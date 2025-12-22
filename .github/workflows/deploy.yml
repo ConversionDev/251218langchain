@@ -69,12 +69,17 @@ jobs:
               echo "✅ Python venv package is already installed"
             fi
 
-            # 가상환경 생성
-            if [ ! -d "$VENV_DIR" ]; then
+            # 가상환경 생성 또는 재생성
+            if [ ! -d "$VENV_DIR" ] || [ ! -f "$VENV_DIR/bin/activate" ]; then
+              if [ -d "$VENV_DIR" ]; then
+                echo "⚠️  Incomplete virtual environment detected. Removing..."
+                rm -rf $VENV_DIR
+              fi
               echo "📦 Creating virtual environment..."
               python3 -m venv $VENV_DIR
+              echo "✅ Virtual environment created successfully"
             else
-              echo "✅ Virtual environment exists"
+              echo "✅ Virtual environment exists and is valid"
             fi
 
             # 패키지 설치
