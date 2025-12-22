@@ -59,6 +59,16 @@ jobs:
 
             cd /home/ubuntu
 
+            # Python venv 패키지 설치 확인 및 설치
+            echo "🔍 Checking Python venv package..."
+            if ! dpkg -l | grep -q python3-venv; then
+              echo "📦 Installing python3-venv and python3-pip packages..."
+              sudo apt-get update -qq
+              sudo apt-get install -y python3-venv python3-pip
+            else
+              echo "✅ Python venv package is already installed"
+            fi
+
             # 가상환경 생성
             if [ ! -d "$VENV_DIR" ]; then
               echo "📦 Creating virtual environment..."
