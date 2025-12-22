@@ -7,12 +7,24 @@ PEFT QLoRA 방식으로 대화하고 학습하는 기능 포함.
 """
 
 import json
+import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import torch
 from datasets import Dataset
+from langchain_classic.chains import (
+    create_history_aware_retriever,
+    create_retrieval_chain,
+)
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain_community.vectorstores import PGVector
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import Runnable
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from peft import (
     LoraConfig,
     PeftModel,
@@ -32,6 +44,345 @@ try:
     from trl import SFTTrainer
 except ImportError:
     from trl.trainer.sft_trainer import SFTTrainer
+
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+
+
+class ChatService:
+    """채팅 서비스 - 모델 로딩 및 RAG 체인 관리."""
+
+    def __init__(
+        self,
+        connection_string: str,
+        collection_name: str,
+        model_name_or_path: Optional[str] = None,
+    ):
+        """ChatService 초기화.
+
+        Args:
+            connection_string: PostgreSQL 연결 문자열
+            collection_name: PGVector 컬렉션 이름
+            model_name_or_path: 로컬 모델 경로 (None이면 기본값 사용)
+        """
+        self.connection_string = connection_string
+        self.collection_name = collection_name
+        self.model_name_or_path = model_name_or_path
+
+        # 모델 및 체인
+        self.openai_embeddings: Optional[OpenAIEmbeddings] = None
+        self.local_embeddings: Optional[HuggingFaceEmbeddings] = None
+        self.openai_llm: Optional[ChatOpenAI] = None
+        self.local_llm: Optional[Any] = None
+        self.openai_rag_chain: Optional[Runnable] = None
+        self.local_rag_chain: Optional[Runnable] = None
+        self.openai_quota_exceeded = False
+        self.vector_store: Optional[PGVector] = None
+
+    def initialize_embeddings(self) -> None:
+        """Embedding 모델 초기화 - OpenAI와 로컬 모델 모두 초기화."""
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+
+        # OpenAI Embedding 초기화
+        if openai_api_key and openai_api_key != "your-api-key-here":
+            try:
+                self.openai_embeddings = OpenAIEmbeddings()
+                # 간단한 테스트
+                self.openai_embeddings.embed_query("test")
+                print("[OK] OpenAI Embedding 모델 초기화 완료")
+            except Exception as e:
+                error_msg = str(e)
+                if (
+                    "quota" in error_msg.lower()
+                    or "429" in error_msg
+                    or "insufficient_quota" in error_msg
+                ):
+                    self.openai_quota_exceeded = True
+                    print(f"[WARNING] OpenAI API 할당량 초과: {error_msg[:100]}...")
+                    print("   OpenAI Embedding을 사용할 수 없습니다.")
+                    self.openai_embeddings = None
+                else:
+                    print(
+                        f"[WARNING] OpenAI Embedding 초기화 실패: {error_msg[:100]}..."
+                    )
+                    self.openai_embeddings = None
+        else:
+            print("[WARNING] OpenAI API 키가 설정되지 않았습니다.")
+            self.openai_embeddings = None
+
+        # 로컬 Embedding 초기화
+        try:
+            embedding_device = os.getenv("EMBEDDING_DEVICE", "cpu")
+            self.local_embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                model_kwargs={"device": embedding_device},
+            )
+            # 간단한 테스트
+            self.local_embeddings.embed_query("test")
+            print(
+                f"[OK] 로컬 Embedding 모델 초기화 완료 (sentence-transformers, device={embedding_device})"
+            )
+        except Exception as local_error:
+            print(
+                f"[WARNING] 로컬 Embedding 모델 초기화 실패: {str(local_error)[:100]}..."
+            )
+            self.local_embeddings = None
+
+        if not self.openai_embeddings and not self.local_embeddings:
+            raise RuntimeError(
+                "OpenAI와 로컬 Embedding 모델 모두 초기화에 실패했습니다. "
+                "OpenAI API 키를 설정하거나 sentence-transformers를 설치해주세요."
+            )
+
+    def initialize_llm(self) -> None:
+        """LLM 모델 초기화 - OpenAI와 로컬 모델 모두 초기화."""
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+
+        # OpenAI LLM 초기화
+        if openai_api_key and openai_api_key != "your-api-key-here":
+            try:
+                self.openai_llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
+                # 실제 API 호출 테스트 (할당량 확인)
+                self.openai_llm.invoke("test")
+                print("[OK] OpenAI Chat 모델 초기화 완료")
+            except Exception as e:
+                error_msg = str(e)
+                if (
+                    "quota" in error_msg.lower()
+                    or "429" in error_msg
+                    or "insufficient_quota" in error_msg
+                ):
+                    self.openai_quota_exceeded = True
+                    print(f"[WARNING] OpenAI API 할당량 초과: {error_msg[:100]}...")
+                    print("   OpenAI LLM을 사용할 수 없습니다.")
+                    self.openai_llm = None
+                else:
+                    print(
+                        f"[WARNING] OpenAI Chat 모델 초기화 실패: {error_msg[:100]}..."
+                    )
+                    self.openai_llm = None
+        else:
+            print("[WARNING] OpenAI API 키가 설정되지 않았습니다.")
+            self.openai_llm = None
+
+        # 로컬 Midm LLM 초기화
+        try:
+            from app.model.model_loader import load_midm_model
+
+            # GPU 메모리 정리
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            # .env 파일에서 LOCAL_MODEL_DIR 읽기
+            local_model_dir = self.model_name_or_path or os.getenv("LOCAL_MODEL_DIR")
+            if local_model_dir:
+                # 상대 경로를 절대 경로로 변환
+                if not Path(local_model_dir).is_absolute():
+                    # 프로젝트 루트 기준으로 변환
+                    project_root = Path(__file__).parent.parent.parent.parent
+                    local_model_dir = str(project_root / local_model_dir)
+                print(f"[INFO] 로컬 모델 디렉토리: {local_model_dir}")
+                midm_model = load_midm_model(
+                    model_path=local_model_dir, register=False, is_default=False
+                )
+            else:
+                midm_model = load_midm_model(register=False, is_default=False)
+
+            self.local_llm = midm_model.get_langchain_model()
+            print("[OK] 로컬 Midm LLM 모델 초기화 완료")
+        except Exception as local_error:
+            error_msg = str(local_error)
+            print(f"[WARNING] 로컬 Midm 모델 초기화 실패: {error_msg[:200]}...")
+            import traceback
+
+            print(f"[DEBUG] 상세 오류: {traceback.format_exc()[:500]}")
+            self.local_llm = None
+
+        if not self.openai_llm and not self.local_llm:
+            raise RuntimeError(
+                "OpenAI와 로컬 LLM 모델 모두 초기화에 실패했습니다. "
+                "OpenAI API 키를 설정하거나 Midm 모델을 확인해주세요."
+            )
+
+    def create_rag_chain(self, llm_model: Any, embeddings_model: Any) -> Runnable:
+        """RAG 체인 생성 - LangChain 체인 기능 활용.
+
+        Args:
+            llm_model: LLM 모델
+            embeddings_model: Embedding 모델
+
+        Returns:
+            RAG 체인
+        """
+        try:
+            # 1. Retriever 생성 (현재 Embedding 모델 사용)
+            current_vector_store = PGVector(
+                embedding_function=embeddings_model,
+                collection_name=self.collection_name,
+                connection_string=self.connection_string,
+            )
+            retriever = current_vector_store.as_retriever(search_kwargs={"k": 3})
+
+            # 2. 대화 기록을 고려한 검색 쿼리 생성 프롬프트
+            contextualize_q_system_prompt = (
+                "대화 기록과 최신 사용자 질문이 주어졌을 때, "
+                "대화 기록의 맥락을 참고하여 독립적으로 이해할 수 있는 질문으로 재구성하세요. "
+                "질문에 답하지 말고, 필요시 재구성하고 그렇지 않으면 그대로 반환하세요."
+            )
+            contextualize_q_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", contextualize_q_system_prompt),
+                    MessagesPlaceholder("chat_history"),
+                    ("human", "{input}"),
+                ]
+            )
+
+            # 3. 대화 기록을 고려한 Retriever 생성
+            history_aware_retriever = create_history_aware_retriever(
+                llm_model, retriever, contextualize_q_prompt
+            )
+
+            # 4. 질문 답변 프롬프트
+            qa_system_prompt = (
+                "당신은 LangChain과 PGVector를 사용하는 도움이 되는 AI 어시스턴트입니다. "
+                "다음 검색된 컨텍스트 정보를 참고하여 사용자의 질문에 답변해주세요. "
+                "컨텍스트에 답변할 수 없는 질문이면, 정중하게 그렇게 말씀해주세요. "
+                "답변은 최대 3문장으로 간결하게 작성해주세요.\n\n"
+                "컨텍스트:\n{context}"
+            )
+            qa_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", qa_system_prompt),
+                    MessagesPlaceholder("chat_history"),
+                    ("human", "{input}"),
+                ]
+            )
+
+            # 5. 문서 결합 체인 생성
+            question_answer_chain = create_stuff_documents_chain(llm_model, qa_prompt)
+
+            # 6. 최종 RAG 체인 생성
+            rag_chain = create_retrieval_chain(
+                history_aware_retriever, question_answer_chain
+            )
+
+            return rag_chain
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[ERROR] RAG 체인 생성 실패: {error_msg[:200]}...")
+            raise
+
+    def initialize_rag_chain(self) -> None:
+        """RAG 체인 초기화 - OpenAI와 로컬 모델용 체인 생성."""
+        # OpenAI용 RAG 체인 생성
+        if self.openai_llm and self.openai_embeddings:
+            try:
+                self.openai_rag_chain = self.create_rag_chain(
+                    self.openai_llm, self.openai_embeddings
+                )
+                print("[OK] OpenAI RAG 체인 초기화 완료")
+            except Exception as e:
+                print(f"[WARNING] OpenAI RAG 체인 초기화 실패: {str(e)[:100]}...")
+                self.openai_rag_chain = None
+
+        # 로컬 모델용 RAG 체인 생성
+        if self.local_llm and self.local_embeddings:
+            try:
+                self.local_rag_chain = self.create_rag_chain(
+                    self.local_llm, self.local_embeddings
+                )
+                print("[OK] 로컬 RAG 체인 초기화 완료")
+            except Exception as e:
+                print(f"[WARNING] 로컬 RAG 체인 초기화 실패: {str(e)[:100]}...")
+                self.local_rag_chain = None
+
+        if not self.openai_rag_chain and not self.local_rag_chain:
+            error_msg = "OpenAI와 로컬 RAG 체인 모두 초기화에 실패했습니다.\n"
+            error_msg += "최소 하나의 LLM과 Embedding 모델이 필요합니다."
+            print(f"[ERROR] {error_msg}")
+            raise RuntimeError(error_msg)
+
+    def chat_with_rag(
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        model_type: str = "openai",
+    ) -> str:
+        """RAG 체인을 사용하여 대화 생성.
+
+        Args:
+            message: 사용자 메시지
+            history: 대화 기록
+            model_type: 모델 타입 ("openai" 또는 "local")
+
+        Returns:
+            생성된 응답
+        """
+        # 모델 타입 정규화
+        if model_type:
+            model_type = model_type.lower()
+        if model_type == "midm":
+            model_type = "local"
+
+        # 적절한 RAG 체인 선택
+        if model_type == "openai":
+            if not self.openai_rag_chain:
+                if self.openai_quota_exceeded:
+                    raise RuntimeError("OpenAI API 할당량이 초과되었습니다.")
+                else:
+                    raise RuntimeError("OpenAI RAG 체인이 초기화되지 않았습니다.")
+            current_rag_chain = self.openai_rag_chain
+        elif model_type == "local":
+            if not self.local_rag_chain:
+                raise RuntimeError("로컬 RAG 체인이 초기화되지 않았습니다.")
+            current_rag_chain = self.local_rag_chain
+        else:
+            raise ValueError(f"지원하지 않는 모델 타입입니다: {model_type}")
+
+        # 대화 기록을 LangChain 메시지 형식으로 변환
+        chat_history = []
+        if history:
+            for msg in history:
+                if msg.get("role") == "user":
+                    chat_history.append(HumanMessage(content=msg.get("content", "")))
+                elif msg.get("role") == "assistant":
+                    chat_history.append(AIMessage(content=msg.get("content", "")))
+
+        # RAG 체인 실행
+        result = current_rag_chain.invoke(
+            {
+                "input": message,
+                "chat_history": chat_history,
+            }
+        )
+
+        # 체인 결과에서 답변 추출
+        response_text = result.get("answer", "답변을 생성할 수 없습니다.")
+
+        # response_text가 None이거나 문자열이 아닌 경우 처리
+        if response_text is None:
+            response_text = "답변을 생성할 수 없습니다."
+        else:
+            response_text = str(response_text)
+
+        # 응답에서 이전 대화 내용 제거 (중복 방지)
+        if response_text and (
+            "Human:" in response_text or "Assistant:" in response_text
+        ):
+            # 빠른 정규식으로 마지막 Assistant: 이후만 추출
+            assistant_match = re.search(
+                r"Assistant:\s*(.+?)(?:\nHuman:|$)", response_text, re.DOTALL
+            )
+            if assistant_match:
+                response_text = assistant_match.group(1).strip()
+
+        # 빈 응답 방지
+        if not response_text or not response_text.strip():
+            response_text = "답변을 생성할 수 없습니다."
+
+        return response_text
 
 
 class ChatServiceQLoRA:

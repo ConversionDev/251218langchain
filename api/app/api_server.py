@@ -15,7 +15,7 @@ import os
 import time
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 # .env 파일 로드 (프로젝트 루트에서 찾기)
 try:
@@ -115,6 +115,8 @@ openai_rag_chain: Optional[Runnable] = None
 local_rag_chain: Optional[Runnable] = None
 # 할당량 초과 추적
 openai_quota_exceeded = False
+# ChatService 인스턴스 (타입 힌트는 함수 내부에서 import)
+chat_service: Optional[Any] = None
 
 
 def wait_for_postgres(max_retries: int = 30, delay: int = 2) -> None:
@@ -591,6 +593,17 @@ def initialize_rag_chain():
 @app.on_event("startup")
 async def startup_event():
     """서버 시작 시 초기화."""
+    global \
+        chat_service, \
+        openai_embeddings, \
+        local_embeddings, \
+        openai_llm, \
+        local_llm, \
+        openai_rag_chain, \
+        local_rag_chain, \
+        openai_quota_exceeded, \
+        vector_store
+
     print("=" * 50)
     print("LangChain FastAPI 서버 시작 중...")
     print("=" * 50)
@@ -605,21 +618,42 @@ async def startup_event():
     print("\n1. Neon PostgreSQL 연결 확인 중...")
     wait_for_postgres()
 
+    # ChatService 초기화
+    print("\n2. ChatService 초기화 중...")
+    from app.service.chat_service_t import ChatService
+
+    chat_service = ChatService(
+        connection_string=CONNECTION_STRING,
+        collection_name=COLLECTION_NAME,
+        model_name_or_path=local_model_dir
+        if local_model_dir != "기본값 사용"
+        else None,
+    )
+
     # Embedding 모델 초기화
-    print("\n2. Embedding 모델 초기화 중...")
-    initialize_embeddings()
+    print("\n3. Embedding 모델 초기화 중...")
+    chat_service.initialize_embeddings()
 
     # LLM 모델 초기화
-    print("\n3. LLM 모델 초기화 중...")
-    initialize_llm()
+    print("\n4. LLM 모델 초기화 중...")
+    chat_service.initialize_llm()
 
-    # PGVector 스토어 초기화
-    print("\n4. PGVector 스토어 초기화 중...")
+    # PGVector 스토어 초기화 (기존 함수 사용)
+    print("\n5. PGVector 스토어 초기화 중...")
+    # ChatService의 embeddings를 전역 변수에 할당 (기존 코드 호환성)
+    openai_embeddings = chat_service.openai_embeddings
+    local_embeddings = chat_service.local_embeddings
+    openai_llm = chat_service.openai_llm
+    local_llm = chat_service.local_llm
+    openai_quota_exceeded = chat_service.openai_quota_exceeded
     initialize_vector_store()
 
     # RAG 체인 초기화
-    print("\n5. RAG 체인 초기화 중...")
-    initialize_rag_chain()
+    print("\n6. RAG 체인 초기화 중...")
+    chat_service.initialize_rag_chain()
+    # ChatService의 RAG 체인을 전역 변수에 할당 (기존 코드 호환성)
+    openai_rag_chain = chat_service.openai_rag_chain
+    local_rag_chain = chat_service.local_rag_chain
 
     print("\n" + "=" * 50)
     print("[OK] 서버 초기화 완료!")

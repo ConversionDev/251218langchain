@@ -29,6 +29,9 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+*.env
+*.pem
+
 
 # vercel
 .vercel
@@ -60,5 +63,3 @@ api/app/model/
 
 # LangChain library (if not needed in repo)
 libs/langchain/
-
-*.pem
