@@ -207,9 +207,9 @@ def initialize_embeddings():
         local_embeddings = None
 
     if not openai_embeddings and not local_embeddings:
-        raise RuntimeError(
-            "OpenAI와 로컬 Embedding 모델 모두 초기화에 실패했습니다. "
-            "OpenAI API 키를 설정하거나 sentence-transformers를 설치해주세요."
+        print(
+            "[WARNING] OpenAI와 로컬 Embedding 모델 모두 초기화에 실패했습니다. "
+            "Embedding 기능이 비활성화됩니다. 벡터 스토어와 RAG 기능을 사용할 수 없습니다."
         )
 
 
@@ -266,6 +266,16 @@ def initialize_llm():
 
         local_llm = midm_model.get_langchain_model()
         print("[OK] 로컬 Midm LLM 모델 초기화 완료")
+    except ModuleNotFoundError as module_error:
+        error_msg = str(module_error)
+        if "app.model" in error_msg:
+            print(
+                "[WARNING] 로컬 Midm 모델 모듈을 찾을 수 없습니다. "
+                "모델 파일이 GitHub에 업로드되지 않았거나 PYTHONPATH 설정이 잘못되었습니다."
+            )
+        else:
+            print(f"[WARNING] 로컬 Midm 모델 모듈 누락: {error_msg[:200]}...")
+        local_llm = None
     except Exception as local_error:
         error_msg = str(local_error)
         print(f"[WARNING] 로컬 Midm 모델 초기화 실패: {error_msg[:200]}...")
@@ -275,9 +285,9 @@ def initialize_llm():
         local_llm = None
 
     if not openai_llm and not local_llm:
-        raise RuntimeError(
-            "OpenAI와 로컬 LLM 모델 모두 초기화에 실패했습니다. "
-            "OpenAI API 키를 설정하거나 Midm 모델을 확인해주세요."
+        print(
+            "[WARNING] OpenAI와 로컬 LLM 모델 모두 초기화에 실패했습니다. "
+            "LLM 기능이 비활성화됩니다. 채팅 및 RAG 기능을 사용할 수 없습니다."
         )
 
 
@@ -299,7 +309,12 @@ def initialize_vector_store():
         current_embeddings = local_embeddings
         print("[INFO] 로컬 Embedding 모델 사용 (fallback)")
     else:
-        raise RuntimeError("사용 가능한 Embedding 모델이 없습니다.")
+        print(
+            "[WARNING] 사용 가능한 Embedding 모델이 없습니다. "
+            "벡터 스토어를 초기화할 수 없습니다."
+        )
+        vector_store = None
+        return
 
     try:
         print("[INFO] ===== PGVector 연결 확인 시작 =====")
@@ -578,16 +593,16 @@ def initialize_rag_chain():
             local_rag_chain = None
 
     if not openai_rag_chain and not local_rag_chain:
-        error_msg = "OpenAI와 로컬 RAG 체인 모두 초기화에 실패했습니다.\n"
+        print("[WARNING] OpenAI와 로컬 RAG 체인 모두 초기화에 실패했습니다.")
         if not openai_llm:
-            error_msg += "- OpenAI LLM이 초기화되지 않았습니다.\n"
+            print("  - OpenAI LLM이 초기화되지 않았습니다.")
         if not openai_embeddings:
-            error_msg += "- OpenAI Embeddings가 초기화되지 않았습니다.\n"
+            print("  - OpenAI Embeddings가 초기화되지 않았습니다.")
         if not local_llm:
-            error_msg += "- 로컬 LLM이 초기화되지 않았습니다.\n"
+            print("  - 로컬 LLM이 초기화되지 않았습니다.")
         if not local_embeddings:
-            error_msg += "- 로컬 Embeddings가 초기화되지 않았습니다.\n"
-        raise RuntimeError(error_msg)
+            print("  - 로컬 Embeddings가 초기화되지 않았습니다.")
+        print("[WARNING] RAG 기능이 비활성화됩니다. 채팅 기능을 사용할 수 없습니다.")
 
 
 @app.on_event("startup")
