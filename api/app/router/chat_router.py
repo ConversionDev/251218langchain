@@ -78,7 +78,8 @@ async def chat(request: ChatRequest, http_request: Request):
         model_type = model_type.lower()
 
     # 환경과 모델 타입 불일치 검증
-    # OpenAI 선택 시 로컬 환경에서만 차단
+    # 프론트엔드가 로컬이고 백엔드도 로컬인 경우 OpenAI 차단
+    # (프론트엔드가 로컬이지만 백엔드가 EC2인 경우는 OpenAI 사용 허용)
     if is_localhost and model_type == "openai":
         raise HTTPException(
             status_code=400,
