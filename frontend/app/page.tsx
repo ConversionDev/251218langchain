@@ -26,27 +26,8 @@ export default function Home() {
   const [modelType, setModelType] = useState<ModelType>("openai");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // localhost 여부 확인 함수
-  const checkIsLocalhost = (): boolean => {
-    if (typeof window === "undefined") return false;
-    return (
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1" ||
-      window.location.hostname === ""
-    );
-  };
-
-  // 컴포넌트 마운트 시 localhost 여부 확인하고 모델 타입 자동 설정
-  useEffect(() => {
-    const isLocalhost = checkIsLocalhost();
-    if (isLocalhost) {
-      setModelType("local");
-      console.log("[DEBUG] localhost 감지, 로컬 모델로 자동 설정");
-    } else {
-      setModelType("openai");
-      console.log("[DEBUG] 외부 접속 감지, OpenAI 모델로 자동 설정");
-    }
-  }, []);
+  // 컴포넌트 마운트 시 기본값은 OpenAI로 설정
+  // (백엔드 응답으로 환경을 구분하므로 자동 설정 제거)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,34 +39,6 @@ export default function Home() {
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
-
-    // localhost 여부 동적으로 확인
-    const isLocalhost = checkIsLocalhost();
-
-    // 모델 타입과 환경 불일치 검증
-    if (isLocalhost && modelType === "openai") {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: "⚠️ 현재 로컬환경입니다. 로컬 모델을 사용해주세요.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      setIsLoading(false);
-      return;
-    }
-
-    if (!isLocalhost && modelType === "local") {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: "⚠️ 현재 로컬 환경이 아닙니다. OpenAI 모델을 사용해주세요.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      setIsLoading(false);
-      return;
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -100,8 +53,6 @@ export default function Home() {
     try {
       // 디버깅: 전송하는 model_type 확인
       console.log("[DEBUG] 전송하는 model_type:", modelType);
-      console.log("[DEBUG] isLocalhost:", isLocalhost);
-      console.log("[DEBUG] hostname:", typeof window !== "undefined" ? window.location.hostname : "N/A");
 
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -120,9 +71,21 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.error || errorData.message || "응답을 받는 중 오류가 발생했습니다.";
+        const errorMsg = errorData.error || errorData.detail || errorData.message || "응답을 받는 중 오류가 발생했습니다.";
 
-        // OpenAI 호출량 초과 에러
+        // 로컬 환경에서 OpenAI 사용 시도 (400 에러)
+        if (response.status === 400 && errorMsg.includes("로컬환경")) {
+          const errorMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: `⚠️ ${errorMsg}`,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+          return;
+        }
+
+        // OpenAI 호출량 초과 에러 (429)
         if (response.status === 429) {
           const errorMessage: Message = {
             id: (Date.now() + 1).toString(),
@@ -134,7 +97,7 @@ export default function Home() {
           return;
         }
 
-        // 백엔드 연결 오류
+        // 백엔드 연결 오류 (503)
         if (response.status === 503) {
           const errorMessage: Message = {
             id: (Date.now() + 1).toString(),
@@ -146,7 +109,15 @@ export default function Home() {
           return;
         }
 
-        throw new Error(errorMsg);
+        // 기타 에러
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: `⚠️ ${errorMsg}`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        return;
       }
 
       const data = await response.json();

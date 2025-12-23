@@ -78,17 +78,14 @@ async def chat(request: ChatRequest, http_request: Request):
         model_type = model_type.lower()
 
     # 환경과 모델 타입 불일치 검증
+    # OpenAI 선택 시 로컬 환경에서만 차단
     if is_localhost and model_type == "openai":
         raise HTTPException(
             status_code=400,
             detail="현재 로컬환경입니다. 로컬 모델을 사용해주세요.",
         )
 
-    if not is_localhost and model_type == "local":
-        raise HTTPException(
-            status_code=400,
-            detail="현재 로컬 환경이 아닙니다. OpenAI 모델을 사용해주세요.",
-        )
+    # 로컬 모델 선택 시 EC2 환경에서는 허용 (차단 제거)
 
     # 디버깅: 받은 model_type 로그 출력
     print(
@@ -102,6 +99,10 @@ async def chat(request: ChatRequest, http_request: Request):
             history=request.history,
             model_type=model_type,
         )
+
+        # 로컬 모델 + EC2 환경일 경우 응답에 환경 정보 추가
+        if model_type == "local" and not is_localhost:
+            response_text = f"현재 EC2 환경입니다.\n\n{response_text}"
 
         return ChatResponse(response=response_text)
 
