@@ -26,8 +26,15 @@ export default function Home() {
   const [modelType, setModelType] = useState<ModelType>("openai");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 컴포넌트 마운트 시 기본값은 OpenAI로 설정
-  // (백엔드 응답으로 환경을 구분하므로 자동 설정 제거)
+  // localhost 여부 확인 함수
+  const checkIsLocalhost = (): boolean => {
+    if (typeof window === "undefined") return false;
+    return (
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === ""
+    );
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,6 +46,22 @@ export default function Home() {
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
+
+    // 프론트엔드 환경 확인 (Vercel vs 로컬)
+    const isFrontendLocalhost = checkIsLocalhost();
+
+    // Vercel 환경에서 로컬 모델 선택 시 차단
+    if (!isFrontendLocalhost && modelType === "local") {
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "⚠️ 현재 로컬 환경이 아닙니다. OpenAI 모델을 사용해주세요.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setIsLoading(false);
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -134,10 +157,13 @@ export default function Home() {
         return;
       }
 
+      // 로컬 환경에서 로컬 모델 선택 시 EC2 환경 감지
+      // 백엔드 응답에 "현재 EC2 환경입니다"가 포함되어 있으면 그대로 표시
+      const responseContent = data.response || "응답을 생성할 수 없습니다.";
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.response || "응답을 생성할 수 없습니다.",
+        content: responseContent,
         timestamp: new Date(),
       };
 
