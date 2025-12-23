@@ -13,13 +13,16 @@ export async function POST(request: NextRequest) {
     }
 
     // LangChain 백엔드 API 호출
-    // docker-compose의 langchain-app 서비스와 통신
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    // BACKEND_URL 환경 변수 필수 (.env 또는 .env.local에 설정 필요)
+    const backendUrl = process.env.BACKEND_URL;
+    if (!backendUrl) {
+      return NextResponse.json(
+        { error: "BACKEND_URL 환경 변수가 설정되지 않았습니다." },
+        { status: 500 }
+      );
+    }
 
     try {
-      // 디버깅: 받은 model_type 확인
-      console.log("[DEBUG] Next.js API route에서 받은 model_type:", model_type);
-
       const response = await fetch(`${backendUrl}/api/chat`, {
         method: "POST",
         headers: {
