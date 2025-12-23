@@ -110,7 +110,7 @@ async def chat(request: ChatRequest, http_request: Request):
         error_msg = str(e)
         print(f"[ERROR] 챗봇 응답 생성 실패: {error_msg}")
 
-        # OpenAI API 할당량 초과 에러 확인
+        # OpenAI API 할당량 초과 에러 확인 (429: Too Many Requests)
         if "할당량" in error_msg or "quota" in error_msg.lower():
             error_detail = (
                 "⚠️ OpenAI API 할당량이 초과되었습니다.\n\n"
@@ -120,7 +120,7 @@ async def chat(request: ChatRequest, http_request: Request):
                 "3. 또는 '🖥️ 로컬 모델' 버튼을 선택하여 로컬 Midm 모델을 사용하세요"
             )
             raise HTTPException(
-                status_code=503,
+                status_code=429,
                 detail=error_detail,
             )
         else:
