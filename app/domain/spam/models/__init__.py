@@ -1,0 +1,21 @@
+"""
+[Domain Model] 스팸 도메인 전용 데이터 규격
+
+스팸 도메인의 데이터 모델 및 스키마 정의.
+"""
+
+from .base_model import EmailMetadata, LLaMAResult, SpamResult
+from .email_model import EmailRequest, EmailResponse
+from .state_model import SpamDetectionState
+from .vector_model import VectorSearchQuery, VectorSearchResult
+
+__all__ = [
+    "EmailMetadata",
+    "LLaMAResult",
+    "SpamResult",
+    "EmailRequest",
+    "EmailResponse",
+    "SpamDetectionState",
+    "VectorSearchQuery",
+    "VectorSearchResult",
+]

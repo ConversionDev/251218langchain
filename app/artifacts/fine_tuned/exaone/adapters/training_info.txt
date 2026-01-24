@@ -1,0 +1,31 @@
+============================================================
+학습 정보
+============================================================
+
+하이퍼파라미터:
+  - 에포크: 2
+  - 배치 크기: 4
+  - 그래디언트 누적: 2
+  - 학습률: 0.0002
+  - 워밍업 스텝: 100
+  - 옵티마이저: OptimizerNames.PAGED_ADAMW_8BIT
+  - 스케줄러: SchedulerType.COSINE
+
+LoRA 설정:
+  - LoRA rank (r): 16
+  - LoRA alpha: 32
+  - LoRA dropout: 0.05
+  - Target modules: None
+
+학습 결과:
+  - 학습 손실: 0.8812
+  - train_runtime: 875.5177
+  - train_samples_per_second: 5.556
+  - train_steps_per_second: 0.694
+  - total_flos: 7776003115499520.0
+  - train_loss: 0.8812010523520017
+
+모델 정보:
+  - 모델 경로: C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\base_models\exaone
+  - 출력 경로: C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\fine_tuned\exaone\adapters
+
