@@ -5,17 +5,12 @@ Pydantic BaseSettings를 사용하여 환경 변수를 타입 안전하게 관�
 순환 의존성을 피하기 위한 중앙 설정 모듈입니다.
 """
 
-from pathlib import Path
 from typing import Optional
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-def _get_project_root() -> Path:
-    """프로젝트 루트 디렉토리 경로 반환."""
-    # config.py -> core/ -> app/ -> RAG/
-    return Path(__file__).parent.parent.parent
+from core.paths import get_project_root  # type: ignore
 
 
 class Settings(BaseSettings):
@@ -26,7 +21,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=str(_get_project_root() / ".env"),
+        env_file=str(get_project_root() / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -83,6 +78,29 @@ class Settings(BaseSettings):
     llm_provider: str = Field(
         default="exaone",
         description="LLM 프로바이더 (exaone, ollama 등)",
+    )
+
+    # ===================
+    # V10 도메인 설정
+    # ===================
+    v10_load_data: bool = Field(
+        default=False,
+        description="V10 데이터 자동 로드 여부 (JSONL → DB)",
+    )
+
+    v10_auto_migrate: bool = Field(
+        default=True,
+        description="V10 마이그레이션 자동 실행 여부",
+    )
+
+    v10_migration_revision: str = Field(
+        default="head",
+        description="적용할 마이그레이션 버전 (기본값: head)",
+    )
+
+    v10_collection_name: str = Field(
+        default="v10_soccer_collection",
+        description="V10 전용 벡터 컬렉션 이름",
     )
 
     exaone_model_dir: Optional[str] = Field(
@@ -149,7 +167,7 @@ class Settings(BaseSettings):
 
 
 # 전역 설정 인스턴스 (싱글톤)
-settings = Settings()
+_settings: Optional[Settings] = None
 
 
 def get_settings() -> Settings:
@@ -159,7 +177,14 @@ def get_settings() -> Settings:
         Settings 인스턴스
 
     Note:
-        전역 `settings` 인스턴스를 직접 사용해도 됩니다.
-        이 함수는 하위 호환성을 위해 유지됩니다.
+        지연 초기화를 사용하여 필요할 때만 설정을 로드합니다.
+        전역 `settings` 변수는 하위 호환성을 위해 유지됩니다.
     """
-    return settings
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
+
+
+# 하위 호환성을 위한 전역 settings 변수
+settings = get_settings()

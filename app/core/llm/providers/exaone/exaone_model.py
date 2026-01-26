@@ -146,6 +146,36 @@ def _parse_tool_calls(json_data: Union[Dict, List]) -> List[Dict[str, Any]]:
     return tool_calls
 
 
+def get_adaptive_max_length(input_length: int, max_new_tokens: int = 2048) -> int:
+    """입력 길이에 따라 KV 캐시 최대 크기를 동적으로 결정 (메모리 절약).
+    
+    Args:
+        input_length: 입력 토큰 길이
+        max_new_tokens: 최대 생성 토큰 수
+    
+    Returns:
+        동적으로 조정된 max_length
+    """
+    total_needed = input_length + max_new_tokens
+    
+    # 입력 길이에 따라 KV 캐시 크기 동적 조정
+    if input_length <= 256:
+        # 매우 짧은 입력: 작은 KV 캐시 (메모리 절약)
+        return min(1024, total_needed)
+    elif input_length <= 512:
+        # 짧은 입력: 중간 KV 캐시
+        return min(2048, total_needed)
+    elif input_length <= 1024:
+        # 중간 입력: 큰 KV 캐시
+        return min(3072, total_needed)
+    elif input_length <= 2048:
+        # 긴 입력: 매우 큰 KV 캐시
+        return min(4096, total_needed)
+    else:
+        # 매우 긴 입력: 최대 허용 크기
+        return min(4096, total_needed)
+
+
 class ExaoneLLM(BaseLLM):
     """EXAONE 3.5 LLM 모델 구현체 (bitsandbytes 4-bit 양자화 GPU 지원)."""
 
@@ -349,24 +379,33 @@ class ExaoneLLM(BaseLLM):
             temperature = kwargs.get("temperature", 0.7)
             do_sample = kwargs.get("do_sample", True)
 
-            # KV 캐시 최적화: 입력 길이 + 최대 생성 토큰 수로 제한
+            # 동적 KV 캐시 최적화: 입력 길이에 따라 max_length 조정 (메모리 절약)
             input_length = input_ids.shape[1]
-            max_length = kwargs.get("max_length", input_length + max_new_tokens)
-            # 최대 4096 토큰으로 제한하여 KV 캐시 메모리 절약
-            max_length = min(max_length, 4096)
+            max_length = kwargs.get("max_length", None)
+            if max_length is None:
+                # 동적 조정: 입력 길이에 따라 KV 캐시 크기 결정
+                max_length = get_adaptive_max_length(input_length, max_new_tokens)
+            else:
+                # 사용자가 지정한 경우, 동적 조정과 비교하여 작은 값 사용
+                adaptive_max = get_adaptive_max_length(input_length, max_new_tokens)
+                max_length = min(max_length, adaptive_max)
 
-            # 생성 (속도 최적화 옵션 적용)
+            # 생성 (메모리 효율적인 옵션 적용)
             with torch.no_grad(), torch.cuda.amp.autocast():
                 outputs = self.model.generate(
                     input_ids,
                     max_new_tokens=max_new_tokens,
-                    max_length=max_length,  # KV 캐시 최적화
+                    max_length=max_length,  # 동적 KV 캐시 최적화
                     temperature=temperature if do_sample else None,
                     do_sample=do_sample,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
                     use_cache=True,  # KV 캐시 활성화 (속도 향상)
                     num_beams=1,  # 그리디 디코딩 (빠른 생성)
+                    # 메모리 효율 옵션 추가
+                    output_attentions=False,  # Attention 출력 비활성화 (메모리 절약)
+                    output_hidden_states=False,  # Hidden states 출력 비활성화 (메모리 절약)
+                    return_dict_in_generate=False,  # Dict 대신 Tensor 반환 (메모리 절약)
                 )
 
             # 디코딩 (입력 부분 제외)
@@ -496,24 +535,33 @@ class ExaoneLangChainWrapper(BaseChatModel):
         temperature = kwargs.get("temperature", 0.7)
         do_sample = kwargs.get("do_sample", True)
 
-        # KV 캐시 최적화: 입력 길이 + 최대 생성 토큰 수로 제한
+        # 동적 KV 캐시 최적화: 입력 길이에 따라 max_length 조정 (메모리 절약)
         input_length = input_ids.shape[1]
-        max_length = kwargs.get("max_length", input_length + max_new_tokens)
-        # 최대 4096 토큰으로 제한하여 KV 캐시 메모리 절약
-        max_length = min(max_length, 4096)
+        max_length = kwargs.get("max_length", None)
+        if max_length is None:
+            # 동적 조정: 입력 길이에 따라 KV 캐시 크기 결정
+            max_length = get_adaptive_max_length(input_length, max_new_tokens)
+        else:
+            # 사용자가 지정한 경우, 동적 조정과 비교하여 작은 값 사용
+            adaptive_max = get_adaptive_max_length(input_length, max_new_tokens)
+            max_length = min(max_length, adaptive_max)
 
-        # 생성 (속도 최적화 옵션 적용)
+        # 생성 (메모리 효율적인 옵션 적용)
         with torch.no_grad(), torch.cuda.amp.autocast():
             outputs = self._model.generate(
                 input_ids,
                 max_new_tokens=max_new_tokens,
-                max_length=max_length,  # KV 캐시 최적화
+                max_length=max_length,  # 동적 KV 캐시 최적화
                 temperature=temperature if do_sample else None,
                 do_sample=do_sample,
                 pad_token_id=self._tokenizer.pad_token_id,
                 eos_token_id=self._tokenizer.eos_token_id,
                 use_cache=True,  # KV 캐시 활성화 (속도 향상)
                 num_beams=1,  # 그리디 디코딩 (빠른 생성)
+                # 메모리 효율 옵션 추가
+                output_attentions=False,  # Attention 출력 비활성화 (메모리 절약)
+                output_hidden_states=False,  # Hidden states 출력 비활성화 (메모리 절약)
+                return_dict_in_generate=False,  # Dict 대신 Tensor 반환 (메모리 절약)
             )
 
         # 디코딩 (입력 부분 제외)
@@ -618,10 +666,16 @@ class ExaoneLangChainWrapper(BaseChatModel):
         temperature = kwargs.get("temperature", 0.7)
         do_sample = kwargs.get("do_sample", True)
 
-        # KV 캐시 최적화
+        # 동적 KV 캐시 최적화: 입력 길이에 따라 max_length 조정 (메모리 절약)
         input_length = input_ids.shape[1]
-        max_length = kwargs.get("max_length", input_length + max_new_tokens)
-        max_length = min(max_length, 4096)
+        max_length = kwargs.get("max_length", None)
+        if max_length is None:
+            # 동적 조정: 입력 길이에 따라 KV 캐시 크기 결정
+            max_length = get_adaptive_max_length(input_length, max_new_tokens)
+        else:
+            # 사용자가 지정한 경우, 동적 조정과 비교하여 작은 값 사용
+            adaptive_max = get_adaptive_max_length(input_length, max_new_tokens)
+            max_length = min(max_length, adaptive_max)
 
         # TextIteratorStreamer 설정
         streamer = TextIteratorStreamer(
@@ -630,11 +684,11 @@ class ExaoneLangChainWrapper(BaseChatModel):
             skip_special_tokens=True,
         )
 
-        # 생성 kwargs (속도 최적화 옵션 적용)
+        # 생성 kwargs (메모리 효율적인 옵션 적용)
         generation_kwargs = {
             "input_ids": input_ids,
             "max_new_tokens": max_new_tokens,
-            "max_length": max_length,
+            "max_length": max_length,  # 동적 KV 캐시 최적화
             "temperature": temperature if do_sample else None,
             "do_sample": do_sample,
             "pad_token_id": self._tokenizer.pad_token_id,
@@ -642,6 +696,10 @@ class ExaoneLangChainWrapper(BaseChatModel):
             "streamer": streamer,
             "use_cache": True,  # KV 캐시 활성화 (속도 향상)
             "num_beams": 1,  # 그리디 디코딩 (빠른 생성)
+            # 메모리 효율 옵션 추가
+            "output_attentions": False,  # Attention 출력 비활성화 (메모리 절약)
+            "output_hidden_states": False,  # Hidden states 출력 비활성화 (메모리 절약)
+            "return_dict_in_generate": False,  # Dict 대신 Tensor 반환 (메모리 절약)
         }
 
         # 별도 스레드에서 생성 실행

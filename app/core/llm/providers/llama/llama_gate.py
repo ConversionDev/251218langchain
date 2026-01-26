@@ -6,49 +6,25 @@ Unsloth를 사용하여 추론 속도를 최적화합니다.
 성능:
     - 속도: 기존 대비 2배 향상
     - 메모리: 60-80% 절약 (4bit 양자화)
-    - XFormers 없이도 Unsloth 자체 최적화로 충분한 성능
+    - Unsloth 자체 최적화 사용
 """
 
 import os
-import sys
 
-# ============================================================================
-# Windows 환경 설정 (최적화)
-# ============================================================================
-
-# OpenMP 충돌 방지
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["OMP_NUM_THREADS"] = "1"
-
-# TorchInductor/Triton 비활성화 (Windows 안정성)
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCHINDUCTOR_DISABLE"] = "1"
-
-# 토크나이저 병렬화 비활성화
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+from core.resource_manager import setup_unsloth_cache  # type: ignore
 
-# ============================================================================
-# XFormers/FlashAttention 정상 import (Mock 제거)
-# ============================================================================
-# xformers와 flash_attn이 설치되어 있으면 정상적으로 사용
-# 설치되어 있지 않으면 Unsloth가 자체 최적화를 사용
-try:
-    import xformers  # noqa: F401, type: ignore
-    print("[INFO] xformers 정상 로드 완료")
-except ImportError:
-    print("[INFO] xformers가 설치되지 않았습니다. Unsloth 자체 최적화를 사용합니다.")
+setup_unsloth_cache()
 
-try:
-    import flash_attn  # noqa: F401, type: ignore
-    print("[INFO] flash_attn 정상 로드 완료")
-except ImportError:
-    print("[INFO] flash_attn이 설치되지 않았습니다. Unsloth 자체 최적화를 사용합니다.")
-
-# ============================================================================
-# Unsloth 및 PyTorch Import
-# ============================================================================
 import torch  # noqa: E402
+
+torch._dynamo.config.disable = True
+torch._dynamo.config.suppress_errors = True
+
 import unsloth  # noqa: E402, F401
 from unsloth import FastLanguageModel  # noqa: E402
 
@@ -74,14 +50,14 @@ class LLaMAGate:
         self.load_in_4bit = load_in_4bit
         self.model = None
         self.tokenizer = None
-        
+
         # GPU 필수 확인
         if not torch.cuda.is_available():
             raise RuntimeError(
                 "CUDA가 사용 불가능합니다. GPU가 필요합니다.\n"
                 "torch.cuda.is_available()이 False입니다."
             )
-        
+
         self.device = "cuda"
         self._load_model()
 
@@ -90,12 +66,9 @@ class LLaMAGate:
         try:
             print(f"[INFO] LLaMA Gate (Unsloth) 모델 로딩 중: {self.model_id}")
 
-            # 양자화 필수 확인
             if self.load_in_4bit:
-                # bitsandbytes 필수 확인
                 try:
                     import bitsandbytes  # noqa: F401
-
                     print("[INFO] bitsandbytes 확인 완료 - 4bit 양자화 사용")
                 except ImportError:
                     raise ImportError(
@@ -103,47 +76,15 @@ class LLaMAGate:
                         "설치: pip install bitsandbytes"
                     )
 
-                # CUDA는 이미 초기화 시 확인됨 (GPU 전용)
-
-            # Unsloth FastLanguageModel로 로드
             self.model, self.tokenizer = FastLanguageModel.from_pretrained(
                 model_name=self.model_id,
                 max_seq_length=self.max_seq_length,
-                dtype=None,  # 자동 감지
+                dtype=None,
                 load_in_4bit=self.load_in_4bit,
             )
 
-            # 양자화 적용 확인
-            if self.load_in_4bit:
-                # 모델이 양자화되었는지 확인
-                try:
-                    # Unsloth는 양자화된 모델을 특별한 타입으로 래핑
-                    model_type = str(type(self.model))
-                    model_dtype = next(self.model.parameters()).dtype
-
-                    # 양자화 확인: bitsandbytes의 Linear4bit 또는 8bit 레이어 확인
-                    has_quantized = False
-                    for name, module in self.model.named_modules():
-                        if "Linear4bit" in str(type(module)) or "Linear8bit" in str(
-                            type(module)
-                        ):
-                            has_quantized = True
-                            break
-
-                    if has_quantized:
-                        print("[OK] 4bit 양자화가 성공적으로 적용되었습니다.")
-                    else:
-                        print(
-                            f"[WARNING] 양자화 레이어를 찾을 수 없습니다. "
-                            f"모델 타입: {model_type}, dtype: {model_dtype}"
-                        )
-                except Exception as e:
-                    print(f"[WARNING] 양자화 확인 중 오류: {e} (계속 진행합니다)")
-
-            # 추론 모드로 최적화
             FastLanguageModel.for_inference(self.model)
 
-            # pad_token 설정
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -171,7 +112,6 @@ class LLaMAGate:
             return "policy_based"
 
         try:
-            # 분류 프롬프트
             prompt = f"""다음 요청을 분석하여 규칙 기반 처리인지 정책 기반 처리인지 판단하세요.
 
 요청 내용: {text}
@@ -184,9 +124,7 @@ class LLaMAGate:
 - "policy_based"
 """
 
-            # 토크나이징
             messages = [{"role": "user", "content": prompt}]
-            # apply_chat_template은 리스트를 반환할 수 있음
             formatted = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
@@ -200,7 +138,6 @@ class LLaMAGate:
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            # 생성
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
@@ -211,7 +148,6 @@ class LLaMAGate:
                     eos_token_id=self.tokenizer.eos_token_id,
                 )
 
-            # 디코딩 (입력 길이 이후 부분만)
             input_length = inputs["input_ids"].shape[1]
             response = (
                 self.tokenizer.decode(
@@ -221,13 +157,11 @@ class LLaMAGate:
                 .lower()
             )
 
-            # 응답 파싱
             if "policy_based" in response or "policy" in response:
                 return "policy_based"
             elif "rule_based" in response or "rule" in response:
                 return "rule_based"
             else:
-                # 기본값: 정책 기반
                 return "policy_based"
 
         except Exception as e:
@@ -261,7 +195,7 @@ class LLaMAGate:
         try:
             subject = email_data.get("subject", "")
             sender = email_data.get("sender", "")
-            body = email_data.get("body", "")[:500]  # 본문 500자 제한
+            body = email_data.get("body", "")[:500]
 
             prompt = f"""다음 이메일을 분석하여 스팸 여부를 판단하세요.
 
@@ -306,17 +240,14 @@ class LLaMAGate:
                 outputs[0][input_length:], skip_special_tokens=True
             ).strip()
 
-            # 숫자 파싱
             import re
 
             match = re.search(r"(\d+\.?\d*)", response)
             if match:
                 spam_prob = float(match.group(1))
-                spam_prob = max(0.0, min(1.0, spam_prob))  # 0~1 범위 제한
+                spam_prob = max(0.0, min(1.0, spam_prob))
             else:
                 spam_prob = 0.5
-
-            # 라벨 및 신뢰도 결정
             if spam_prob >= 0.7:
                 label = "SPAM"
                 confidence = "high" if spam_prob >= 0.85 else "medium"
@@ -340,3 +271,128 @@ class LLaMAGate:
                 "confidence": "low",
                 "label": "UNCERTAIN",
             }
+
+    def classify_spam_batch(
+        self, email_data_list: list[dict], batch_size: int = 32
+    ) -> list[dict]:
+        """이메일 스팸 분류 (배치 처리).
+
+        Args:
+            email_data_list: 이메일 메타데이터 리스트
+            batch_size: 배치 크기
+
+        Returns:
+            스팸 분류 결과 리스트
+        """
+        if self.model is None or self.tokenizer is None:
+            return [
+                {"spam_prob": 0.5, "confidence": "low", "label": "UNCERTAIN"}
+                for _ in email_data_list
+            ]
+
+        results = []
+        import re
+
+        # 배치 단위로 처리
+        for batch_start in range(0, len(email_data_list), batch_size):
+            batch_end = min(batch_start + batch_size, len(email_data_list))
+            batch_data = email_data_list[batch_start:batch_end]
+
+            try:
+                prompts = []
+                for email_data in batch_data:
+                    subject = email_data.get("subject", "")
+                    sender = email_data.get("sender", "")
+                    body = email_data.get("body", "")[:500]
+
+                    prompt = f"""다음 이메일을 분석하여 스팸 여부를 판단하세요.
+
+제목: {subject}
+발신자: {sender}
+본문: {body}
+
+스팸 확률을 0.0~1.0 사이 숫자로 답변하세요.
+- 0.0~0.3: 정상 메일 (HAM)
+- 0.3~0.7: 불확실 (UNCERTAIN)
+- 0.7~1.0: 스팸 (SPAM)
+
+응답 형식: 숫자만 (예: 0.85)
+"""
+                    messages = [{"role": "user", "content": prompt}]
+                    formatted = self.tokenizer.apply_chat_template(
+                        messages,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                    )
+                    prompts.append(formatted)
+
+                inputs = self.tokenizer(
+                    prompts,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                )
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+                with torch.no_grad():
+                    outputs = self.model.generate(
+                        **inputs,
+                        max_new_tokens=10,
+                        temperature=0.1,
+                        do_sample=False,
+                        pad_token_id=self.tokenizer.pad_token_id,
+                        eos_token_id=self.tokenizer.eos_token_id,
+                    )
+
+                for i, output in enumerate(outputs):
+                    input_length = inputs["attention_mask"][i].sum().item()
+                    response = (
+                        self.tokenizer.decode(
+                            output[input_length:], skip_special_tokens=True
+                        )
+                        .strip()
+                        .lower()
+                    )
+
+                    match = re.search(r"(\d+\.?\d*)", response)
+                    if match:
+                        spam_prob = float(match.group(1))
+                        spam_prob = max(0.0, min(1.0, spam_prob))
+                    else:
+                        spam_prob = 0.5
+                    if spam_prob < 0.3:
+                        label = "HAM"
+                        confidence = "high" if spam_prob < 0.1 else "medium"
+                    elif spam_prob > 0.7:
+                        label = "SPAM"
+                        confidence = "high" if spam_prob > 0.9 else "medium"
+                    else:
+                        label = "UNCERTAIN"
+                        confidence = "low"
+
+                    results.append(
+                        {
+                            "spam_prob": spam_prob,
+                            "confidence": confidence,
+                            "label": label,
+                        }
+                    )
+
+            except Exception as e:
+                print(f"[WARNING] 배치 처리 실패, 개별 처리로 전환: {e}")
+                for email_data in batch_data:
+                    try:
+                        result = self.classify_spam(email_data)
+                        results.append(result)
+                    except Exception as e2:
+                        print(f"[WARNING] 개별 처리도 실패: {e2}")
+                        results.append(
+                            {
+                                "spam_prob": 0.5,
+                                "confidence": "low",
+                                "label": "UNCERTAIN",
+                            }
+                        )
+
+        return results

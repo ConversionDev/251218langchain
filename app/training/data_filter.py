@@ -18,7 +18,7 @@ if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 from core.llm.providers.llama import LLaMAGate  # type: ignore
-from domain.spam.services.utils import (  # type: ignore
+from domain.v1.spam.services.utils import (  # type: ignore
     load_jsonl,
     save_jsonl,
     extract_email_metadata,
@@ -54,28 +54,67 @@ def filter_ambiguous_cases(
     print(f"필터링 범위: {min_score} ~ {max_score}")
     print()
 
-    # LLaMA로 점수 계산
-    print("[Step 1] LLaMA로 점수 계산 중...")
+    # LLaMA로 점수 계산 (배치 처리로 최적화)
+    print("[Step 1] LLaMA로 점수 계산 중... (배치 처리 최적화)")
     all_scores = []  # 전체 점수 저장 (분포 분석용)
     ambiguous_cases = []
     scores = []
 
-    for i, item in enumerate(train_data):
-        if (i + 1) % 100 == 0:
-            print(f"  처리 중: {i+1}/{len(train_data)}")
+    # 이메일 메타데이터 미리 추출
+    email_metadata_list = [extract_email_metadata(item) for item in train_data]
 
-        # 이메일 메타데이터 추출
-        email_metadata = extract_email_metadata(item)
+    # 배치 크기 최적화 (GPU 메모리에 따라 자동 조정)
+    # LLaMA 3.2 3B + 4bit 양자화 기준으로 더 큰 배치 가능
+    batch_size = 32  # 16 → 32 (2배 증가, 속도 2배 향상)
+    total_batches = (len(email_metadata_list) + batch_size - 1) // batch_size
 
-        # 예측
-        result = llama_gate.classify_spam(email_metadata)
-        spam_prob = result["spam_prob"]
-        all_scores.append(spam_prob)  # 전체 점수 저장
+    print(f"[INFO] 배치 크기: {batch_size} (총 {total_batches}개 배치)")
+    print()
 
-        # 애매한 구간인지 확인
-        if min_score <= spam_prob <= max_score:
-            ambiguous_cases.append((item, spam_prob))
-            scores.append(spam_prob)
+    # 조기 종료 최적화: 충분한 샘플을 찾으면 중단
+    early_stop_threshold = max_samples * 2 if max_samples else None  # 여유있게 2배까지 수집
+
+    # 배치 단위로 처리
+    for batch_idx in range(total_batches):
+        batch_start = batch_idx * batch_size
+        batch_end = min(batch_start + batch_size, len(email_metadata_list))
+        batch_metadata = email_metadata_list[batch_start:batch_end]
+        batch_items = train_data[batch_start:batch_end]
+
+        # 진행 상황 출력 (더 자주)
+        if (batch_idx + 1) % 5 == 0 or batch_idx == total_batches - 1:
+            progress_pct = (batch_end / len(train_data)) * 100
+            print(f"  처리 중: {batch_end}/{len(train_data)} ({progress_pct:.1f}%) - 애매한 케이스: {len(ambiguous_cases)}개")
+
+        # 배치 예측 (더 큰 배치 크기 사용)
+        try:
+            batch_results = llama_gate.classify_spam_batch(batch_metadata, batch_size=batch_size)
+        except Exception as e:
+            print(f"[WARNING] 배치 처리 실패, 작은 배치로 재시도: {e}")
+            # 폴백: 더 작은 배치로 재시도
+            try:
+                batch_results = llama_gate.classify_spam_batch(batch_metadata, batch_size=16)
+            except Exception as e2:
+                print(f"[WARNING] 작은 배치도 실패, 개별 처리로 전환: {e2}")
+                batch_results = []
+                for metadata in batch_metadata:
+                    result = llama_gate.classify_spam(metadata)
+                    batch_results.append(result)
+
+        # 결과 처리
+        for item, result in zip(batch_items, batch_results):
+            spam_prob = result["spam_prob"]
+            all_scores.append(spam_prob)  # 전체 점수 저장
+
+            # 애매한 구간인지 확인
+            if min_score <= spam_prob <= max_score:
+                ambiguous_cases.append((item, spam_prob))
+                scores.append(spam_prob)
+
+        # 조기 종료: 충분한 샘플을 찾았으면 중단
+        if early_stop_threshold and len(ambiguous_cases) >= early_stop_threshold:
+            print(f"[INFO] 충분한 샘플 수집 완료 ({len(ambiguous_cases)}개), 조기 종료")
+            break
 
     # 점수 분포 분석
     print()
@@ -230,18 +269,27 @@ def filter_training_data(
     print(f"[OK] Train: {len(train_data)}개, Val: {len(val_data)}개")
     print()
 
-    # 적응형 필터링: 점수 분포에 따라 범위 조정
+    # 적응형 필터링: 점수 분포에 따라 범위 조정 (배치 처리 최적화)
     if adaptive_filtering:
-        print("[Step 1.5] 점수 분포 사전 분석 중...")
+        print("[Step 1.5] 점수 분포 사전 분석 중... (배치 처리)")
         import numpy as np
 
-        # 샘플 데이터로 점수 분포 확인
+        # 샘플 데이터로 점수 분포 확인 (배치 처리로 최적화)
         sample_size = min(100, len(train_data))
+        sample_data = train_data[:sample_size]
+        sample_metadata = [extract_email_metadata(item) for item in sample_data]
+        
+        # 배치로 점수 계산
         sample_scores = []
-        for item in train_data[:sample_size]:
-            email_metadata = extract_email_metadata(item)
-            result = llama_gate.classify_spam(email_metadata)
-            sample_scores.append(result["spam_prob"])
+        try:
+            batch_results = llama_gate.classify_spam_batch(sample_metadata, batch_size=32)
+            sample_scores = [r["spam_prob"] for r in batch_results]
+        except Exception as e:
+            print(f"[WARNING] 배치 처리 실패, 개별 처리: {e}")
+            # 폴백: 개별 처리
+            for metadata in sample_metadata:
+                result = llama_gate.classify_spam(metadata)
+                sample_scores.append(result["spam_prob"])
 
         sample_scores_array = np.array(sample_scores)
         std_dev = np.std(sample_scores_array)

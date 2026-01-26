@@ -54,15 +54,6 @@ def get_fine_tuned_dir() -> Path:
     return get_artifacts_dir() / "fine_tuned"
 
 
-def get_model_dir() -> Path:
-    """모델 디렉토리 경로 반환.
-
-    Returns:
-        app/artifacts/base_models/ 디렉토리 경로
-    """
-    return get_base_models_dir()
-
-
 def get_data_dir() -> Path:
     """데이터 디렉토리 경로 반환.
 
@@ -81,37 +72,21 @@ def get_output_dir() -> Path:
     return get_fine_tuned_dir()
 
 
-def get_llama_model_dir() -> Path:
-    """LLaMA 모델 디렉토리 경로 반환.
+def get_resource_manager_dir() -> Path:
+    """Resource Manager 디렉토리 경로 반환.
 
     Returns:
-        app/artifacts/base_models/llama/ 디렉토리 경로
+        app/core/resource_manager/ 디렉토리 경로
     """
-    return get_base_models_dir() / "llama"
+    return get_app_root() / "core" / "resource_manager"
 
 
-def get_exaone_model_dir() -> Path:
-    """EXAONE 모델 디렉토리 경로 반환.
+def get_unsloth_cache_dir() -> Path:
+    """Unsloth 컴파일 캐시 디렉토리 경로 반환.
 
     Returns:
-        app/artifacts/base_models/exaone/ 디렉토리 경로
+        app/core/resource_manager/unsloth_compiled_cache/ 디렉토리 경로
     """
-    return get_base_models_dir() / "exaone"
-
-
-def get_fine_tuned_llama_dir() -> Path:
-    """Fine-tuned LLaMA 디렉토리 경로 반환.
-
-    Returns:
-        app/artifacts/fine_tuned/llama/ 디렉토리 경로
-    """
-    return get_fine_tuned_dir() / "llama"
-
-
-def get_fine_tuned_exaone_dir() -> Path:
-    """Fine-tuned EXAONE 디렉토리 경로 반환.
-
-    Returns:
-        app/artifacts/fine_tuned/exaone/ 디렉토리 경로
-    """
-    return get_fine_tuned_dir() / "exaone"
+    cache_dir = get_resource_manager_dir() / "unsloth_compiled_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir

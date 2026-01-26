@@ -1,20 +1,20 @@
 ---
+base_model: LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct
 library_name: peft
 model_name: adapters
 tags:
-- base_model:adapter:C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\base_models\exaone
+- base_model:adapter:LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct
 - lora
 - sft
 - transformers
 - trl
 licence: license
-base_model: C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\base_models\exaone
 pipeline_tag: text-generation
 ---
 
 # Model Card for adapters
 
-This model is a fine-tuned version of [None](https://huggingface.co/None).
+This model is a fine-tuned version of [LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct](https://huggingface.co/LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct).
 It has been trained using [TRL](https://github.com/huggingface/trl).
 
 ## Quick start
@@ -38,10 +38,10 @@ This model was trained with SFT.
 ### Framework versions
 
 - PEFT 0.18.1
-- TRL: 0.27.0
-- Transformers: 4.57.6
-- Pytorch: 2.9.1+cu126
-- Datasets: 4.5.0
+- TRL: 0.24.0
+- Transformers: 4.57.3
+- Pytorch: 2.7.1+cu118
+- Datasets: 4.3.0
 - Tokenizers: 0.22.2
 
 ## Citations

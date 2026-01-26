@@ -23,20 +23,39 @@ from typing import Any, Dict, List, Optional, Tuple
 os.environ["TRANSFORMERS_TRUST_REMOTE_CODE"] = "true"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-import torch
-from datasets import Dataset
-from peft import (
+# Unsloth 캐시 설정 (리소스 매니저에서 관리)
+from core.resource_manager import setup_unsloth_cache  # type: ignore # noqa: E402
+
+setup_unsloth_cache()
+
+# EXAONE은 Unsloth와 호환되지 않음 (causal_mask 파라미터 문제)
+# 따라서 이 모듈에서는 Unsloth를 사용하지 않음
+_UNSLOTH_AVAILABLE = False
+FastLanguageModel = None  # type: ignore
+print("[INFO] EXAONE 학습: Unsloth 비활성화 (호환성 문제로 transformers + TRL + PEFT 사용)")
+
+import torch  # noqa: E402
+from datasets import Dataset  # noqa: E402
+from peft import (  # noqa: E402
     LoraConfig,
     TaskType,
     get_peft_model,
     prepare_model_for_kbit_training,
 )
-from transformers import (
+from transformers import (  # noqa: E402
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
     DataCollatorForLanguageModeling,
 )
+
+# HuggingFace 캐시 확인을 위한 import
+try:
+    from huggingface_hub import scan_cache_dir  # noqa: E402
+    _HF_HUB_AVAILABLE = True
+except ImportError:
+    _HF_HUB_AVAILABLE = False
+    scan_cache_dir = None  # type: ignore
 
 try:
     from trl import SFTTrainer
@@ -48,6 +67,17 @@ except ImportError:
 class TrainingDataLoader:
     """학습 데이터 및 모델 로더."""
 
+    # 클래스 변수: 로컬 경로 존재 여부 캐싱 (파일 시스템 체크 최적화)
+    _local_exaone_path_cache: Optional[str] = None
+    _local_exaone_path_checked: bool = False
+
+    # 클래스 변수: GPU 정보 캐싱 (GPU 확인 최적화)
+    _gpu_name_cache: Optional[str] = None
+    _gpu_memory_cache: Optional[float] = None
+
+    # 클래스 변수: HuggingFace 캐시 확인 결과 캐싱
+    _hf_cache_checked: Dict[str, bool] = {}
+
     def __init__(
         self,
         model_path: Optional[str] = None,
@@ -56,6 +86,7 @@ class TrainingDataLoader:
         lora_dropout: float = 0.05,
         target_modules: Optional[List[str]] = None,
         device_map: str = "cuda:0",
+        use_unsloth: bool = False,  # EXAONE은 Unsloth와 호환되지 않음 (항상 False)
     ):
         """초기화.
 
@@ -66,6 +97,7 @@ class TrainingDataLoader:
             lora_dropout: LoRA dropout
             target_modules: LoRA를 적용할 모듈 목록 (None이면 자동 감지)
             device_map: 디바이스 매핑 (기본값: "cuda:0", GPU 필수)
+            use_unsloth: 무시됨 (EXAONE은 Unsloth와 호환되지 않아 항상 비활성화)
         """
         self.model_path = model_path or self._find_exaone_model()
         self.lora_r = lora_r
@@ -73,6 +105,11 @@ class TrainingDataLoader:
         self.lora_dropout = lora_dropout
         self.target_modules = target_modules
         self.device_map = device_map
+
+        # EXAONE 모델은 Unsloth와 호환되지 않음 (causal_mask 파라미터 문제)
+        # 이 모듈은 EXAONE 전용이므로 항상 Unsloth 비활성화
+        self.use_unsloth = False
+        print("[INFO] EXAONE 모델: transformers + TRL + PEFT 사용 (Unsloth 비활성화)")
 
         # QLoRA 설정 (4-bit quantization)
         self.bnb_config = BitsAndBytesConfig(
@@ -105,27 +142,64 @@ class TrainingDataLoader:
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
 
-    def _find_exaone_model(self) -> Optional[str]:
-        """EXAONE 모델 경로 자동 탐지.
+    def _find_exaone_model(self) -> str:
+        """EXAONE 모델 경로 또는 HuggingFace 모델 ID 자동 탐지.
+
+        우선순위:
+        1. 환경 변수 EXAONE_MODEL_DIR
+        2. app/artifacts/base_models/exaone (로컬 경로, 캐싱됨)
+        3. HuggingFace 모델 ID (캐시에서 자동 로드)
 
         Returns:
-            모델 경로 또는 None
+            모델 경로 또는 HuggingFace 모델 ID
         """
-        # 환경 변수 확인
+        # 1. 환경 변수 확인 (최우선, 빠른 체크)
         env_path = os.environ.get("EXAONE_MODEL_DIR")
         if env_path:
             env_path_obj = Path(env_path)
+            # 환경 변수 경로는 매번 체크 (사용자가 변경할 수 있음)
             if env_path_obj.exists() and (env_path_obj / "config.json").exists():
+                print(f"[INFO] 환경 변수에서 EXAONE 모델 경로 사용: {env_path}")
                 return str(env_path_obj)
 
-        # app/artifacts/base_models/exaone 경로 확인
-        app_dir = Path(__file__).parent.parent  # training -> app
-        exaone_dir = app_dir / "artifacts" / "base_models" / "exaone"
+        # 2. 로컬 경로 확인 (캐싱으로 최적화)
+        # 클래스 변수로 한 번만 체크하고 결과 재사용
+        if not TrainingDataLoader._local_exaone_path_checked:
+            app_dir = Path(__file__).parent.parent  # training -> app
+            exaone_dir = app_dir / "artifacts" / "base_models" / "exaone"
 
-        if exaone_dir.exists() and (exaone_dir / "config.json").exists():
-            return str(exaone_dir)
+            # 파일 시스템 체크는 한 번만 수행
+            if exaone_dir.exists() and (exaone_dir / "config.json").exists():
+                TrainingDataLoader._local_exaone_path_cache = str(exaone_dir)
+            else:
+                TrainingDataLoader._local_exaone_path_cache = None
 
-        return None
+            TrainingDataLoader._local_exaone_path_checked = True
+
+        # 캐시된 결과 사용
+        if TrainingDataLoader._local_exaone_path_cache:
+            print(f"[INFO] 로컬 경로에서 EXAONE 모델 사용: {TrainingDataLoader._local_exaone_path_cache}")
+            return TrainingDataLoader._local_exaone_path_cache
+
+        # 3. HuggingFace 모델 ID 반환 (캐시에서 자동 로드)
+        # 로컬 경로가 없으면 바로 반환 (추가 파일 시스템 체크 없음)
+        default_model_id = "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct"
+
+        # HuggingFace 캐시 사전 확인 (한 번만 확인하고 캐싱)
+        if default_model_id not in TrainingDataLoader._hf_cache_checked:
+            cache_exists = self._check_hf_cache(default_model_id)
+            TrainingDataLoader._hf_cache_checked[default_model_id] = cache_exists
+
+        cache_status = TrainingDataLoader._hf_cache_checked[default_model_id]
+        if cache_status:
+            print(f"[INFO] 로컬 경로가 없어 HuggingFace 모델 ID 사용: {default_model_id}")
+            print("[INFO] HuggingFace 캐시에서 모델을 로드합니다.")
+        else:
+            print(f"[INFO] 로컬 경로가 없어 HuggingFace 모델 ID 사용: {default_model_id}")
+            print("[WARNING] HuggingFace 캐시에 모델이 없습니다. 다운로드가 시작됩니다.")
+            print("[INFO] 첫 다운로드는 시간이 걸릴 수 있습니다.")
+
+        return default_model_id
 
     def load_datasets(
         self,
@@ -170,20 +244,74 @@ class TrainingDataLoader:
 
         return train_dataset, val_dataset
 
+    def _check_hf_cache(self, model_id: str) -> bool:
+        """HuggingFace 캐시에 모델이 있는지 확인.
+
+        Args:
+            model_id: HuggingFace 모델 ID (예: "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct")
+
+        Returns:
+            캐시에 모델이 있으면 True, 없으면 False
+        """
+        if not _HF_HUB_AVAILABLE or scan_cache_dir is None:
+            # huggingface_hub가 없으면 확인 불가 (항상 True로 가정)
+            return True
+
+        try:
+            cache_info = scan_cache_dir()
+            repos = list(cache_info.repos)
+
+            # 모델 ID로 캐시 검색
+            for repo in repos:
+                if repo.repo_id == model_id:
+                    # 모델이 캐시에 있음
+                    return True
+
+            # 캐시에 없음
+            return False
+        except Exception as e:
+            # 오류 발생 시 안전하게 True 반환 (다운로드 시도)
+            print(f"[WARNING] HuggingFace 캐시 확인 실패: {e}")
+            return True
+
     def load_model(self) -> Tuple[Any, AutoTokenizer]:
         """EXAONE 모델 및 토크나이저 로드.
 
         Returns:
             (model, tokenizer)
         """
-        if self.model_path is None:
+        # GPU 필수 확인
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA가 사용 불가능합니다. GPU가 필요합니다.\n"
+                "학습은 반드시 GPU 메모리를 사용해야 합니다."
+            )
+
+        # GPU 정보 캐싱 (한 번만 확인하고 재사용)
+        if TrainingDataLoader._gpu_name_cache is None:
+            TrainingDataLoader._gpu_name_cache = torch.cuda.get_device_name(0)
+            gpu_props = torch.cuda.get_device_properties(0)
+            TrainingDataLoader._gpu_memory_cache = gpu_props.total_memory / (1024**3)
+
+        print(f"[INFO] GPU 확인: {TrainingDataLoader._gpu_name_cache}")
+        print(f"[INFO] GPU 메모리: {TrainingDataLoader._gpu_memory_cache:.2f} GB")
+        print()
+
+        # model_path는 이제 항상 반환됨 (HuggingFace 모델 ID 포함)
+        if not self.model_path:
             raise ValueError(
-                "EXAONE 모델 경로를 찾을 수 없습니다. "
-                "app/artifacts/base_models/exaone 디렉토리에 모델 파일이 있는지 확인하거나 "
-                "EXAONE_MODEL_DIR 환경 변수를 설정하세요."
+                "EXAONE 모델을 찾을 수 없습니다. "
+                "다음 중 하나를 확인하세요:\n"
+                "1. app/artifacts/base_models/exaone 디렉토리에 모델 파일이 있는지\n"
+                "2. EXAONE_MODEL_DIR 환경 변수가 설정되어 있는지\n"
+                "3. HuggingFace 캐시에 모델이 다운로드되어 있는지"
             )
 
         print(f"[INFO] 모델 로딩 중: {self.model_path}")
+        print(f"[INFO] 디바이스: {self.device_map} (GPU 메모리 사용)")
+
+        # EXAONE은 Unsloth와 호환되지 않으므로 항상 transformers 사용
+        print("[INFO] transformers + PEFT로 EXAONE 모델 로딩 중...")
 
         # 토크나이저 로드
         # trl >= 0.8.0에서는 max_seq_length를 여기서 설정
@@ -204,6 +332,17 @@ class TrainingDataLoader:
         # QLoRA는 device_map이 딕셔너리 형태이거나 "auto"를 권장하지만,
         # GPU만 사용하려면 "cuda:0" 형식 사용
         device_map_value = self.device_map if self.device_map != "cuda" else "cuda:0"
+
+        # HuggingFace 모델 ID인 경우 캐시 확인 (이미 _find_exaone_model에서 확인됨)
+        if "/" in str(self.model_path) and not Path(self.model_path).exists():
+            model_id = str(self.model_path)
+            if model_id in TrainingDataLoader._hf_cache_checked:
+                cache_exists = TrainingDataLoader._hf_cache_checked[model_id]
+                if cache_exists:
+                    print("[INFO] HuggingFace 모델 ID 감지: 캐시에서 로드 중...")
+                else:
+                    print("[INFO] HuggingFace 모델 ID 감지: 다운로드 중... (캐시에 없음)")
+
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
             quantization_config=self.bnb_config,
@@ -212,19 +351,33 @@ class TrainingDataLoader:
             torch_dtype=torch.bfloat16,
         )
 
-        # PEFT 모델 준비
+        # PEFT 모델 준비 (중간 모델 객체는 자동으로 GC 처리됨)
         model = prepare_model_for_kbit_training(model)
 
-        # LoRA 적용
+        # LoRA 적용 (기존 model 객체는 peft_model로 대체됨)
         peft_model = get_peft_model(model, self.lora_config)
         peft_model.print_trainable_parameters()
 
-        self.model = model
+        # GPU 사용 확인
+        next_param = next(peft_model.parameters())
+        device = next_param.device
+        if device.type != "cuda":
+            raise RuntimeError(
+                f"모델이 GPU에 로드되지 않았습니다. 현재 디바이스: {device}\n"
+                "학습은 반드시 GPU 메모리를 사용해야 합니다."
+            )
+        print(f"[OK] 모델이 GPU에 로드됨: {device}")
+
+        # 메모리 정리: 원본 model 객체는 더 이상 필요 없음 (peft_model이 포함)
+        # peft_model이 model을 포함하므로 model 참조는 제거 가능
+        # 하지만 반환값과 self.model에 저장해야 하므로 유지
+        self.model = model  # 원본 모델 참조 유지 (peft_model이 내부적으로 사용)
         self.peft_model = peft_model
 
-        print("[OK] 모델 로딩 완료")
+        print("[OK] 모델 로딩 완료 (GPU 메모리 사용)")
 
-        return model, tokenizer
+        # peft_model 반환 (학습에 사용)
+        return peft_model, tokenizer
 
     def format_dataset(
         self,

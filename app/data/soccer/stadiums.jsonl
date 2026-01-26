@@ -1,0 +1,20 @@
+{"id": 1000, "stadium_code": "D03", "statdium_name": "전주월드컵경기장", "hometeam_code": "K05", "seat_count": 28000, "address": "전북 전주시 덕진구 반월동  763-1", "ddd": "063", "tel": "273-1763"}
+{"id": 1001, "stadium_code": "B02", "statdium_name": "성남종합운동장", "hometeam_code": "K08", "seat_count": 27000, "address": "경기도 성남시 분당구 야탑동  486", "ddd": "031", "tel": "753-3956"}
+{"id": 1002, "stadium_code": "C06", "statdium_name": "포항스틸야드", "hometeam_code": "K03", "seat_count": 25000, "address": "경북  포항시 남구 괴동 1", "ddd": "054", "tel": "282-2002"}
+{"id": 1003, "stadium_code": "D01", "statdium_name": "광양전용경기장", "hometeam_code": "K07", "seat_count": 20009, "address": "전남 광양시 금호동  700", "ddd": "061", "tel": "792-5600"}
+{"id": 1004, "stadium_code": "B05", "statdium_name": "서울월드컵경기장", "hometeam_code": "K09", "seat_count": 66806, "address": "서울특별시 마포구 난지도길  66", "ddd": "02", "tel": "2128-2973"}
+{"id": 1005, "stadium_code": "B01", "statdium_name": "인천월드컵경기장", "hometeam_code": "K04", "seat_count": 35000, "address": "인천광역시 남구 문학동  482", "ddd": "031", "tel": "666-0496"}
+{"id": 1006, "stadium_code": "C05", "statdium_name": "창원종합운동장", "hometeam_code": "K11", "seat_count": 27085, "address": "경남 창원시 두대동  145", "ddd": "055", "tel": "6644-8468"}
+{"id": 1007, "stadium_code": "C04", "statdium_name": "울산문수경기장", "hometeam_code": "K01", "seat_count": 46102, "address": "울산광역시 남구 옥산  산5", "ddd": "052", "tel": "220-2468"}
+{"id": 1008, "stadium_code": "D02", "statdium_name": "대전월드컵경기장", "hometeam_code": "K10", "seat_count": 41000, "address": "대전광역시 유성구 노은동  270", "ddd": "042", "tel": "252-2002"}
+{"id": 1009, "stadium_code": "B04", "statdium_name": "수원월드컵경기장", "hometeam_code": "K02", "seat_count": 50000, "address": "수원시 팔달구 우만1동  228번지", "ddd": "031", "tel": "259-2150"}
+{"id": 1010, "stadium_code": "A02", "statdium_name": "광주월드컵경기장", "hometeam_code": "K12", "seat_count": 40245, "address": "광주광역시 서구 풍암동  423-2", "ddd": "062", "tel": "2468-8642"}
+{"id": 1011, "stadium_code": "C02", "statdium_name": "부산아시아드경기장", "hometeam_code": "K06", "seat_count": 30000, "address": "부산광역시 서구 서대신동 3가  210번지", "ddd": "051", "tel": "247-5771"}
+{"id": 1012, "stadium_code": "A03", "statdium_name": "강릉종합경기장", "hometeam_code": "K13", "seat_count": 33000, "address": "강원 강릉시 교동 산58", "ddd": "033", "tel": "459-3631"}
+{"id": 1013, "stadium_code": "A04", "statdium_name": "제주월드컵경기장", "hometeam_code": "K14", "seat_count": 42256, "address": "제주 서귀포시  법환동", "ddd": "064", "tel": "3631-2460"}
+{"id": 1014, "stadium_code": "A05", "statdium_name": "대구월드컵경기장", "hometeam_code": "K15", "seat_count": 66422, "address": "대구광역시 수성구 대흥동  504", "ddd": "053", "tel": "602-2011"}
+{"id": 1015, "stadium_code": "F01", "statdium_name": "대구시민경기장", "hometeam_code": "", "seat_count": 30000, "address": "대구광역시", "ddd": "054", "tel": ""}
+{"id": 1016, "stadium_code": "F02", "statdium_name": "부산시민경기장", "hometeam_code": "", "seat_count": 30000, "address": "부산광역시", "ddd": "051", "tel": ""}
+{"id": 1017, "stadium_code": "F03", "statdium_name": "일산경기장", "hometeam_code": "", "seat_count": 20000, "address": "경기도  일산시", "ddd": "031", "tel": ""}
+{"id": 1018, "stadium_code": "F04", "statdium_name": "마산경기장", "hometeam_code": "", "seat_count": 20000, "address": "경남  마산시", "ddd": "055", "tel": ""}
+{"id": 1019, "stadium_code": "F05", "statdium_name": "안양경기장", "hometeam_code": "", "seat_count": 20000, "address": "경기도  안양시", "ddd": "031", "tel": ""}

@@ -3,7 +3,7 @@
   "alpha_pattern": {},
   "arrow_config": null,
   "auto_mapping": null,
-  "base_model_name_or_path": "C:\\Users\\kku10\\OneDrive\\\ubb38\uc11c\\RAG\\app\\artifacts\\base_models\\exaone",
+  "base_model_name_or_path": "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct",
   "bias": "none",
   "corda_config": null,
   "ensure_weight_tying": false,
@@ -29,10 +29,10 @@
   "rank_pattern": {},
   "revision": null,
   "target_modules": [
-    "o_proj",
-    "v_proj",
+    "k_proj",
     "q_proj",
-    "k_proj"
+    "v_proj",
+    "o_proj"
   ],
   "target_parameters": null,
   "task_type": "CAUSAL_LM",

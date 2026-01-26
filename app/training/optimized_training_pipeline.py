@@ -2,11 +2,15 @@
 최적화된 학습 파이프라인
 
 역할: 학습 시간 최소화를 위한 통합 파이프라인
-1. LLaMA로 데이터 필터링
-2. 최적화된 설정으로 EXAONE 학습
+1. LLaMA로 데이터 필터링 (Unsloth 사용)
+2. 최적화된 설정으로 EXAONE 학습 (Unsloth 비활성화)
 3. 전체 프로세스 자동화
+
+주의: EXAONE은 Unsloth와 호환되지 않으므로 학습 시 Unsloth 패치를 비활성화합니다.
 """
 
+import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Optional
@@ -16,13 +20,17 @@ app_dir = Path(__file__).parent.parent
 if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
-from core.llm.providers.llama import LLaMAGate  # type: ignore
-from domain.spam.services.utils import (  # type: ignore
+# EXAONE 학습 시 Unsloth SFTTrainer 패치 방지
+# 이 환경 변수는 lora_adapter.py에서도 설정되지만, 여기서 먼저 설정
+os.environ["UNSLOTH_DISABLE_TRAINER_PATCH"] = "1"
+
+from core.llm.providers.llama import LLaMAGate  # type: ignore  # noqa: E402
+from domain.v1.spam.services.utils import (  # type: ignore  # noqa: E402
     get_data_dir,
     get_output_dir,
 )
-from training.data_filter import filter_training_data  # type: ignore
-from training.lora_adapter import LoRATrainer  # type: ignore
+from training.data_filter import filter_training_data  # type: ignore  # noqa: E402
+from training.lora_adapter import LoRATrainer  # type: ignore  # noqa: E402
 
 
 class OptimizedTrainingPipeline:
@@ -60,6 +68,9 @@ class OptimizedTrainingPipeline:
             output_dir_path = Path(output_dir)
 
         self.output_dir: Path = output_dir_path
+        # 기존 모델이 있으면 덮어쓰기
+        if self.output_dir.exists():
+            shutil.rmtree(self.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # 필터링된 데이터 저장 경로
@@ -86,11 +97,10 @@ class OptimizedTrainingPipeline:
             print("[Phase 1] 데이터 필터링")
             print("-" * 60)
 
-            # LLaMA 분류기 로드
+            # LLaMA 분류기 로드 (기본값: LLaMA 3.2 3B 사용)
             print("[INFO] LLaMA 분류기 로딩 중...")
             llama_gate = LLaMAGate(
-                model_id="meta-llama/Llama-3.1-8B-Instruct",
-                use_4bit=True,
+                load_in_4bit=True,
             )
             print()
 
@@ -134,20 +144,21 @@ class OptimizedTrainingPipeline:
         )
         print()
 
-        # 학습 실행 (최적화된 설정)
-        print("[INFO] 최적화된 설정으로 학습 시작...")
+        # 학습 실행 (속도 최적화 설정)
+        print("[INFO] 속도 최적화 설정으로 학습 시작...")
         output_dir = Path(
             trainer.train(
-                num_epochs=2,  # 최적화
-                per_device_train_batch_size=4,  # 최적화
-                per_device_eval_batch_size=2,  # 최적화
-                gradient_accumulation_steps=2,  # 최적화
-                max_seq_length=512,  # 최적화
-                eval_steps=1000,  # 최적화
-                save_steps=1000,  # 최적화
-                logging_steps=50,  # 최적화
-                dataloader_num_workers=4,  # 최적화
-                gradient_checkpointing=True,  # 최적화
+                num_epochs=2,
+                per_device_train_batch_size=8,  # 4 → 8 (속도 향상)
+                per_device_eval_batch_size=4,  # 2 → 4 (속도 향상)
+                gradient_accumulation_steps=1,  # 2 → 1 (속도 향상, 실제 배치 = 8)
+                max_seq_length=512,
+                eval_steps=500,  # 1000 → 500 (평가 빈도 증가는 속도에 영향 적음)
+                save_steps=500,  # 1000 → 500 (저장 빈도 증가는 속도에 영향 적음)
+                logging_steps=25,  # 50 → 25 (로깅 빈도 증가는 속도에 영향 적음)
+                dataloader_num_workers=0,  # 4 → 0 (Windows에서 멀티프로세싱 오버헤드 제거)
+                gradient_checkpointing=False,  # True → False (속도 향상, 메모리 사용량 증가)
+                warmup_steps=50,  # 워밍업 단축
             )
         )
 

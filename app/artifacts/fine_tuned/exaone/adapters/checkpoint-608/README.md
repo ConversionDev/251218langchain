@@ -1,9 +1,9 @@
 ---
-base_model: C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\base_models\exaone
+base_model: LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct
 library_name: peft
 pipeline_tag: text-generation
 tags:
-- base_model:adapter:C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\base_models\exaone
+- base_model:adapter:LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct
 - lora
 - sft
 - transformers

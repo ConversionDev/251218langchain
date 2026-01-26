@@ -4,10 +4,10 @@
 
 하이퍼파라미터:
   - 에포크: 2
-  - 배치 크기: 4
-  - 그래디언트 누적: 2
+  - 배치 크기: 8
+  - 그래디언트 누적: 1
   - 학습률: 0.0002
-  - 워밍업 스텝: 100
+  - 워밍업 스텝: 50
   - 옵티마이저: OptimizerNames.PAGED_ADAMW_8BIT
   - 스케줄러: SchedulerType.COSINE
 
@@ -18,14 +18,15 @@ LoRA 설정:
   - Target modules: None
 
 학습 결과:
-  - 학습 손실: 0.8812
-  - train_runtime: 875.5177
-  - train_samples_per_second: 5.556
-  - train_steps_per_second: 0.694
-  - total_flos: 7776003115499520.0
-  - train_loss: 0.8812010523520017
+  - 학습 손실: 0.7503
+  - train_runtime: 1258.7249
+  - train_samples_per_second: 3.864
+  - train_steps_per_second: 0.483
+  - total_flos: 2.79079488847872e+16
+  - train_loss: 0.7502805872967369
+  - epoch: 2.0
 
 모델 정보:
-  - 모델 경로: C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\base_models\exaone
+  - 모델 경로: LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct
   - 출력 경로: C:\Users\kku10\OneDrive\문서\RAG\app\artifacts\fine_tuned\exaone\adapters
 

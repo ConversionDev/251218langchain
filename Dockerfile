@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 패키지 설치
-COPY api/requirements.txt .
+COPY app/api/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
-COPY api/ ./api/
+COPY app/ ./app/
 
 # .env 파일 복사 (런타임에서 사용)
 COPY .env .env
@@ -33,5 +33,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # 실행 명령
-CMD ["python", "-m", "api.app.main"]
+CMD ["python", "-m", "app.api.main"]
 

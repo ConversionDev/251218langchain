@@ -16,7 +16,6 @@ from core.paths import (  # type: ignore
     get_base_models_dir,
     get_data_dir,
     get_fine_tuned_dir,
-    get_model_dir,
     get_output_dir,
     get_project_root,
 )
@@ -29,7 +28,6 @@ __all__ = [
     "get_base_models_dir",
     "get_data_dir",
     "get_fine_tuned_dir",
-    "get_model_dir",
     "get_output_dir",
     "get_project_root",
     # config

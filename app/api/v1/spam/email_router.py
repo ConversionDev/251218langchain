@@ -6,8 +6,8 @@
 
 from typing import Any, Dict
 
-from domain.chat.orchestrator import run_spam_detection  # type: ignore
-from domain.spam.models.email_model import EmailRequest, EmailResponse  # type: ignore
+from domain.v1.chat.orchestrator import run_spam_detection  # type: ignore
+from domain.v1.spam.models.email_model import EmailRequest, EmailResponse  # type: ignore
 from fastapi import APIRouter, HTTPException
 
 email_router = APIRouter(prefix="/mail", tags=["mail"])
@@ -60,8 +60,8 @@ async def spam_mail_filter(email: EmailRequest):
         )  # 그래프에서 직접 전달받음
 
         # LLaMA와 EXAONE 결과를 모델로 변환
-        from domain.spam.agents.exaone.models import ExaoneResult  # type: ignore
-        from domain.spam.models import LLaMAResult  # type: ignore
+        from domain.v1.spam.agents.exaone.models import ExaoneResult  # type: ignore
+        from domain.v1.spam.models import LLaMAResult  # type: ignore
 
         llama_result_dict = result.get("llama_result", {})
         exaone_result_dict = result.get("exaone_result")

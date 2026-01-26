@@ -1,12 +1,13 @@
 {
-  "name": "LangChain Chatbot",
+  "name": "LangChain + LangGraph 테스트",
   "short_name": "LangChain Chat",
-  "description": "LangChain을 활용한 챗봇 서비스",
+  "description": "LangChain RAG와 LangGraph 에이전트 테스트 챗봇",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#0a0a1a",
+  "theme_color": "#0a0a1a",
   "orientation": "portrait-primary",
+  "scope": "/",
   "icons": [
     {
       "src": "/icon-192x192.png",

@@ -58,8 +58,12 @@ __pycache__/
 dist/
 build/
 
-# Python model files
-api/app/model/
-
 # LangChain library (if not needed in repo)
 libs/langchain/
+
+# Fine-tuned models and artifacts
+app/artifacts/
+
+# Unsloth compiled cache (기존 위치 및 새 위치 모두)
+app/unsloth_compiled_cache/
+app/core/resource_manager/unsloth_compiled_cache/

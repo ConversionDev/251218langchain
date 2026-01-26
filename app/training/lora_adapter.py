@@ -27,24 +27,35 @@ if str(app_dir) not in sys.path:
 os.environ["TRANSFORMERS_TRUST_REMOTE_CODE"] = "true"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
+# Unsloth SFTTrainer 패치 방지 (EXAONE은 Unsloth와 호환되지 않음)
+# 이 환경 변수를 설정하면 Unsloth가 SFTTrainer를 패치하지 않음
+os.environ["UNSLOTH_DISABLE_TRAINER_PATCH"] = "1"
+
 from typing import Any, Dict, Optional
 
 from transformers import TrainingArguments
 
 # trl 버전에 따라 import 방식이 다름
+# 중요: Unsloth가 이미 import된 경우에도 원본 SFTTrainer를 사용하도록 함
 SFTTrainer = None
 SFTConfig = None
 
+# Unsloth 패치 전에 원본 SFTTrainer를 가져오기 위해 직접 import
 try:
-    from trl import SFTConfig, SFTTrainer  # type: ignore
-except ImportError:
+    # trl의 원본 SFTTrainer 직접 import
+    from trl.trainer.sft_trainer import SFTTrainer as _OriginalSFTTrainer  # type: ignore
+    SFTTrainer = _OriginalSFTTrainer
     try:
-        from trl.trainer.sft_trainer import SFTTrainer  # type: ignore
-
+        from trl import SFTConfig  # type: ignore
+    except ImportError:
         try:
             from trl.trainer.sft_config import SFTConfig  # type: ignore
         except ImportError:
             SFTConfig = None
+    print("[INFO] EXAONE 학습: 원본 TRL SFTTrainer 사용 (Unsloth 패치 비활성화)")
+except ImportError:
+    try:
+        from trl import SFTConfig, SFTTrainer  # type: ignore
     except ImportError:
         try:
             from trl import SFTTrainer  # type: ignore
@@ -76,7 +87,7 @@ class LoRATrainer:
         """
         # 출력 디렉토리 설정
         if output_dir is None:
-            from domain.spam.services.utils import get_output_dir  # type: ignore
+            from domain.v1.spam.services.utils import get_output_dir  # type: ignore
 
             output_dir_path = get_output_dir() / "exaone" / "adapters"
         else:
@@ -85,13 +96,14 @@ class LoRATrainer:
         self.output_dir = output_dir_path
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # TrainingDataLoader 생성
+        # TrainingDataLoader 생성 (EXAONE은 Unsloth 비활성화)
         self.data_loader = TrainingDataLoader(
             model_path=None,  # 자동 탐지
             lora_r=lora_r,
             lora_alpha=lora_alpha,
             lora_dropout=lora_dropout,
             device_map=device_map,
+            use_unsloth=False,  # EXAONE은 Unsloth와 호환되지 않음
         )
 
         # 학습 객체
@@ -226,27 +238,27 @@ class LoRATrainer:
 
     def train(
         self,
-        num_epochs: int = 2,  # 3 → 2 (최적화)
-        per_device_train_batch_size: int = 4,  # 1 → 4 (최적화)
-        per_device_eval_batch_size: int = 2,  # 1 → 2 (최적화)
-        gradient_accumulation_steps: int = 2,  # 8 → 2 (실제 배치 = 8 유지)
+        num_epochs: int = 2,
+        per_device_train_batch_size: int = 8,  # 4 → 8 (속도 향상)
+        per_device_eval_batch_size: int = 4,  # 2 → 4 (속도 향상)
+        gradient_accumulation_steps: int = 1,  # 2 → 1 (속도 향상)
         learning_rate: float = 2e-4,
-        warmup_steps: int = 100,
-        logging_steps: int = 50,  # 10 → 50 (최적화)
-        eval_steps: int = 1000,  # 500 → 1000 (최적화)
-        save_steps: int = 1000,  # 500 → 1000 (최적화)
+        warmup_steps: int = 50,  # 100 → 50 (속도 향상)
+        logging_steps: int = 25,  # 50 → 25
+        eval_steps: int = 500,  # 1000 → 500
+        save_steps: int = 500,  # 1000 → 500
         save_total_limit: int = 3,
         load_best_model_at_end: bool = True,
         metric_for_best_model: str = "eval_loss",
         greater_is_better: bool = False,
-        max_seq_length: int = 512,  # 2048 → 512 (최적화)
+        max_seq_length: int = 512,
         fp16: bool = False,
         bf16: bool = True,
         optim: str = "paged_adamw_8bit",
         lr_scheduler_type: str = "cosine",
         report_to: Optional[str] = None,
-        dataloader_num_workers: int = 4,  # 추가 (최적화)
-        gradient_checkpointing: bool = True,  # 추가 (최적화)
+        dataloader_num_workers: int = 0,  # 4 → 0 (Windows 멀티프로세싱 오버헤드 제거)
+        gradient_checkpointing: bool = False,  # True → False (속도 향상, 메모리 사용량 증가)
     ) -> Path:
         """SFT 학습 실행.
 

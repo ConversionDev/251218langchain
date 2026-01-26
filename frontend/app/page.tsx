@@ -1,362 +1,160 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import ChatMessage from "@/components/ChatMessage";
-import ChatInput from "@/components/ChatInput";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
-
-type ModelType = "openai" | "local";
+import { useEffect, useRef } from "react";
+import { useChatStore } from "@/lib/store/chatStore";
+import ChatMessage from "@/components/v1/ChatMessage";
+import ChatInput from "@/components/v1/ChatInput";
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      content: "안녕하세요! LangChain 챗봇입니다. 무엇을 도와드릴까요?",
-      timestamp: new Date(),
-    },
-  ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [modelType, setModelType] = useState<ModelType>("openai");
+  const {
+    messages,
+    isLoading,
+    provider,
+    useRag,
+    apiMode,
+    agentStatus,
+    sendMessage,
+    setProvider,
+    setApiMode,
+    toggleRag,
+    clearMessages,
+    checkAgentHealth,
+  } = useChatStore();
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // localhost 여부 확인 함수
-  const checkIsLocalhost = (): boolean => {
-    if (typeof window === "undefined") return false;
-    return (
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1" ||
-      window.location.hostname === ""
-    );
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  // 스크롤 자동 이동
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = async (content: string) => {
-    if (!content.trim() || isLoading) return;
-
-    // 프론트엔드 환경 확인 (Vercel vs 로컬)
-    const isFrontendLocalhost = checkIsLocalhost();
-
-    // Vercel 환경에서 로컬 모델 선택 시 차단
-    if (!isFrontendLocalhost && modelType === "local") {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: "⚠️ 현재 로컬 환경이 아닙니다. OpenAI 모델을 사용해주세요.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      setIsLoading(false);
-      return;
-    }
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
-    try {
-      // 디버깅: 전송하는 model_type 확인
-      console.log("[DEBUG] 전송하는 model_type:", modelType);
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: content,
-          history: messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          model_type: modelType, // "openai" 또는 "local"
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.error || errorData.detail || errorData.message || "응답을 받는 중 오류가 발생했습니다.";
-
-        // 로컬 환경에서 OpenAI 사용 시도 (400 에러)
-        if (response.status === 400 && errorMsg.includes("로컬환경")) {
-          const errorMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: `⚠️ ${errorMsg}`,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, errorMessage]);
-          return;
-        }
-
-        // OpenAI 호출량 초과 에러 (429)
-        if (response.status === 429) {
-          const errorMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: "⚠️ OpenAI API 호출량이 초과되었습니다. 할당량을 확인하고 다시 시도해주세요. 또는 '로컬 모델' 버튼을 선택하여 로컬 모델을 사용해주세요.",
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, errorMessage]);
-          return;
-        }
-
-        // 백엔드 연결 오류 (503)
-        if (response.status === 503) {
-          const errorMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: `⚠️ ${errorMsg}`,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, errorMessage]);
-          return;
-        }
-
-        // 기타 에러
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: `⚠️ ${errorMsg}`,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-        return;
-      }
-
-      const data = await response.json();
-
-      // 에러 응답인지 확인
-      if (data.error) {
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: `⚠️ ${data.error}`,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-        return;
-      }
-
-      // 로컬 환경에서 로컬 모델 선택 시 EC2 환경 감지
-      // 백엔드 응답에 "현재 EC2 환경입니다"가 포함되어 있으면 그대로 표시
-      const responseContent = data.response || "응답을 생성할 수 없습니다.";
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: responseContent,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `⚠️ 오류가 발생했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // 에이전트 상태 확인 (마운트 시)
+  useEffect(() => {
+    checkAgentHealth();
+  }, [checkAgentHealth]);
 
   return (
-    <div className="chat-container">
-      <header className="chat-header">
-        <h1>🤖 LangChain Chatbot</h1>
-        <p>PGVector와 연동된 AI 챗봇</p>
-        <div className="model-selector">
+    <div className="flex flex-col h-screen max-w-[900px] mx-auto bg-[#1a1a2e] shadow-[0_0_40px_rgba(102,126,234,0.2)]">
+      {/* 헤더 */}
+      <header className="bg-gradient-to-br from-[#16213e] to-[#1a1a2e] text-[#e0e0e0] px-6 py-4 border-b border-[rgba(102,126,234,0.3)] md:px-4 md:py-3">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-semibold text-white md:text-base">🤖 LangChain + LangGraph 테스트</h1>
+            <a
+              href="/v1/spam-detection"
+              className="px-3 py-1.5 bg-[rgba(102,126,234,0.2)] border border-[rgba(102,126,234,0.3)] rounded-lg text-[#e0e0e0] no-underline text-sm transition-all hover:bg-[rgba(102,126,234,0.3)]"
+            >
+              🛡️ 스팸 감지
+            </a>
+          </div>
+          <div className="flex items-center gap-2 text-sm px-3 py-1 bg-[rgba(255,255,255,0.05)] rounded-full">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                agentStatus === "healthy"
+                  ? "bg-green-400 shadow-[0_0_8px_#4ade80]"
+                  : agentStatus === "error"
+                    ? "bg-red-400 shadow-[0_0_8px_#f87171]"
+                    : "bg-yellow-400 animate-pulse"
+              }`}
+            ></span>
+            {agentStatus === "healthy"
+              ? "연결됨"
+              : agentStatus === "error"
+                ? "오류"
+                : "확인 중..."}
+          </div>
+        </div>
+
+        {/* API 모드 선택 */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-sm text-[#a0a0a0] min-w-[70px] md:min-w-0 md:w-full md:mb-1">API 모드:</span>
           <button
-            className={`model-button ${modelType === "openai" ? "active" : ""}`}
-            onClick={() => setModelType("openai")}
+            className={`px-3 py-1.5 border rounded-lg text-sm transition-all md:px-2.5 md:py-1 md:text-xs ${
+              apiMode === "langchain"
+                ? "bg-gradient-to-br from-[#667eea] to-[#764ba2] border-[#667eea] text-white font-medium"
+                : "border-[rgba(102,126,234,0.3)] bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] hover:bg-[rgba(102,126,234,0.2)] hover:border-[rgba(102,126,234,0.5)]"
+            } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            onClick={() => setApiMode("langchain")}
             disabled={isLoading}
           >
-            🌐 OpenAI
+            🔗 LangChain
           </button>
           <button
-            className={`model-button ${modelType === "local" ? "active" : ""}`}
-            onClick={() => setModelType("local")}
+            className={`px-3 py-1.5 border rounded-lg text-sm transition-all md:px-2.5 md:py-1 md:text-xs ${
+              apiMode === "langgraph"
+                ? "bg-gradient-to-br from-[#667eea] to-[#764ba2] border-[#667eea] text-white font-medium"
+                : "border-[rgba(102,126,234,0.3)] bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] hover:bg-[rgba(102,126,234,0.2)] hover:border-[rgba(102,126,234,0.5)]"
+            } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            onClick={() => setApiMode("langgraph")}
             disabled={isLoading}
           >
-            🖥️ 로컬 모델
+            🕸️ LangGraph
           </button>
         </div>
+
+        {/* LLM 제공자 선택 */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-sm text-[#a0a0a0] min-w-[70px] md:min-w-0 md:w-full md:mb-1">LLM:</span>
+          <button
+            className={`px-3 py-1.5 border rounded-lg text-sm transition-all md:px-2.5 md:py-1 md:text-xs ${
+              provider === "exaone"
+                ? "bg-gradient-to-br from-[#667eea] to-[#764ba2] border-[#667eea] text-white font-medium"
+                : "border-[rgba(102,126,234,0.3)] bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] hover:bg-[rgba(102,126,234,0.2)] hover:border-[rgba(102,126,234,0.5)]"
+            } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            onClick={() => setProvider("exaone")}
+            disabled={isLoading}
+          >
+            🇰🇷 EXAONE
+          </button>
+        </div>
+
+        {/* RAG 및 기타 옵션 (LangGraph 모드에서만) */}
+        {apiMode === "langgraph" && (
+          <div className="flex items-center gap-4 flex-wrap">
+            <label className="flex items-center gap-2 text-sm cursor-pointer text-[#a0a0a0] has-[:checked]:text-[#e0e0e0]">
+              <input
+                type="checkbox"
+                checked={useRag}
+                onChange={toggleRag}
+                disabled={isLoading}
+                className="w-4 h-4 accent-[#667eea]"
+              />
+              <span>📚 RAG 사용</span>
+            </label>
+            <button
+              className="px-3 py-1.5 border border-[rgba(248,113,113,0.3)] rounded-lg bg-[rgba(248,113,113,0.1)] text-[#f87171] text-sm cursor-pointer transition-all hover:bg-[rgba(248,113,113,0.2)] hover:border-[#f87171] disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={clearMessages}
+              disabled={isLoading}
+            >
+              🗑️ 대화 초기화
+            </button>
+          </div>
+        )}
       </header>
 
-      <main className="chat-main">
-        <div className="messages-container">
+      {/* 메시지 영역 */}
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a1a]">
+        <div className="flex-1 overflow-y-auto p-6 bg-[#0f0f23]">
           {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
           ))}
           {isLoading && (
-            <div className="loading-indicator">
-              <div className="typing-dots">
-                <span></span>
-                <span></span>
-                <span></span>
+            <div className="flex items-center gap-4 p-4">
+              <div className="flex gap-1.5 px-4 py-3 bg-[rgba(102,126,234,0.1)] rounded-2xl border border-[rgba(102,126,234,0.2)]">
+                <span className="w-2 h-2 rounded-full bg-[#667eea] animate-typing"></span>
+                <span className="w-2 h-2 rounded-full bg-[#667eea] animate-typing [animation-delay:0.2s]"></span>
+                <span className="w-2 h-2 rounded-full bg-[#667eea] animate-typing [animation-delay:0.4s]"></span>
               </div>
+              <span className="text-sm text-[#a0a0a0]">
+                {apiMode === "langgraph" ? "에이전트 처리 중..." : "응답 생성 중..."}
+              </span>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <ChatInput onSend={handleSendMessage} disabled={isLoading} />
+        <ChatInput onSend={sendMessage} disabled={isLoading} />
       </main>
-
-      <style jsx>{`
-        .chat-container {
-          display: flex;
-          flex-direction: column;
-          height: 100vh;
-          max-width: 800px;
-          margin: 0 auto;
-          background: white;
-          box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-        }
-
-        .chat-header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 1.5rem;
-          text-align: center;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .chat-header h1 {
-          font-size: 1.5rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .chat-header p {
-          font-size: 0.9rem;
-          opacity: 0.9;
-        }
-
-        .model-selector {
-          display: flex;
-          gap: 0.5rem;
-          margin-top: 1rem;
-          justify-content: center;
-        }
-
-        .model-button {
-          padding: 0.5rem 1rem;
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          border-radius: 0.5rem;
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-          font-size: 0.9rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .model-button:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.2);
-          border-color: rgba(255, 255, 255, 0.5);
-        }
-
-        .model-button.active {
-          background: rgba(255, 255, 255, 0.3);
-          border-color: white;
-          font-weight: 600;
-        }
-
-        .model-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .chat-main {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-        }
-
-        .messages-container {
-          flex: 1;
-          overflow-y: auto;
-          padding: 1rem;
-          background: #f5f5f5;
-        }
-
-        .loading-indicator {
-          display: flex;
-          justify-content: flex-start;
-          padding: 1rem;
-        }
-
-        .typing-dots {
-          display: flex;
-          gap: 0.5rem;
-          padding: 1rem 1.5rem;
-          background: white;
-          border-radius: 1.5rem;
-          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        .typing-dots span {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: #667eea;
-          animation: typing 1.4s infinite;
-        }
-
-        .typing-dots span:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-
-        .typing-dots span:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-
-        @keyframes typing {
-          0%,
-          60%,
-          100% {
-            transform: translateY(0);
-            opacity: 0.7;
-          }
-          30% {
-            transform: translateY(-10px);
-            opacity: 1;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .chat-container {
-            height: 100vh;
-            height: 100dvh; /* 모바일 브라우저 높이 */
-          }
-
-          .chat-header h1 {
-            font-size: 1.2rem;
-          }
-        }
-      `}</style>
     </div>
   );
 }
-

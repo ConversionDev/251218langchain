@@ -11,9 +11,11 @@ PGVector 벡터 스토어를 직접 초기화하여 챗봇 API를 제공합니�
 - LangGraph 기반 스팸 감지 API
 """
 
+import logging
 import warnings
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, AsyncGenerator, Optional
 
 # 공통 모듈 (환경 변수 로딩 포함)
 from core.config import get_settings  # type: ignore
@@ -37,12 +39,16 @@ except ImportError:
             create_history_aware_retriever,
             create_retrieval_chain,
         )
-        from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+        from langchain_classic.chains.combine_documents import (
+            create_stuff_documents_chain,
+        )
     except ImportError:
         # 최신 LangChain 1.x: langchain 패키지에서 직접 import
-        from langchain.chains.history_aware_retriever import create_history_aware_retriever
-        from langchain.chains.retrieval import create_retrieval_chain
         from langchain.chains.combine_documents import create_stuff_documents_chain
+        from langchain.chains.history_aware_retriever import (
+            create_history_aware_retriever,
+        )
+        from langchain.chains.retrieval import create_retrieval_chain
 
 from langchain_community.vectorstores import PGVector
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -75,11 +81,47 @@ settings = get_settings()
 CONNECTION_STRING = settings.connection_string
 COLLECTION_NAME = settings.collection_name
 
-# FastAPI 앱 생성
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """
+    FastAPI 애플리케이션 라이프사이클 관리 (현대식 구조).
+
+    Startup: V1 및 V10 도메인 초기화
+    Shutdown: 정리 작업 (필요시)
+    """
+    # Startup: 도메인 초기화
+    print("\n" + "=" * 50)
+    print("FastAPI 서버 시작 중...")
+    print("=" * 50)
+
+    # V1 도메인 초기화
+    init_v1()
+
+    # V10 도메인 초기화
+    print("\n" + "=" * 50)
+    print("V10 도메인 초기화 중...")
+    print("=" * 50)
+    init_v10()
+
+    print("\n" + "=" * 50)
+    print("[OK] 모든 도메인 초기화 완료!")
+    print("=" * 50)
+
+    # 애플리케이션 실행
+    yield
+
+    # Shutdown: 정리 작업 (필요시 추가)
+    # 예: 연결 종료, 리소스 해제 등
+    print("\n[INFO] 서버 종료 중...")
+
+
+# FastAPI 앱 생성 (lifespan 사용)
 app = FastAPI(
     title="LangChain Chatbot API",
     description="PGVector와 연동된 LangChain 챗봇 API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS 설정
@@ -98,6 +140,222 @@ local_llm = None
 local_rag_chain: Optional[Runnable] = None
 # ChatService 인스턴스 (타입 힌트는 함수 내부에서 import)
 chat_service: Optional[Any] = None
+
+
+def init_v10() -> None:
+    """V10 도메인 초기화: Alembic 마이그레이션으로 테이블 자동 생성 및 업데이트."""
+    try:
+        # 설정 가져오기
+        current_settings = get_settings()
+
+        # 관계형 테이블 자동 생성 (Alembic + 자동 생성 방식)
+        logging.info("V10 관계형 테이블 생성 중 (Alembic 자동 생성)...")
+        wait_for_postgres()
+
+        try:
+            # 모델들을 명시적으로 import하여 Base.metadata에 등록
+            from alembic import command  # type: ignore
+
+            # Alembic 설정
+            from alembic.config import Config  # type: ignore
+            from core.database import Base, get_v10_engine  # type: ignore
+            from domain.v10.member.bases.player import Player  # noqa: F401
+            from domain.v10.member.bases.schedule import Schedule  # noqa: F401
+            from domain.v10.member.bases.stadium import Stadium  # noqa: F401
+            from domain.v10.member.bases.team import Team  # noqa: F401
+            from sqlalchemy import inspect  # type: ignore[import-untyped]
+
+            alembic_ini_path = Path(__file__).parent / "alembic.ini"
+            alembic_cfg = Config(str(alembic_ini_path))
+
+            # Alembic 마이그레이션 파일 존재 여부 확인
+            alembic_versions_path = Path(__file__).parent / "alembic" / "versions"
+            if not alembic_versions_path.exists():
+                alembic_versions_path.mkdir(parents=True, exist_ok=True)
+
+            migration_files_before = [f for f in alembic_versions_path.glob("*.py") if f.name != ".gitkeep"]
+
+            if current_settings.v10_auto_migrate:
+                # 항상 autogenerate 실행하여 변경사항 감지 및 새 마이그레이션 생성
+                logging.info("모델과 DB 스키마 비교 중 (변경사항 자동 감지)...")
+                try:
+                    # autogenerate 실행 (변경사항이 있으면 새 마이그레이션 파일 생성)
+                    command.revision(
+                        alembic_cfg,
+                        autogenerate=True,
+                        message="Auto-generated migration for V10 domain"
+                    )
+                    logging.info("✓ 스키마 비교 완료")
+                except Exception as autogen_error:
+                    # autogenerate 실패는 무시 (변경사항이 없을 수도 있음)
+                    error_msg = str(autogen_error)
+                    if "Target database is not up to date" in error_msg:
+                        logging.info("기존 마이그레이션을 먼저 적용해야 합니다.")
+                    elif "Can't locate revision identified by" in error_msg:
+                        logging.warning("마이그레이션 체인 문제가 있을 수 있습니다.")
+                    else:
+                        logging.debug(f"Autogenerate 결과: {error_msg[:100]}")
+
+                # 생성된 새 마이그레이션 파일 확인
+                migration_files_after = [f for f in alembic_versions_path.glob("*.py") if f.name != ".gitkeep"]
+                new_migrations = [f for f in migration_files_after if f not in migration_files_before]
+
+                if new_migrations:
+                    logging.info(f"✓ 새로운 마이그레이션 파일 {len(new_migrations)}개 생성됨: {[f.name for f in new_migrations]}")
+                else:
+                    logging.info("변경사항이 없습니다. 기존 마이그레이션 적용 중...")
+
+                # Alembic 마이그레이션 실행 (기존 + 새로 생성된 마이그레이션 모두 적용)
+                command.upgrade(alembic_cfg, current_settings.v10_migration_revision)
+
+                # 테이블이 실제로 생성되었는지 확인
+                engine = get_v10_engine()
+                inspector = inspect(engine)
+                existing_tables = inspector.get_table_names()
+                expected_tables = ["players", "teams", "schedules", "stadiums"]
+                created_tables = [name for name in expected_tables if name in existing_tables]
+
+                if len(created_tables) == len(expected_tables):
+                    logging.info("✓ V10 도메인 마이그레이션 완료 (모든 테이블 생성됨)")
+                else:
+                    missing_tables = [name for name in expected_tables if name not in existing_tables]
+                    logging.warning(f"일부 테이블이 생성되지 않았습니다: {missing_tables}")
+                    logging.warning("마이그레이션 파일을 확인하고 수동으로 수정이 필요할 수 있습니다.")
+            else:
+                if not current_settings.v10_auto_migrate:
+                    logging.warning("V10 자동 마이그레이션이 비활성화되어 있습니다. (V10_AUTO_MIGRATE=false)")
+                    logging.warning("테이블을 생성하려면 마이그레이션을 수동으로 실행하거나 V10_AUTO_MIGRATE=true로 설정하세요.")
+
+        except Exception as e:
+            logging.error(f"관계형 테이블 생성 중 오류: {e}")
+            import traceback
+            logging.error(traceback.format_exc())
+            raise  # 테이블 생성 실패는 치명적 오류이므로 재발생
+
+        # 벡터 스토어 테이블 초기화 (서버 시작 시 테이블 생성)
+        logging.info("V10 벡터 스토어 테이블 초기화 중...")
+        wait_for_postgres()
+
+        # V1 초기화 후 임베딩 모델 사용 가능
+        global local_embeddings
+        if local_embeddings is not None:
+            try:
+                import psycopg2  # type: ignore[import-untyped]
+                from core.database import get_v10_vector_store  # type: ignore
+                from langchain_core.documents import (
+                    Document,  # type: ignore[import-untyped]
+                )
+
+                # 벡터 스토어 생성
+                vector_store = get_v10_vector_store(
+                    embeddings_model=local_embeddings,
+                    collection_name=current_settings.v10_collection_name
+                )
+
+                # 컬렉션이 이미 존재하는지 확인
+                conn = psycopg2.connect(current_settings.connection_string)
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT uuid FROM langchain_pg_collection
+                    WHERE name = %s
+                """, (current_settings.v10_collection_name,))
+                collection_exists = cur.fetchone() is not None
+                conn.close()
+
+                if not collection_exists:
+                    # 빈 문서 추가하여 테이블 생성 (PGVector는 첫 데이터 추가 시 테이블 생성)
+                    vector_store.add_documents([
+                        Document(page_content="__init__", metadata={"type": "__init__"})
+                    ])
+                    logging.info(f"✓ V10 벡터 스토어 테이블 생성 완료: {current_settings.v10_collection_name}")
+                else:
+                    logging.info(f"✓ V10 벡터 스토어 테이블 이미 존재: {current_settings.v10_collection_name}")
+            except Exception as e:
+                logging.warning(f"벡터 스토어 테이블 초기화 실패 (임베딩 모델 필요): {e}")
+        else:
+            logging.info("벡터 스토어 테이블 초기화는 V1 초기화 후 자동으로 수행됩니다.")
+
+        # 선택적 데이터 로드 (벡터 스토어)
+        if current_settings.v10_load_data:
+            from domain.v10.shared.data_loader import load_all_v10_data  # type: ignore
+            logging.info("V10 데이터 벡터 스토어 로드 중...")
+            # 임베딩 모델 전달 (V1 초기화 후 사용 가능, global은 이미 선언됨)
+            if local_embeddings is None:
+                logging.warning("임베딩 모델이 없습니다. V1 초기화 후 다시 시도하세요.")
+            else:
+                results = load_all_v10_data(embeddings_model=local_embeddings)
+                logging.info(f"✓ V10 데이터 벡터 스토어 로드 완료: {results}")
+    except Exception as e:
+        logging.error(f"V10 도메인 초기화 실패: {e}")
+        raise
+
+
+def init_v1() -> None:
+    """V1 도메인 초기화: LangChain RAG 체인 및 관련 서비스 초기화."""
+    global chat_service, local_embeddings, local_llm, local_rag_chain, vector_store
+
+    print("=" * 50)
+    print("LangChain FastAPI 서버 시작 중...")
+    print("=" * 50)
+
+    # 환경 변수 확인
+    llm_provider = settings.llm_provider
+    exaone_model_dir = settings.exaone_model_dir or "기본값 사용"
+    print(f"\n[INFO] LLM_PROVIDER: {llm_provider}")
+    print(f"[INFO] EXAONE_MODEL_DIR: {exaone_model_dir}")
+
+    # Neon PostgreSQL 연결 대기
+    print("\n1. Neon PostgreSQL 연결 확인 중...")
+    wait_for_postgres()
+
+    # ChatService 초기화
+    print("\n2. ChatService 초기화 중...")
+    from domain.v1.chat.services.chat_service import ChatService  # type: ignore
+
+    chat_service = ChatService(
+        connection_string=CONNECTION_STRING,
+        collection_name=COLLECTION_NAME,
+        model_name_or_path=exaone_model_dir
+        if exaone_model_dir != "기본값 사용"
+        else None,
+    )
+
+    # Embedding 모델 초기화
+    print("\n3. Embedding 모델 초기화 중...")
+    chat_service.initialize_embeddings()
+
+    # LLM 모델 초기화
+    print("\n4. LLM 모델 초기화 중...")
+    chat_service.initialize_llm()
+
+    # EXAONE 베이스 모델 미리 로드 (서버 시작 시 - 전략 3: 하이브리드)
+    if llm_provider == "exaone":
+        print("\n4-1. EXAONE 베이스 모델 미리 로드 중...")
+        from core.resource_manager.exaone_manager import ExaoneManager  # type: ignore
+
+        ExaoneManager().get_base_model()  # 베이스 모델만 사전 로드 (어댑터는 필요 시 로드)
+        print("[OK] EXAONE 베이스 모델 미리 로드 완료!")
+
+    # PGVector 스토어 초기화 (기존 함수 사용)
+    print("\n5. PGVector 스토어 초기화 중...")
+    # ChatService의 embeddings를 전역 변수에 할당 (기존 코드 호환성)
+    local_embeddings = chat_service.local_embeddings
+    local_llm = chat_service.local_llm
+    initialize_vector_store()
+
+    # RAG 체인 초기화
+    print("\n6. RAG 체인 초기화 중...")
+    chat_service.initialize_rag_chain()
+    # ChatService의 RAG 체인을 전역 변수에 할당 (기존 코드 호환성)
+    local_rag_chain = chat_service.local_rag_chain
+
+    # 스팸 감지 모델은 Lazy Loading (첫 요청 시 로드)
+    print("\n7. 스팸 감지 모델: Lazy Loading 설정 (첫 요청 시 LLaMA 로드)")
+    print("[INFO] VRAM 절약을 위해 스팸 테스트 요청 시 LLaMA 모델이 로드됩니다.")
+
+    print("\n" + "=" * 50)
+    print("[OK] V1 도메인 초기화 완료!")
+    print("=" * 50)
 
 
 def initialize_embeddings():
@@ -121,7 +379,7 @@ def initialize_embeddings():
                 "CUDA가 사용 불가능합니다. GPU가 필요합니다.\n"
                 "torch.cuda.is_available()이 False입니다."
             )
-        
+
         # EMBEDDING_DEVICE 환경 변수 또는 CUDA 사용
         embedding_device = settings.embedding_device
         if embedding_device is None:
@@ -350,85 +608,39 @@ def initialize_rag_chain():
         print("[WARNING] RAG 기능이 비활성화됩니다. 채팅 기능을 사용할 수 없습니다.")
 
 
-@app.on_event("startup")  # FastAPI 0.104+ 호환 (lifespan도 지원하지만 하위 호환성 유지)
-async def startup_event():
-    """서버 시작 시 초기화."""
-    global chat_service, local_embeddings, local_llm, local_rag_chain, vector_store
-
-    print("=" * 50)
-    print("LangChain FastAPI 서버 시작 중...")
-    print("=" * 50)
-
-    # 환경 변수 확인
-    llm_provider = settings.llm_provider
-    exaone_model_dir = settings.exaone_model_dir or "기본값 사용"
-    print(f"\n[INFO] LLM_PROVIDER: {llm_provider}")
-    print(f"[INFO] EXAONE_MODEL_DIR: {exaone_model_dir}")
-
-    # Neon PostgreSQL 연결 대기
-    print("\n1. Neon PostgreSQL 연결 확인 중...")
-    wait_for_postgres()
-
-    # ChatService 초기화
-    print("\n2. ChatService 초기화 중...")
-    from domain.chat.services.chat_service import ChatService  # type: ignore
-
-    chat_service = ChatService(
-        connection_string=CONNECTION_STRING,
-        collection_name=COLLECTION_NAME,
-        model_name_or_path=exaone_model_dir
-        if exaone_model_dir != "기본값 사용"
-        else None,
-    )
-
-    # Embedding 모델 초기화
-    print("\n3. Embedding 모델 초기화 중...")
-    chat_service.initialize_embeddings()
-
-    # LLM 모델 초기화
-    print("\n4. LLM 모델 초기화 중...")
-    chat_service.initialize_llm()
-
-    # EXAONE 베이스 모델 미리 로드 (서버 시작 시 - 전략 3: 하이브리드)
-    if llm_provider == "exaone":
-        print("\n4-1. EXAONE 베이스 모델 미리 로드 중...")
-        from core.resource_manager.exaone_manager import ExaoneManager  # type: ignore
-
-        ExaoneManager().get_base_model()  # 베이스 모델만 사전 로드 (어댑터는 필요 시 로드)
-        print("[OK] EXAONE 베이스 모델 미리 로드 완료!")
-
-    # PGVector 스토어 초기화 (기존 함수 사용)
-    print("\n5. PGVector 스토어 초기화 중...")
-    # ChatService의 embeddings를 전역 변수에 할당 (기존 코드 호환성)
-    local_embeddings = chat_service.local_embeddings
-    local_llm = chat_service.local_llm
-    initialize_vector_store()
-
-    # RAG 체인 초기화
-    print("\n6. RAG 체인 초기화 중...")
-    chat_service.initialize_rag_chain()
-    # ChatService의 RAG 체인을 전역 변수에 할당 (기존 코드 호환성)
-    local_rag_chain = chat_service.local_rag_chain
-
-    # 스팸 감지 모델은 Lazy Loading (첫 요청 시 로드)
-    print("\n7. 스팸 감지 모델: Lazy Loading 설정 (첫 요청 시 LLaMA 로드)")
-    print("[INFO] VRAM 절약을 위해 스팸 테스트 요청 시 LLaMA 모델이 로드됩니다.")
-
-    print("\n" + "=" * 50)
-    print("[OK] 서버 초기화 완료!")
-    print("=" * 50)
-
-
 # 라우터 등록 (순환 import 방지를 위해 여기서 import)
+from api.v1.agent.graph_router import (
+    router as graph_router,  # type: ignore  # noqa: E402
+)
 from api.v1.chat.chat_router import router as chat_router  # type: ignore  # noqa: E402
 from api.v1.spam.email_router import email_router  # type: ignore  # noqa: E402
-from api.v1.agent.graph_router import router as graph_router  # type: ignore  # noqa: E402
 from api.v1.spam.mcp_router import router as mcp_router  # type: ignore  # noqa: E402
+
+# v10 라우터 등록 (soccer 라우터 통합)
+from api.v10.soccer.player_router import (
+    router as player_router,  # type: ignore  # noqa: E402
+)
+from api.v10.soccer.schedule_router import (
+    router as schedule_router,  # type: ignore  # noqa: E402
+)
+from api.v10.soccer.stadium_router import (
+    router as stadium_router,  # type: ignore  # noqa: E402
+)
+from api.v10.soccer.team_router import (
+    router as team_router,  # type: ignore  # noqa: E402
+)
 
 app.include_router(chat_router)
 app.include_router(graph_router)
 app.include_router(mcp_router)
 app.include_router(email_router)
+
+# v10 API 라우터 등록 (prefix: /api/v10)
+# 모든 타입이 /soccer/{type}/upload 패턴으로 통일
+app.include_router(player_router, prefix="/api/v10")  # /soccer/player/upload
+app.include_router(team_router, prefix="/api/v10")  # /soccer/team/upload
+app.include_router(stadium_router, prefix="/api/v10")  # /soccer/stadium/upload
+app.include_router(schedule_router, prefix="/api/v10")  # /soccer/schedule/upload
 
 
 @app.get("/")
@@ -451,9 +663,3 @@ async def health_check():
         "local_llm": "initialized" if local_llm else "not initialized",
         "local_rag_chain": "initialized" if local_rag_chain else "not initialized",
     }
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)

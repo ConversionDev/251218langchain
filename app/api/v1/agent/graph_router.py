@@ -77,10 +77,10 @@ async def agent_chat(request: AgentRequest):
 
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-        if "domain.chat.orchestrator" in sys.modules:
-            graph_module = sys.modules["domain.chat.orchestrator"]
+        if "domain.v1.chat.orchestrator" in sys.modules:
+            graph_module = sys.modules["domain.v1.chat.orchestrator"]
         else:
-            graph_module = importlib.import_module("domain.chat.orchestrator")
+            graph_module = importlib.import_module("domain.v1.chat.orchestrator")
         run_agent = graph_module.run_agent
 
         if "core.llm.providers.llm_provider" in sys.modules:
@@ -142,10 +142,10 @@ async def agent_chat_stream(request: AgentRequest):
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
         # 지연 import
-        if "domain.chat.orchestrator" in sys.modules:
-            graph_module = sys.modules["domain.chat.orchestrator"]
+        if "domain.v1.chat.orchestrator" in sys.modules:
+            graph_module = sys.modules["domain.v1.chat.orchestrator"]
         else:
-            graph_module = importlib.import_module("domain.chat.orchestrator")
+            graph_module = importlib.import_module("domain.v1.chat.orchestrator")
         run_agent_stream = graph_module.run_agent_stream
 
         if "core.llm.providers.llm_provider" in sys.modules:

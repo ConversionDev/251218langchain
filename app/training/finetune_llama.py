@@ -5,6 +5,7 @@ Unsloth를 사용하여 LLaMA 모델을 2~5배 빠르게 fine-tuning합니다.
 """
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -12,16 +13,28 @@ from pathlib import Path
 # Windows 환경 설정 (멀티프로세싱 및 TorchInductor 문제 방지)
 # ============================================================================
 
-# Unsloth 캐시가 app/training/ 디렉토리에 생성되도록 작업 디렉토리 변경
+# app/ 디렉토리를 Python 경로에 추가 (작업 디렉토리 변경 전에)
+app_dir = Path(__file__).parent.parent
+if str(app_dir) not in sys.path:
+    sys.path.insert(0, str(app_dir))
+
+# Unsloth 캐시 설정 (작업 디렉토리 변경 전에 실행)
+from core.resource_manager import setup_unsloth_cache  # type: ignore
+setup_unsloth_cache()  # 절대 경로로 환경 변수 설정
+
+# 작업 디렉토리를 리소스 매니저로 변경 (방법 1: 근본 원인 해결)
+# Unsloth가 작업 디렉토리 기준으로 캐시를 생성하므로 리소스 매니저 위치에 직접 생성되도록 함
+from core.paths import get_resource_manager_dir  # type: ignore
+resource_manager_dir = get_resource_manager_dir()
+os.chdir(resource_manager_dir)
+
+# training_dir는 다른 경로 참조에 필요하므로 유지
 training_dir = Path(__file__).parent.resolve()
-original_cwd = os.getcwd()
-os.chdir(training_dir)
 
 # OpenMP 충돌 방지
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["OMP_NUM_THREADS"] = "1"
 
-# TorchInductor/Triton 비활성화 (Windows에서 FileNotFoundError 방지)
+# TorchInductor/Triton 비활성화
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCHINDUCTOR_DISABLE"] = "1"
 
@@ -43,22 +56,27 @@ if sys.platform == "win32":
     except RuntimeError:
         pass
 
+
+# ============================================================================
+# torch._dynamo 전역 비활성화
+# ============================================================================
+# Unsloth의 하드코딩된 @torch.compile 데코레이터를 무시하기 위해 비활성화
+import torch  # noqa: E402
+
+torch._dynamo.config.disable = True
+torch._dynamo.config.suppress_errors = True
+
 # ============================================================================
 # Unsloth를 가장 먼저 import해야 최적화가 적용됨
 # ============================================================================
 import unsloth  # noqa: E402, F401
-from unsloth import FastLanguageModel  # noqa: E402
 
-# app/ 디렉토리를 Python 경로에 추가
-app_dir = Path(__file__).parent.parent
-if str(app_dir) not in sys.path:
-    sys.path.insert(0, str(app_dir))
+from unsloth import FastLanguageModel  # noqa: E402
 
 from typing import Any, Dict, List, Optional
 
-import torch
 from datasets import Dataset  # noqa: E402
-from domain.spam.services.utils import (  # type: ignore
+from domain.v1.spam.services.utils import (  # type: ignore
     extract_email_metadata,
     format_email_text,
     get_data_dir,
@@ -76,39 +94,50 @@ class LLaMATrainer:
         self,
         model_id: str = "unsloth/Llama-3.2-3B-Instruct",
         output_dir: Optional[Path] = None,
-        max_seq_length: int = 512,
+        max_seq_length: int = 256,  # 1 에포크 최적화: 512 -> 256 (속도/메모리 개선)
         load_in_4bit: bool = True,
     ):
         """초기화.
 
         Args:
             model_id: HuggingFace 모델 ID (unsloth 최적화 모델 권장)
-            output_dir: 출력 디렉토리 (None이면 자동 생성)
+            output_dir: 출력 디렉토리 (None이면 자동 생성, Exaone과 동일한 구조 사용)
             max_seq_length: 최대 시퀀스 길이
             load_in_4bit: 4-bit 양자화 사용 여부
         """
         self.model_id = model_id
         self.max_seq_length = max_seq_length
         self.load_in_4bit = load_in_4bit
-        
+
         # GPU 필수 확인
         if not torch.cuda.is_available():
             raise RuntimeError(
                 "CUDA가 사용 불가능합니다. GPU가 필요합니다.\n"
                 "torch.cuda.is_available()이 False입니다."
             )
-        
+
         self.device = "cuda"
 
-        # 출력 디렉토리
+        # 출력 디렉토리 설정 (Exaone과 동일한 구조)
         if output_dir is None:
             output_dir = get_output_dir() / "llama" / "adapters"
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            output_dir = Path(output_dir)
+
+        self.output_dir = output_dir
+        self._setup_output_directory()
 
         # 모델 및 토크나이저
         self.tokenizer = None
         self.model = None
+
+    def _setup_output_directory(self) -> None:
+        """출력 디렉토리 설정 및 기존 모델 처리 (Exaone과 동일한 구조, 덮어쓰기)."""
+        # 기존 모델이 있으면 덮어쓰기
+        if self.output_dir.exists():
+            shutil.rmtree(self.output_dir)
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def load_model(self) -> None:
         """Unsloth를 사용하여 모델 및 토크나이저 로드."""
@@ -137,7 +166,7 @@ class LLaMATrainer:
             print("[Step 2] LoRA 어댑터 설정 중...")
             self.model = FastLanguageModel.get_peft_model(
                 self.model,
-                r=16,
+                r=8,  # 1 에포크 최적화: 16 -> 8 (메모리 절약, 속도 향상)
                 target_modules=[
                     "q_proj",
                     "k_proj",
@@ -147,7 +176,7 @@ class LLaMATrainer:
                     "up_proj",
                     "down_proj",
                 ],
-                lora_alpha=16,
+                lora_alpha=8,  # 1 에포크 최적화: 16 -> 8 (r과 동일하게)
                 lora_dropout=0,  # Unsloth에서는 0 권장
                 bias="none",
                 use_gradient_checkpointing="unsloth",  # 메모리 절약
@@ -224,30 +253,36 @@ class LLaMATrainer:
         self,
         train_data: List[Dict[str, Any]],
         val_data: Optional[List[Dict[str, Any]]] = None,
-        num_epochs: int = 3,
-        per_device_train_batch_size: int = 8,
-        per_device_eval_batch_size: int = 8,
-        learning_rate: float = 2e-4,
-        warmup_steps: int = 10,
+        num_epochs: int = 1,  # 1 에포크 최적화: 3 -> 1
+        per_device_train_batch_size: int = 32,  # 1 에포크 최적화: 16 -> 32 (속도 향상)
+        per_device_eval_batch_size: int = 32,  # 1 에포크 최적화: 16 -> 32
+        learning_rate: float = 3e-4,  # 1 에포크 최적화: 2e-4 -> 3e-4 (빠른 수렴)
+        warmup_steps: int = 10,  # 1 에포크 최적화: 50 -> 10 (짧은 학습)
         logging_steps: int = 10,
-        save_steps: int = 100,
-        save_total_limit: int = 3,
-        gradient_accumulation_steps: int = 4,
+        save_steps: int = 200,  # 안정성 고려: 500 -> 200 (체크포인트 보장)
+        save_total_limit: int = 2,  # 안정성 고려: 1 -> 2 (초기 + 최신 체크포인트 유지)
+        gradient_accumulation_steps: int = 1,  # 1 에포크 최적화: 2 -> 1 (배치 크기 증가로 조정)
+        eval_strategy: str = "epoch",  # 1 에포크 최적화: 에포크 끝에 평가 (1번만)
+        eval_steps: Optional[int] = None,
+        disable_eval: bool = False,  # 평가 기본 활성화 (모니터링 중요)
     ) -> Path:
         """Unsloth LoRA Fine-tuning 실행.
 
         Args:
             train_data: 학습 데이터 (SFT 형식)
             val_data: 검증 데이터 (SFT 형식, None이면 train에서 분할)
-            num_epochs: 학습 에포크 수
-            per_device_train_batch_size: 디바이스당 학습 배치 크기
-            per_device_eval_batch_size: 디바이스당 평가 배치 크기
-            learning_rate: 학습률
-            warmup_steps: 워밍업 스텝 수
+            num_epochs: 학습 에포크 수 (기본값: 1, 1 에포크 최적화)
+            per_device_train_batch_size: 디바이스당 학습 배치 크기 (기본값: 32, 1 에포크 최적화)
+            per_device_eval_batch_size: 디바이스당 평가 배치 크기 (기본값: 32)
+            learning_rate: 학습률 (기본값: 3e-4, 1 에포크 최적화)
+            warmup_steps: 워밍업 스텝 수 (기본값: 10, 1 에포크 최적화)
             logging_steps: 로깅 스텝 수
-            save_steps: 저장 스텝 수
-            save_total_limit: 최대 체크포인트 수
-            gradient_accumulation_steps: 그래디언트 누적 스텝 수
+            save_steps: 저장 스텝 수 (기본값: 200, 안정성 고려)
+            save_total_limit: 최대 체크포인트 수 (기본값: 2, 초기 + 최신 유지)
+            gradient_accumulation_steps: 그래디언트 누적 스텝 수 (기본값: 1, 1 에포크 최적화)
+            eval_strategy: 평가 전략 (기본값: "epoch", 1 에포크이므로 1번만 평가)
+            eval_steps: 평가 빈도 (None이면 eval_strategy에 따라 결정)
+            disable_eval: 평가 비활성화 (기본값: False, 평가 유지 권장)
 
         Returns:
             학습된 모델 경로
@@ -275,7 +310,19 @@ class LLaMATrainer:
         print(f"[INFO] 검증 데이터: {len(val_dataset)}개")
         print()
 
-        # TrainingArguments
+        # 평가 전략 설정 (1 에포크 최적화: 에포크 끝에 평가)
+        if disable_eval:
+            final_eval_strategy = "no"
+            final_eval_steps = None
+        else:
+            final_eval_strategy = eval_strategy
+            # 1 에포크이므로 "epoch" 전략이 효율적 (1번만 평가)
+            if final_eval_strategy == "epoch":
+                final_eval_steps = None
+            else:
+                final_eval_steps = eval_steps if eval_steps is not None else save_steps
+
+        # TrainingArguments (안정성과 속도 균형 최적화)
         training_args = TrainingArguments(
             output_dir=str(self.output_dir),
             num_train_epochs=num_epochs,
@@ -287,16 +334,35 @@ class LLaMATrainer:
             logging_steps=logging_steps,
             save_steps=save_steps,
             save_total_limit=save_total_limit,
+            # Mixed precision (속도 최적화)
             fp16=not torch.cuda.is_bf16_supported(),
             bf16=torch.cuda.is_bf16_supported(),
-            eval_strategy="steps",
-            eval_steps=save_steps,
+            # 평가 설정 (안정성: 모니터링 유지)
+            eval_strategy=final_eval_strategy,
+            eval_steps=final_eval_steps,
+            # 체크포인트 설정 (안정성: 충분한 체크포인트 보장)
             save_strategy="steps",
+            save_on_each_node=False,  # 단일 노드 학습
+            save_safetensors=True,  # 안전한 텐서 저장 형식
+            # 로깅 설정
             logging_dir=str(self.output_dir / "logs"),
+            report_to="none",  # 외부 로깅 비활성화 (속도 최적화)
+            # 옵티마이저 설정 (메모리 최적화)
             optim="adamw_8bit",
             weight_decay=0.01,
-            lr_scheduler_type="linear",
-            seed=42,
+            # 학습률 스케줄러 (속도 최적화: 빠른 수렴)
+            lr_scheduler_type="cosine",
+            # 안정성 설정
+            seed=42,  # 재현성 보장
+            max_grad_norm=1.0,  # 그래디언트 클리핑 (안정성)
+            gradient_checkpointing=True,  # 메모리 절약 (이미 LoRA에서 설정됨)
+            # 체크포인트 복구 설정 (안정성)
+            resume_from_checkpoint=False,  # 명시적으로 새 학습 시작
+            overwrite_output_dir=True,  # 기존 디렉토리 덮어쓰기
+            load_best_model_at_end=False,  # 1 에포크이므로 최적 모델 선택 불필요
+            # 데이터 로더 설정 (Windows 안정성)
+            dataloader_num_workers=0,  # Windows 멀티프로세싱 문제 방지
+            dataloader_pin_memory=False,  # Windows 안정성
         )
 
         # SFTTrainer 사용 (Unsloth 최적화)
@@ -306,31 +372,47 @@ class LLaMATrainer:
 
         trainer = SFTTrainer(
             model=self.model,
+            tokenizer=self.tokenizer,  # Unsloth SFTTrainer에 필수 (fix_untrained_tokens에서 사용)
             train_dataset=train_dataset,
-            eval_dataset=val_dataset,
+            eval_dataset=val_dataset if not disable_eval else None,
             formatting_func=formatting_func,
             max_seq_length=self.max_seq_length,
             data_collator=DataCollatorForSeq2Seq(tokenizer=self.tokenizer),
             args=training_args,
         )
 
-        # 학습 실행
-        print("[INFO] 학습 시작...")
-        trainer_stats = trainer.train()
+        # 학습 시작 시 초기 체크포인트 저장 (학습 실패 시 보존)
+        # save_total_limit에 포함되지 않으므로 별도로 보존
+        initial_checkpoint = self.output_dir / "checkpoint-0"
+        trainer.save_model(str(initial_checkpoint))
+        print(f"[INFO] 초기 체크포인트 저장: {initial_checkpoint.name}")
 
-        # 학습 통계 출력
-        print()
-        print("[INFO] 학습 통계:")
-        print(f"  - 총 학습 시간: {trainer_stats.metrics['train_runtime']:.2f}초")
-        print(
-            f"  - 초당 샘플 수: {trainer_stats.metrics['train_samples_per_second']:.2f}"
-        )
-        print()
+        # 학습 실행 (예외 처리 포함)
+        print("[INFO] 학습 시작...")
+        try:
+            trainer_stats = trainer.train()
+
+            # 학습 통계 출력
+            print()
+            print("[INFO] 학습 통계:")
+            print(f"  - 총 학습 시간: {trainer_stats.metrics['train_runtime']:.2f}초")
+            print(
+                f"  - 초당 샘플 수: {trainer_stats.metrics['train_samples_per_second']:.2f}"
+            )
+            print()
+        except Exception:
+            # 학습 실패 시에도 마지막 체크포인트 보존
+            self._save_latest_checkpoint_as_final(trainer)
+            raise
 
         # 모델 저장 (LoRA 어댑터만)
         final_model_path = self.output_dir / "final_model"
-        self.model.save_pretrained(str(final_model_path))
-        self.tokenizer.save_pretrained(str(final_model_path))
+        try:
+            self.model.save_pretrained(str(final_model_path))
+            self.tokenizer.save_pretrained(str(final_model_path))
+        except Exception:
+            # 저장 실패 시 마지막 체크포인트를 final_model로 복사
+            self._save_latest_checkpoint_as_final(trainer)
 
         print()
         print("=" * 60)
@@ -340,6 +422,33 @@ class LLaMATrainer:
         print()
 
         return final_model_path
+
+    def _save_latest_checkpoint_as_final(self, trainer: SFTTrainer) -> None:
+        """마지막 체크포인트를 final_model로 복사 (학습 실패 시 보존용)."""
+        try:
+            # 체크포인트 디렉토리 찾기
+            checkpoint_dirs = [
+                d for d in self.output_dir.iterdir()
+                if d.is_dir() and d.name.startswith("checkpoint-")
+            ]
+
+            if checkpoint_dirs:
+                # 가장 최신 체크포인트 찾기
+                latest_checkpoint = max(
+                    checkpoint_dirs,
+                    key=lambda x: int(x.name.split("-")[1]) if x.name.split("-")[1].isdigit() else 0
+                )
+
+                final_model_path = self.output_dir / "final_model"
+                if latest_checkpoint != final_model_path:
+                    # 기존 final_model 삭제
+                    if final_model_path.exists():
+                        shutil.rmtree(final_model_path)
+
+                    # 최신 체크포인트 복사
+                    shutil.copytree(latest_checkpoint, final_model_path)
+        except Exception:
+            pass
 
     def save_merged_model(self, output_path: Optional[Path] = None) -> Path:
         """LoRA 어댑터를 base 모델에 병합하여 저장.
@@ -398,26 +507,31 @@ def main():
     parser.add_argument(
         "--num_epochs",
         type=int,
-        default=3,
-        help="학습 에포크 수 (기본값: 3)",
+        default=1,
+        help="학습 에포크 수 (기본값: 1, 1 에포크 최적화)",
     )
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=8,
-        help="배치 크기 (기본값: 8, Unsloth로 더 큰 배치 가능)",
+        default=32,
+        help="배치 크기 (기본값: 32, 1 에포크 최적화)",
     )
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=2e-4,
-        help="학습률 (기본값: 2e-4)",
+        default=3e-4,
+        help="학습률 (기본값: 3e-4, 1 에포크 최적화)",
     )
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=512,
-        help="최대 시퀀스 길이 (기본값: 512)",
+        default=256,
+        help="최대 시퀀스 길이 (기본값: 256, 1 에포크 최적화)",
+    )
+    parser.add_argument(
+        "--disable_eval",
+        action="store_true",
+        help="평가 비활성화 (기본값: 활성화, 에포크 끝에 평가)",
     )
 
     args = parser.parse_args()
@@ -455,6 +569,7 @@ def main():
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         learning_rate=args.learning_rate,
+        disable_eval=args.disable_eval,  # 기본값 False (평가 활성화)
     )
 
 
