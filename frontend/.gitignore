@@ -5,42 +5,76 @@
 /.pnp
 .pnp.js
 .yarn/install-state.gz
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.pnp.*
+
+# package managers
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+npm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
 
 # testing
 /coverage
+/.nyc_output
+*.lcov
+.nyc_output
 
 # next.js
 /.next/
 /out/
+.next/
+out/
 
 # production
 /build
+dist/
+*.tsbuildinfo
 
 # misc
 .DS_Store
 *.pem
+*.pid
+*.seed
+*.pid.lock
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # local env files
 .env*.local
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
 
 # vercel
 .vercel
+.vercel.json
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+tsconfig.tsbuildinfo
 
 # PWA - 빌드 시 생성되는 파일들
 /public/sw.js
 /public/sw.js.map
 /public/workbox-*.js
 /public/workbox-*.js.map
+/public/worker-*.js
+/public/worker-*.js.map
+/public/*.js.map
 
 # IDE
 .vscode/
@@ -48,10 +82,21 @@ next-env.d.ts
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
 # OS
 Thumbs.db
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
 
 # Logs
 logs
@@ -60,7 +105,58 @@ logs
 # Cache
 .cache/
 .parcel-cache/
+.eslintcache
+.stylelintcache
+.turbo
+.swc/
 
 # Temporary files
 *.tmp
 *.temp
+*.bak
+*.swp
+*~.nib
+
+# Storybook
+storybook-static
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Misc
+*.tgz
+*.tar.gz
+.cache
+.temp
+.tmp
+
+# Large data files (if any in frontend)
+*.csv
+*.jsonl
+*.xlsx
+*.xls
+
+# Media files (if not needed in repo)
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+
+# Model files (if any)
+*.pth
+*.pt
+*.h5
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
