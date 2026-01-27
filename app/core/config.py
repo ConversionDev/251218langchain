@@ -83,11 +83,6 @@ class Settings(BaseSettings):
     # ===================
     # V10 도메인 설정
     # ===================
-    v10_load_data: bool = Field(
-        default=False,
-        description="V10 데이터 자동 로드 여부 (JSONL → DB)",
-    )
-
     v10_auto_migrate: bool = Field(
         default=True,
         description="V10 마이그레이션 자동 실행 여부",

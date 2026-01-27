@@ -6,17 +6,13 @@ JSONL 파일을 받아서 첫 5개 행을 미리보기하고, 전체 데이터�
 
 import json
 import logging
-import tempfile
-import os
-from pathlib import Path
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
 
-from core.database import get_v10_db, get_v10_vector_store  # type: ignore
-from core.config import get_settings  # type: ignore
-from domain.v10.shared.data_loader import load_players_hybrid  # type: ignore
+from core.database import get_v10_db  # type: ignore
+from domain.v10.soccer.hub.orchestrators.player_orchestrator import PlayerOrchestrator  # type: ignore
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -48,81 +44,75 @@ async def upload_player_jsonl(
         content = await file.read()
         content_str = content.decode('utf-8')
 
-        # JSONL 파싱 (첫 5개 행만 - 미리보기)
+        # JSONL 파싱
         lines = content_str.strip().split('\n')
-        preview_data: List[Dict[str, Any]] = []
 
-        for i, line in enumerate(lines[:5], 1):  # 첫 5개 행만
+        # 미리보기 데이터 (첫 5개 행)
+        preview_data: List[Dict[str, Any]] = []
+        # 전체 데이터
+        all_data: List[Dict[str, Any]] = []
+
+        for i, line in enumerate(lines, 1):
             line = line.strip()
             if not line:
                 continue
 
             try:
                 data = json.loads(line)
-                preview_data.append({
-                    "row": i,
-                    "data": data
-                })
+                all_data.append(data)
+
+                # 미리보기용 (첫 5개 행만) - 프론트 형식에 맞게 변환
+                if i <= 5:
+                    preview_data.append({
+                        "row": i,
+                        "data": data
+                    })
+
             except json.JSONDecodeError as e:
                 logger.warning(f"행 {i} 파싱 실패: {str(e)}")
-                preview_data.append({
-                    "row": i,
-                    "error": f"JSON 파싱 오류: {str(e)}",
-                    "raw": line[:100]  # 처음 100자만
-                })
-
-        # 임베딩 모델 가져오기 (서버에서 초기화된 것 사용)
-        try:
-            from server import local_embeddings  # type: ignore
-            if local_embeddings is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail="임베딩 모델이 초기화되지 않았습니다. 서버를 재시작하세요."
-                )
-            embeddings_model = local_embeddings
-        except ImportError:
-            raise HTTPException(
-                status_code=503,
-                detail="임베딩 모델을 가져올 수 없습니다. 서버를 재시작하세요."
-            )
-
-        # 벡터 스토어 생성
-        settings = get_settings()
-        vector_store = get_v10_vector_store(embeddings_model, settings.v10_collection_name)
-
-        # 임시 파일로 저장 (DB 저장용)
-        with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.jsonl') as tmp_file:
-            tmp_file.write(content)  # 이미 읽은 content 사용
-            tmp_path = Path(tmp_file.name)
+                if i <= 5:
+                    preview_data.append({
+                        "row": i,
+                        "error": f"JSON 파싱 오류: {str(e)}",
+                        "raw": line[:100]  # 처음 100자만
+                    })
 
         try:
             logger.info(f"[업로드 시작] players 파일: {file.filename}")
 
-            # 하이브리드 방식으로 데이터 로드 (전체 데이터 저장)
-            results = load_players_hybrid(
-                jsonl_path=tmp_path,
-                db=db,
-                vector_store=vector_store
+            # Orchestrator 초기화
+            orchestrator = PlayerOrchestrator()
+
+            # Orchestrator를 통해 데이터 처리 (LangGraph 휴리스틱 처리 + 규칙 기반 DB 저장)
+            orchestrator_result = orchestrator.process(
+                data=all_data,
+                preview_data=preview_data,
+                db=db  # DB 세션 전달 (규칙 기반 저장용)
             )
 
-            # DB 커밋 확인
+            # DB 커밋 (규칙 기반 저장 후)
             db.commit()
+
+            # 결과 정리
+            strategy_result = orchestrator_result.get("result", {})
+            decided_strategy = orchestrator_result.get("decided_strategy", "rule")
 
             logger.info(
                 f"[업로드 완료] players: "
-                f"관계형 DB {results.get('db', 0)}개, "
-                f"벡터 스토어 {results.get('vector', 0)}개 저장됨"
+                f"전략={decided_strategy}, "
+                f"처리됨={strategy_result.get('processed', 0)}/{strategy_result.get('total', 0)}개"
             )
 
             return {
-                "success": True,
+                "success": orchestrator_result.get("success", False),
                 "message": "선수 데이터 업로드 및 로드 완료",
                 "data_type": "players",
                 "filename": file.filename,
-                "total_rows": len(lines),
+                "total_rows": len(all_data),
                 "preview_rows": len(preview_data),
                 "preview": preview_data,
-                "results": results,
+                "strategy": decided_strategy,
+                "results": strategy_result,
             }
 
         except Exception as load_error:
@@ -133,13 +123,6 @@ async def upload_player_jsonl(
                 status_code=500,
                 detail=f"데이터 로드 중 오류 발생: {str(load_error)}"
             )
-        finally:
-            # 임시 파일 삭제
-            if tmp_path.exists():
-                try:
-                    os.unlink(tmp_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"임시 파일 삭제 실패: {str(cleanup_error)}")
 
     except HTTPException:
         raise

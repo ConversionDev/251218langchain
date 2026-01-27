@@ -158,7 +158,7 @@ def init_v10() -> None:
 
             # Alembic 설정
             from alembic.config import Config  # type: ignore
-            from core.database import Base, get_v10_engine  # type: ignore
+            from core.database import get_v10_engine  # type: ignore
             from domain.v10.member.bases.player import Player  # noqa: F401
             from domain.v10.member.bases.schedule import Schedule  # noqa: F401
             from domain.v10.member.bases.stadium import Stadium  # noqa: F401
@@ -168,63 +168,51 @@ def init_v10() -> None:
             alembic_ini_path = Path(__file__).parent / "alembic.ini"
             alembic_cfg = Config(str(alembic_ini_path))
 
-            # Alembic 마이그레이션 파일 존재 여부 확인
+            # Alembic 마이그레이션 파일 디렉토리 확인
             alembic_versions_path = Path(__file__).parent / "alembic" / "versions"
             if not alembic_versions_path.exists():
                 alembic_versions_path.mkdir(parents=True, exist_ok=True)
 
-            migration_files_before = [f for f in alembic_versions_path.glob("*.py") if f.name != ".gitkeep"]
-
             if current_settings.v10_auto_migrate:
-                # 항상 autogenerate 실행하여 변경사항 감지 및 새 마이그레이션 생성
-                logging.info("모델과 DB 스키마 비교 중 (변경사항 자동 감지)...")
+                # autogenerate 실행 (변경사항이 있으면 새 마이그레이션 파일 생성)
                 try:
-                    # autogenerate 실행 (변경사항이 있으면 새 마이그레이션 파일 생성)
                     command.revision(
                         alembic_cfg,
                         autogenerate=True,
                         message="Auto-generated migration for V10 domain"
                     )
-                    logging.info("✓ 스키마 비교 완료")
                 except Exception as autogen_error:
                     # autogenerate 실패는 무시 (변경사항이 없을 수도 있음)
                     error_msg = str(autogen_error)
                     if "Target database is not up to date" in error_msg:
-                        logging.info("기존 마이그레이션을 먼저 적용해야 합니다.")
+                        logging.debug("기존 마이그레이션을 먼저 적용해야 합니다.")
                     elif "Can't locate revision identified by" in error_msg:
-                        logging.warning("마이그레이션 체인 문제가 있을 수 있습니다.")
-                    else:
-                        logging.debug(f"Autogenerate 결과: {error_msg[:100]}")
-
-                # 생성된 새 마이그레이션 파일 확인
-                migration_files_after = [f for f in alembic_versions_path.glob("*.py") if f.name != ".gitkeep"]
-                new_migrations = [f for f in migration_files_after if f not in migration_files_before]
-
-                if new_migrations:
-                    logging.info(f"✓ 새로운 마이그레이션 파일 {len(new_migrations)}개 생성됨: {[f.name for f in new_migrations]}")
-                else:
-                    logging.info("변경사항이 없습니다. 기존 마이그레이션 적용 중...")
+                        logging.debug("마이그레이션 체인 문제가 있을 수 있습니다.")
+                    # 기타 오류는 무시 (변경사항 없음으로 간주)
 
                 # Alembic 마이그레이션 실행 (기존 + 새로 생성된 마이그레이션 모두 적용)
-                command.upgrade(alembic_cfg, current_settings.v10_migration_revision)
+                try:
+                    command.upgrade(alembic_cfg, current_settings.v10_migration_revision)
+                    logging.info("✓ V10 도메인 마이그레이션 완료")
+                except Exception as upgrade_error:
+                    # 마이그레이션 실패 시에만 테이블 확인
+                    logging.error(f"마이그레이션 실행 실패: {upgrade_error}")
+                    try:
+                        engine = get_v10_engine()
+                        inspector = inspect(engine)
+                        existing_tables = inspector.get_table_names()
+                        expected_tables = ["players", "teams", "schedules", "stadiums"]
+                        created_tables = [name for name in expected_tables if name in existing_tables]
 
-                # 테이블이 실제로 생성되었는지 확인
-                engine = get_v10_engine()
-                inspector = inspect(engine)
-                existing_tables = inspector.get_table_names()
-                expected_tables = ["players", "teams", "schedules", "stadiums"]
-                created_tables = [name for name in expected_tables if name in existing_tables]
-
-                if len(created_tables) == len(expected_tables):
-                    logging.info("✓ V10 도메인 마이그레이션 완료 (모든 테이블 생성됨)")
-                else:
-                    missing_tables = [name for name in expected_tables if name not in existing_tables]
-                    logging.warning(f"일부 테이블이 생성되지 않았습니다: {missing_tables}")
-                    logging.warning("마이그레이션 파일을 확인하고 수동으로 수정이 필요할 수 있습니다.")
+                        if len(created_tables) != len(expected_tables):
+                            missing_tables = [name for name in expected_tables if name not in existing_tables]
+                            logging.warning(f"일부 테이블이 생성되지 않았습니다: {missing_tables}")
+                    except Exception:
+                        pass  # 테이블 확인 실패는 무시
+                    raise  # 마이그레이션 실패는 재발생
             else:
-                if not current_settings.v10_auto_migrate:
-                    logging.warning("V10 자동 마이그레이션이 비활성화되어 있습니다. (V10_AUTO_MIGRATE=false)")
-                    logging.warning("테이블을 생성하려면 마이그레이션을 수동으로 실행하거나 V10_AUTO_MIGRATE=true로 설정하세요.")
+                logging.warning("V10 자동 마이그레이션이 비활성화되어 있습니다. (V10_AUTO_MIGRATE=false)")
+                logging.warning("테이블을 생성하려면 마이그레이션을 수동으로 실행하거나 V10_AUTO_MIGRATE=true로 설정하세요.")
 
         except Exception as e:
             logging.error(f"관계형 테이블 생성 중 오류: {e}")
@@ -232,59 +220,8 @@ def init_v10() -> None:
             logging.error(traceback.format_exc())
             raise  # 테이블 생성 실패는 치명적 오류이므로 재발생
 
-        # 벡터 스토어 테이블 초기화 (서버 시작 시 테이블 생성)
-        logging.info("V10 벡터 스토어 테이블 초기화 중...")
-        wait_for_postgres()
-
-        # V1 초기화 후 임베딩 모델 사용 가능
-        global local_embeddings
-        if local_embeddings is not None:
-            try:
-                import psycopg2  # type: ignore[import-untyped]
-                from core.database import get_v10_vector_store  # type: ignore
-                from langchain_core.documents import (
-                    Document,  # type: ignore[import-untyped]
-                )
-
-                # 벡터 스토어 생성
-                vector_store = get_v10_vector_store(
-                    embeddings_model=local_embeddings,
-                    collection_name=current_settings.v10_collection_name
-                )
-
-                # 컬렉션이 이미 존재하는지 확인
-                conn = psycopg2.connect(current_settings.connection_string)
-                cur = conn.cursor()
-                cur.execute("""
-                    SELECT uuid FROM langchain_pg_collection
-                    WHERE name = %s
-                """, (current_settings.v10_collection_name,))
-                collection_exists = cur.fetchone() is not None
-                conn.close()
-
-                if not collection_exists:
-                    # 빈 문서 추가하여 테이블 생성 (PGVector는 첫 데이터 추가 시 테이블 생성)
-                    vector_store.add_documents([
-                        Document(page_content="__init__", metadata={"type": "__init__"})
-                    ])
-                    logging.info(f"✓ V10 벡터 스토어 테이블 생성 완료: {current_settings.v10_collection_name}")
-                else:
-                    logging.info(f"✓ V10 벡터 스토어 테이블 이미 존재: {current_settings.v10_collection_name}")
-            except Exception as e:
-                logging.warning(f"벡터 스토어 테이블 초기화 실패 (임베딩 모델 필요): {e}")
-        else:
-            logging.info("벡터 스토어 테이블 초기화는 V1 초기화 후 자동으로 수행됩니다.")
-
-        # 선택적 데이터 로드 (벡터 스토어)
-        if current_settings.v10_load_data:
-            from domain.v10.shared.data_loader import load_all_v10_data  # type: ignore
-            logging.info("V10 데이터 벡터 스토어 로드 중...")
-            # 임베딩 모델 전달 (V1 초기화 후 사용 가능, global은 이미 선언됨)
-            if local_embeddings is None:
-                logging.warning("임베딩 모델이 없습니다. V1 초기화 후 다시 시도하세요.")
-            else:
-                results = load_all_v10_data(embeddings_model=local_embeddings)
-                logging.info(f"✓ V10 데이터 벡터 스토어 로드 완료: {results}")
+        # V10 데이터는 JSONL 업로드를 통해 LangGraph 휴리스틱 처리로 로드됩니다.
+        logging.info("✓ V10 도메인 초기화 완료")
     except Exception as e:
         logging.error(f"V10 도메인 초기화 실패: {e}")
         raise
