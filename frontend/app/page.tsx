@@ -11,11 +11,10 @@ export default function Home() {
     isLoading,
     provider,
     useRag,
-    apiMode,
     agentStatus,
     sendMessage,
+    cancelRequest,
     setProvider,
-    setApiMode,
     toggleRag,
     clearMessages,
     checkAgentHealth,
@@ -39,7 +38,7 @@ export default function Home() {
       <header className="bg-gradient-to-br from-[#16213e] to-[#1a1a2e] text-[#e0e0e0] px-6 py-4 border-b border-[rgba(102,126,234,0.3)] md:px-4 md:py-3">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold text-white md:text-base">🤖 LangChain + LangGraph 테스트</h1>
+            <h1 className="text-xl font-semibold text-white md:text-base">🤖 LangGraph 에이전트</h1>
             <a
               href="/v1/spam-detection"
               className="px-3 py-1.5 bg-[rgba(102,126,234,0.2)] border border-[rgba(102,126,234,0.3)] rounded-lg text-[#e0e0e0] no-underline text-sm transition-all hover:bg-[rgba(102,126,234,0.3)]"
@@ -65,33 +64,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* API 모드 선택 */}
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="text-sm text-[#a0a0a0] min-w-[70px] md:min-w-0 md:w-full md:mb-1">API 모드:</span>
-          <button
-            className={`px-3 py-1.5 border rounded-lg text-sm transition-all md:px-2.5 md:py-1 md:text-xs ${
-              apiMode === "langchain"
-                ? "bg-gradient-to-br from-[#667eea] to-[#764ba2] border-[#667eea] text-white font-medium"
-                : "border-[rgba(102,126,234,0.3)] bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] hover:bg-[rgba(102,126,234,0.2)] hover:border-[rgba(102,126,234,0.5)]"
-            } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-            onClick={() => setApiMode("langchain")}
-            disabled={isLoading}
-          >
-            🔗 LangChain
-          </button>
-          <button
-            className={`px-3 py-1.5 border rounded-lg text-sm transition-all md:px-2.5 md:py-1 md:text-xs ${
-              apiMode === "langgraph"
-                ? "bg-gradient-to-br from-[#667eea] to-[#764ba2] border-[#667eea] text-white font-medium"
-                : "border-[rgba(102,126,234,0.3)] bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] hover:bg-[rgba(102,126,234,0.2)] hover:border-[rgba(102,126,234,0.5)]"
-            } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-            onClick={() => setApiMode("langgraph")}
-            disabled={isLoading}
-          >
-            🕸️ LangGraph
-          </button>
-        </div>
-
         {/* LLM 제공자 선택 */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="text-sm text-[#a0a0a0] min-w-[70px] md:min-w-0 md:w-full md:mb-1">LLM:</span>
@@ -108,28 +80,26 @@ export default function Home() {
           </button>
         </div>
 
-        {/* RAG 및 기타 옵션 (LangGraph 모드에서만) */}
-        {apiMode === "langgraph" && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-2 text-sm cursor-pointer text-[#a0a0a0] has-[:checked]:text-[#e0e0e0]">
-              <input
-                type="checkbox"
-                checked={useRag}
-                onChange={toggleRag}
-                disabled={isLoading}
-                className="w-4 h-4 accent-[#667eea]"
-              />
-              <span>📚 RAG 사용</span>
-            </label>
-            <button
-              className="px-3 py-1.5 border border-[rgba(248,113,113,0.3)] rounded-lg bg-[rgba(248,113,113,0.1)] text-[#f87171] text-sm cursor-pointer transition-all hover:bg-[rgba(248,113,113,0.2)] hover:border-[#f87171] disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={clearMessages}
+        {/* RAG 및 기타 옵션 */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className="flex items-center gap-2 text-sm cursor-pointer text-[#a0a0a0] has-[:checked]:text-[#e0e0e0]">
+            <input
+              type="checkbox"
+              checked={useRag}
+              onChange={toggleRag}
               disabled={isLoading}
-            >
-              🗑️ 대화 초기화
-            </button>
-          </div>
-        )}
+              className="w-4 h-4 accent-[#667eea]"
+            />
+            <span>📚 RAG 사용</span>
+          </label>
+          <button
+            className="px-3 py-1.5 border border-[rgba(248,113,113,0.3)] rounded-lg bg-[rgba(248,113,113,0.1)] text-[#f87171] text-sm cursor-pointer transition-all hover:bg-[rgba(248,113,113,0.2)] hover:border-[#f87171] disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={clearMessages}
+            disabled={isLoading}
+          >
+            🗑️ 대화 초기화
+          </button>
+        </div>
       </header>
 
       {/* 메시지 영역 */}
@@ -139,15 +109,22 @@ export default function Home() {
             <ChatMessage key={message.id} message={message} />
           ))}
           {isLoading && (
-            <div className="flex items-center gap-4 p-4">
+            <div className="flex items-center gap-4 p-4 flex-wrap">
               <div className="flex gap-1.5 px-4 py-3 bg-[rgba(102,126,234,0.1)] rounded-2xl border border-[rgba(102,126,234,0.2)]">
                 <span className="w-2 h-2 rounded-full bg-[#667eea] animate-typing"></span>
                 <span className="w-2 h-2 rounded-full bg-[#667eea] animate-typing [animation-delay:0.2s]"></span>
                 <span className="w-2 h-2 rounded-full bg-[#667eea] animate-typing [animation-delay:0.4s]"></span>
               </div>
               <span className="text-sm text-[#a0a0a0]">
-                {apiMode === "langgraph" ? "에이전트 처리 중..." : "응답 생성 중..."}
+                에이전트 처리 중...
               </span>
+              <button
+                type="button"
+                onClick={cancelRequest}
+                className="px-3 py-1.5 border border-[rgba(248,113,113,0.4)] rounded-lg bg-[rgba(248,113,113,0.15)] text-[#f87171] text-sm font-medium cursor-pointer transition-all hover:bg-[rgba(248,113,113,0.25)] hover:border-[#f87171]"
+              >
+                답변 취소
+              </button>
             </div>
           )}
           <div ref={messagesEndRef} />

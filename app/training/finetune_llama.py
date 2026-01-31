@@ -76,7 +76,7 @@ from unsloth import FastLanguageModel  # noqa: E402
 from typing import Any, Dict, List, Optional
 
 from datasets import Dataset  # noqa: E402
-from domain.v1.spam.services.utils import (  # type: ignore
+from domain.v1.spokes.spam.services.utils import (  # type: ignore
     extract_email_metadata,
     format_email_text,
     get_data_dir,

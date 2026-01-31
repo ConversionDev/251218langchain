@@ -18,7 +18,7 @@ if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 from core.llm.providers.llama import LLaMAGate  # type: ignore
-from domain.v1.spam.services.utils import (  # type: ignore
+from domain.v1.spokes.spam.services.utils import (  # type: ignore
     load_jsonl,
     save_jsonl,
     extract_email_metadata,
@@ -278,7 +278,7 @@ def filter_training_data(
         sample_size = min(100, len(train_data))
         sample_data = train_data[:sample_size]
         sample_metadata = [extract_email_metadata(item) for item in sample_data]
-        
+
         # 배치로 점수 계산
         sample_scores = []
         try:

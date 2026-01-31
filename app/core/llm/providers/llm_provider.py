@@ -4,6 +4,9 @@
 지원 모델:
 - exaone: EXAONE 3.5 (한국어 특화, ReAct 권장)
 - ollama: Ollama 로컬 모델 (향후 지원)
+
+역할: Hub Adapter(domain.v1.hub.llm)의 백엔드. API·오케스트레이터는 get_provider_name/list_providers 등
+provider 메타는 hub.llm 경유, LLM 인스턴스는 hub.llm.get_llm 등 경유로만 사용합니다.
 """
 
 import os

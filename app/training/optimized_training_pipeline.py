@@ -25,7 +25,7 @@ if str(app_dir) not in sys.path:
 os.environ["UNSLOTH_DISABLE_TRAINER_PATCH"] = "1"
 
 from core.llm.providers.llama import LLaMAGate  # type: ignore  # noqa: E402
-from domain.v1.spam.services.utils import (  # type: ignore  # noqa: E402
+from domain.v1.spokes.spam.services.utils import (  # type: ignore  # noqa: E402
     get_data_dir,
     get_output_dir,
 )

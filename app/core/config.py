@@ -35,6 +35,13 @@ class Settings(BaseSettings):
         description="DATABASE_URL 환경 변수",
     )
 
+    db_batch_chunk_size: int = Field(
+        default=500,
+        ge=1,
+        le=5000,
+        description="DB 배치 저장 시 청크 크기 (성능·메모리 균형)",
+    )
+
     sslmode: str = Field(
         default="require",
         description="SSL 모드",
@@ -127,11 +134,6 @@ class Settings(BaseSettings):
     port: int = Field(
         default=8000,
         description="서버 포트",
-    )
-
-    debug: bool = Field(
-        default=False,
-        description="디버그 모드",
     )
 
     debug_streaming: bool = Field(

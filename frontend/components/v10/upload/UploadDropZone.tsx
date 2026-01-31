@@ -12,7 +12,7 @@ interface UploadDropZoneProps {
 
 export default function UploadDropZone({ dataType, title }: UploadDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const { uploading, uploadResult, error, uploadFile, setError } = useFileUpload(dataType);
+  const { uploading, uploadResult, error, uploadFile, cancelUpload, setError } = useFileUpload(dataType);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -87,6 +87,17 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
               <>
                 <div className="upload-spinner"></div>
                 <p>업로드 중...</p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cancelUpload();
+                  }}
+                  className="cancel-button"
+                >
+                  취소
+                </button>
               </>
             ) : (
               <>
@@ -268,6 +279,28 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
           to {
             transform: rotate(360deg);
           }
+        }
+
+        .cancel-button {
+          margin-top: 1rem;
+          padding: 0.5rem 1.5rem;
+          background: #ef4444;
+          color: #ffffff;
+          border: none;
+          border-radius: 0.5rem;
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .cancel-button:hover {
+          background: #dc2626;
+          transform: scale(1.05);
+        }
+
+        .cancel-button:active {
+          transform: scale(0.95);
         }
 
         /* 에러 메시지 */

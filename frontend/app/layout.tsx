@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ServiceWorkerRegistration } from "./components/ServiceWorkerRegistration";
 
 export const metadata: Metadata = {
-  title: "LangChain + LangGraph 테스트",
-  description: "LangChain RAG와 LangGraph 에이전트 테스트 챗봇",
+  title: "LangGraph 에이전트",
+  description: "LangGraph 에이전트 챗봇 (도구·RAG)",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
@@ -32,7 +33,10 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0a0a1a" />
       </head>
-      <body>{children}</body>
+      <body>
+        <ServiceWorkerRegistration />
+        {children}
+      </body>
     </html>
   );
 }

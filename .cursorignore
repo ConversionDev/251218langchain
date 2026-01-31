@@ -1,0 +1,25 @@
+# Cursor AI 인덱싱에서 제외할 파일/디렉토리
+# 이 파일은 Cursor의 자동 완성 및 프롬프트 성능을 최적화하기 위한 것입니다.
+
+# 대용량 데이터 파일
+app/data/*.csv
+app/data/*.jsonl
+app/data/sft_dataset/
+
+# 로그 파일
+*.log
+
+# IDE 설정
+.vscode/
+.idea/
+
+# 이미 .gitignore에 있는 항목들도 명시적으로 추가 (Cursor 인덱싱 최적화)
+node_modules/
+__pycache__/
+*.pyc
+.next/
+dist/
+build/
+app/artifacts/
+app/unsloth_compiled_cache/
+app/core/resource_manager/unsloth_compiled_cache/

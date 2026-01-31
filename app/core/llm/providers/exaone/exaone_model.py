@@ -15,6 +15,9 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Union
 
 # OpenMP 충돌 방지
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# 모델 로딩 속도 개선을 위한 환경 변수 설정
+os.environ["TOKENIZERS_PARALLELISM"] = "true"  # 토크나이저 병렬 처리
+os.environ["HF_HUB_DISABLE_EXPERIMENTAL_WARNING"] = "1"  # 경고 메시지 비활성화
 
 import torch
 from core.llm.base import BaseLLM  # type: ignore
@@ -148,16 +151,16 @@ def _parse_tool_calls(json_data: Union[Dict, List]) -> List[Dict[str, Any]]:
 
 def get_adaptive_max_length(input_length: int, max_new_tokens: int = 2048) -> int:
     """입력 길이에 따라 KV 캐시 최대 크기를 동적으로 결정 (메모리 절약).
-    
+
     Args:
         input_length: 입력 토큰 길이
         max_new_tokens: 최대 생성 토큰 수
-    
+
     Returns:
         동적으로 조정된 max_length
     """
     total_needed = input_length + max_new_tokens
-    
+
     # 입력 길이에 따라 KV 캐시 크기 동적 조정
     if input_length <= 256:
         # 매우 짧은 입력: 작은 KV 캐시 (메모리 절약)
@@ -272,11 +275,9 @@ class ExaoneLLM(BaseLLM):
                     "torch.cuda.is_available()이 False입니다."
                 )
 
-            # 양자화 및 모델 로드 설정 (GPU 전용)
             dtype = torch.float16
 
             if self.use_4bit:
-                # bitsandbytes 4-bit 양자화 (GPU 메모리 절약)
                 print("[INFO] bitsandbytes 4-bit 양자화 적용 (GPU 전용)")
                 quantization_config = BitsAndBytesConfig(
                     load_in_4bit=True,
@@ -290,13 +291,14 @@ class ExaoneLLM(BaseLLM):
                 quantization_config = None
                 quantization_info = "없음 (FP16)"
 
-            # 모델 로드 설정 (GPU 강제)
             load_kwargs: Dict[str, Any] = {
-                "torch_dtype": dtype,
-                "device_map": {"": "cuda:0"},  # GPU 강제 사용
+                "dtype": dtype,
+                "device_map": {"": "cuda:0"},
                 "trust_remote_code": self.trust_remote_code,
                 "low_cpu_mem_usage": True,
-                "attn_implementation": "sdpa",  # PyTorch 2.0+ SDPA 최적화
+                "attn_implementation": "sdpa",
+                "use_safetensors": True,
+                "local_files_only": True,
             }
 
             if quantization_config is not None:
@@ -307,7 +309,6 @@ class ExaoneLLM(BaseLLM):
                 **load_kwargs,
             )
 
-            # torch.compile 최적화 (PyTorch 2.0+, 첫 실행 시 컴파일 시간 필요)
             from core.config import settings  # type: ignore
 
             if settings.exaone_use_compile and hasattr(torch, "compile"):
@@ -315,13 +316,19 @@ class ExaoneLLM(BaseLLM):
                 self.model = torch.compile(self.model, mode="reduce-overhead")
                 print("[OK] torch.compile() 적용 완료")
 
-            # 토크나이저 로드
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self._load_path,
-                trust_remote_code=self.trust_remote_code,
-            )
-
-            # pad_token 설정 (없으면 eos_token 사용)
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self._load_path,
+                    trust_remote_code=self.trust_remote_code,
+                    use_fast=True,
+                    local_files_only=True,
+                )
+            except Exception:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self._load_path,
+                    trust_remote_code=self.trust_remote_code,
+                    local_files_only=True,
+                )
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id

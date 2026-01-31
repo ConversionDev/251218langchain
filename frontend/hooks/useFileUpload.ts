@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 type DataType = "players" | "teams" | "stadiums" | "schedules";
 
@@ -28,12 +28,22 @@ export function useFileUpload(dataType: DataType) {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const uploadFile = useCallback(
     async (file: File) => {
       setUploading(true);
       setError(null);
       setUploadResult(null);
+
+      // 이전 요청이 있으면 취소
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // 새로운 AbortController 생성
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
 
       try {
         const formData = new FormData();
@@ -53,6 +63,7 @@ export function useFileUpload(dataType: DataType) {
         const response = await fetch(endpoint, {
           method: "POST",
           body: formData,
+          signal: abortController.signal,
         });
 
         if (!response.ok) {
@@ -63,13 +74,27 @@ export function useFileUpload(dataType: DataType) {
         const data = await response.json();
         setUploadResult(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "파일 업로드 실패");
+        if (err instanceof Error && err.name === "AbortError") {
+          setError("업로드가 취소되었습니다.");
+        } else {
+          setError(err instanceof Error ? err.message : "파일 업로드 실패");
+        }
       } finally {
         setUploading(false);
+        abortControllerRef.current = null;
       }
     },
     [dataType]
   );
+
+  const cancelUpload = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setUploading(false);
+      setError("업로드가 취소되었습니다.");
+      abortControllerRef.current = null;
+    }
+  }, []);
 
   const reset = useCallback(() => {
     setError(null);
@@ -85,6 +110,7 @@ export function useFileUpload(dataType: DataType) {
     uploadResult,
     error,
     uploadFile,
+    cancelUpload,
     reset,
     setError: setErrorState,
   };

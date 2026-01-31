@@ -87,7 +87,7 @@ class LoRATrainer:
         """
         # 출력 디렉토리 설정
         if output_dir is None:
-            from domain.v1.spam.services.utils import get_output_dir  # type: ignore
+            from domain.v1.spokes.spam.services.utils import get_output_dir  # type: ignore
 
             output_dir_path = get_output_dir() / "exaone" / "adapters"
         else:

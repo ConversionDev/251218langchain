@@ -1,3 +1,4 @@
+# 버전 동기화: 프로젝트 venv에서 python scripts/sync_requirements_from_env.py 실행
 # ===============================
 # FastAPI / Server (CPU Orchestrator)
 # ===============================
@@ -10,8 +11,9 @@ python-dotenv==1.2.1
 orjson==3.11.5
 
 # ===============================
-# LangChain / LangGraph
-# (No OpenAI, No LangSmith 의도면 langsmith 제거 가능)
+# LangChain / LangGraph (라이브러리 용도)
+# 채팅은 LangGraph 에이전트 단일 진입만 사용.
+# LangChain = 메시지·도구·BaseChatModel·벡터스토어 등 구현용 라이브러리.
 # ===============================
 langchain==1.2.0
 langchain-core==1.2.2
@@ -30,7 +32,7 @@ langgraph-sdk==0.3.3
 psycopg2-binary==2.9.11
 pgvector==0.4.2
 SQLAlchemy==2.0.46
-alembic==1.14.0
+alembic==1.18.1
 
 # ===============================
 # PyTorch / CUDA (cu118 기준)
@@ -38,7 +40,7 @@ alembic==1.14.0
 torch==2.7.1+cu118
 torchvision==0.22.1+cu118
 torchaudio==2.7.1+cu118
-torchao==0.15.0
+torchao==0.13.0
 
 # ===============================
 # HuggingFace / NLP Core
@@ -83,4 +85,7 @@ regex==2026.1.15
 httpx==0.28.1
 aiohttp==3.13.3
 websockets==16.0
+
+# MCP 서버/클라이언트 (v2 고정, 3.0 호환 방지)
+fastmcp>=2.14.0,<3
 

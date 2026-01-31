@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 from langgraph.graph import END, StateGraph
 
-from domain.v10.soccer.hub.nodes import (  # type: ignore
+from domain.v10.soccer.hub.processing import (  # type: ignore
     error_handler_node,
     finalize_node,
     retry_save_node,
@@ -72,6 +72,7 @@ def _rule_process_node(state: TeamProcessingState) -> Dict[str, Any]:
             data=validated_data,
             db=db,
             vector_store=None,
+            auto_commit=state.get("auto_commit", True),
         )
 
         logger.info(f"[RuleProcessNode] Rule 기반 처리 완료: {result}")
@@ -121,7 +122,7 @@ def build_team_graph():
     Returns:
         컴파일된 StateGraph
     """
-    from domain.v10.soccer.hub.nodes.save_node import save_node  # type: ignore
+    from domain.v10.soccer.hub.processing import save_node  # type: ignore
 
     g = StateGraph(TeamProcessingState)
 
@@ -300,6 +301,7 @@ class TeamOrchestrator:
             "vector_store": vector_store,
             "save_retry_count": 0,
             "save_failed": False,
+            "auto_commit": False,
         }
 
         # 그래프 실행
@@ -307,6 +309,22 @@ class TeamOrchestrator:
 
         try:
             result = graph.invoke(initial_state, config=config)
+
+            # 트랜잭션: 그래프 내부는 auto_commit=False이므로 여기서 한 번만 commit
+            db_session = result.get("db")
+            if db_session is not None:
+                try:
+                    db_session.commit()
+                except Exception as commit_err:
+                    db_session.rollback()
+                    self.logger.error("[TeamOrchestrator] commit 실패: %s", commit_err)
+                    return {
+                        "success": False,
+                        "result": result.get("result", {}),
+                        "processing_path": result.get("processing_path", ""),
+                        "decided_strategy": result.get("decided_strategy", "rule"),
+                        "error": str(commit_err),
+                    }
 
             # 결과 추출
             final_result = result.get("result", {})

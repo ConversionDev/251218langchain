@@ -9,10 +9,12 @@ interface MenuItem {
   path: string;
 }
 
+// 데이터 의존성 순서에 맞게 정렬 (Foreign Key 참조 순서)
+// 1. Stadiums → 2. Teams → 3. Players → 4. Schedules
 const menuItems: MenuItem[] = [
-  { id: "players", label: "선수", icon: "👤", path: "/v10/upload/player" },
-  { id: "teams", label: "팀", icon: "⚽", path: "/v10/upload/team" },
   { id: "stadiums", label: "스타디움", icon: "🏟️", path: "/v10/upload/stadium" },
+  { id: "teams", label: "팀", icon: "⚽", path: "/v10/upload/team" },
+  { id: "players", label: "선수", icon: "👤", path: "/v10/upload/player" },
   { id: "schedules", label: "스케줄", icon: "📅", path: "/v10/upload/schedule" },
 ];
 

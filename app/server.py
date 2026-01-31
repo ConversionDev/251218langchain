@@ -1,21 +1,20 @@
 """
-FastAPI 백엔드 서버 - FastAPI와 LangChain 연동.
-
-이 서버는 FastAPI를 통해 LangChain RAG 체인을 제공하는 API 서버입니다.
-PGVector 벡터 스토어를 직접 초기화하여 챗봇 API를 제공합니다.
+FastAPI 백엔드 서버.
 
 역할:
 - FastAPI 서버 제공 (REST API)
-- LangChain RAG 체인 실행
-- PGVector 벡터 스토어 초기화 및 관리
-- LangGraph 기반 스팸 감지 API
+- LangGraph 에이전트 채팅 (단일 진입)
+- PGVector 벡터 스토어 초기화 (에이전트 RAG 노드용)
+- 스팸 감지 등 기타 API
 """
 
+import asyncio
 import logging
+import threading
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional
 
 # 공통 모듈 (환경 변수 로딩 포함)
 from core.config import get_settings  # type: ignore
@@ -25,34 +24,7 @@ from core.database import wait_for_postgres  # type: ignore
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# LangChain 1.x 호환: langchain_classic 또는 langchain에서 import 시도
-try:
-    from langchain.chains import (
-        create_history_aware_retriever,
-        create_retrieval_chain,
-    )
-    from langchain.chains.combine_documents import create_stuff_documents_chain
-except ImportError:
-    # 하위 호환성: langchain-classic 패키지 사용
-    try:
-        from langchain_classic.chains import (
-            create_history_aware_retriever,
-            create_retrieval_chain,
-        )
-        from langchain_classic.chains.combine_documents import (
-            create_stuff_documents_chain,
-        )
-    except ImportError:
-        # 최신 LangChain 1.x: langchain 패키지에서 직접 import
-        from langchain.chains.combine_documents import create_stuff_documents_chain
-        from langchain.chains.history_aware_retriever import (
-            create_history_aware_retriever,
-        )
-        from langchain.chains.retrieval import create_retrieval_chain
-
 from langchain_community.vectorstores import PGVector
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import Runnable
 
 # PGVector의 JSONB deprecation 경고 무시 (import 후 경고 필터링)
 try:
@@ -76,47 +48,59 @@ warnings.filterwarnings(
     module="langchain_community.vectorstores.pgvector",
 )
 
-# 설정 로드
 settings = get_settings()
 CONNECTION_STRING = settings.connection_string
 COLLECTION_NAME = settings.collection_name
+
+# Llama + ExaOne Fast MCP 통일 (health + MCP 프로토콜 한 앱)
+from domain.v1.hub.mcp.app import get_http_app  # type: ignore  # noqa: E402
+
+mcp_app = get_http_app()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
-    FastAPI 애플리케이션 라이프사이클 관리 (현대식 구조).
+    FastAPI 애플리케이션 라이프사이클 관리.
 
-    Startup: V1 및 V10 도메인 초기화
-    Shutdown: 정리 작업 (필요시)
+    Windows/uvicorn: lifespan에서 초기화를 기다리면 yield 직후 서버가 종료되는 현상이 있어,
+    먼저 yield로 서버를 띄운 뒤 V1/V10 초기화를 백그라운드 태스크로 실행합니다.
     """
-    # Startup: 도메인 초기화
     print("\n" + "=" * 50)
     print("FastAPI 서버 시작 중...")
     print("=" * 50)
 
-    # V1 도메인 초기화
-    init_v1()
+    init_error: Optional[Exception] = None
 
-    # V10 도메인 초기화
-    print("\n" + "=" * 50)
-    print("V10 도메인 초기화 중...")
-    print("=" * 50)
-    init_v10()
+    async def run_inits() -> None:
+        nonlocal init_error
+        try:
+            await asyncio.to_thread(init_v1)
+            print("\n" + "=" * 50)
+            print("V10 도메인 초기화 중...")
+            print("=" * 50)
+            await asyncio.to_thread(init_v10)
+            print("\n" + "=" * 50)
+            print("[OK] 모든 도메인 초기화 완료!")
+            print("=" * 50)
+        except Exception as e:
+            init_error = e
+            logging.exception("도메인 초기화 실패: %s", e)
 
-    print("\n" + "=" * 50)
-    print("[OK] 모든 도메인 초기화 완료!")
-    print("=" * 50)
-
-    # 애플리케이션 실행
+    init_task = asyncio.create_task(run_inits())
+    # 서버를 먼저 띄우기 위해 yield를 즉시 수행 (초기화는 백그라운드에서 진행)
     yield
 
-    # Shutdown: 정리 작업 (필요시 추가)
-    # 예: 연결 종료, 리소스 해제 등
+    init_task.cancel()
+    try:
+        await init_task
+    except asyncio.CancelledError:
+        pass
+    if init_error:
+        logging.warning("초기화 중 오류가 있었습니다: %s", init_error)
     print("\n[INFO] 서버 종료 중...")
 
 
-# FastAPI 앱 생성 (lifespan 사용)
 app = FastAPI(
     title="LangChain Chatbot API",
     description="PGVector와 연동된 LangChain 챗봇 API",
@@ -133,13 +117,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 전역 변수
+# 전역 변수 (에이전트 RAG 노드·벡터스토어용)
 vector_store: Optional[PGVector] = None
 local_embeddings = None
 local_llm = None
-local_rag_chain: Optional[Runnable] = None
-# ChatService 인스턴스 (타입 힌트는 함수 내부에서 import)
-chat_service: Optional[Any] = None
+_rag_init_lock = threading.Lock()
+_rag_initialized = False
 
 
 def init_v10() -> None:
@@ -159,14 +142,17 @@ def init_v10() -> None:
             # Alembic 설정
             from alembic.config import Config  # type: ignore
             from core.database import get_v10_engine  # type: ignore
-            from domain.v10.member.bases.player import Player  # noqa: F401
-            from domain.v10.member.bases.schedule import Schedule  # noqa: F401
-            from domain.v10.member.bases.stadium import Stadium  # noqa: F401
-            from domain.v10.member.bases.team import Team  # noqa: F401
+            from domain.v10.soccer.models.bases.player import Player  # noqa: F401
+            from domain.v10.soccer.models.bases.schedule import Schedule  # noqa: F401
+            from domain.v10.soccer.models.bases.stadium import Stadium  # noqa: F401
+            from domain.v10.soccer.models.bases.team import Team  # noqa: F401
             from sqlalchemy import inspect  # type: ignore[import-untyped]
 
             alembic_ini_path = Path(__file__).parent / "alembic.ini"
             alembic_cfg = Config(str(alembic_ini_path))
+            # CWD와 무관하게 app/alembic을 사용 (main.py를 루트에서 실행해도 versions를 찾도록)
+            app_dir = Path(__file__).parent
+            alembic_cfg.set_main_option("script_location", str(app_dir / "alembic"))
 
             # Alembic 마이그레이션 파일 디렉토리 확인
             alembic_versions_path = Path(__file__).parent / "alembic" / "versions"
@@ -228,66 +214,35 @@ def init_v10() -> None:
 
 
 def init_v1() -> None:
-    """V1 도메인 초기화: LangChain RAG 체인 및 관련 서비스 초기화."""
-    global chat_service, local_embeddings, local_llm, local_rag_chain, vector_store
+    """V1 도메인 초기화: 에이전트용 벡터스토어·Embedding·Exaone 사전 로드."""
+    global local_embeddings, local_llm, vector_store
 
     print("=" * 50)
-    print("LangChain FastAPI 서버 시작 중...")
+    print("V1 도메인 초기화 (LangGraph 에이전트)...")
     print("=" * 50)
 
-    # 환경 변수 확인
     llm_provider = settings.llm_provider
     exaone_model_dir = settings.exaone_model_dir or "기본값 사용"
     print(f"\n[INFO] LLM_PROVIDER: {llm_provider}")
     print(f"[INFO] EXAONE_MODEL_DIR: {exaone_model_dir}")
 
-    # Neon PostgreSQL 연결 대기
+    # Neon PostgreSQL 연결 대기 (에이전트 RAG·벡터스토어용)
     print("\n1. Neon PostgreSQL 연결 확인 중...")
     wait_for_postgres()
 
-    # ChatService 초기화
-    print("\n2. ChatService 초기화 중...")
-    from domain.v1.chat.services.chat_service import ChatService  # type: ignore
-
-    chat_service = ChatService(
-        connection_string=CONNECTION_STRING,
-        collection_name=COLLECTION_NAME,
-        model_name_or_path=exaone_model_dir
-        if exaone_model_dir != "기본값 사용"
-        else None,
-    )
-
-    # Embedding 모델 초기화
-    print("\n3. Embedding 모델 초기화 중...")
-    chat_service.initialize_embeddings()
-
-    # LLM 모델 초기화
-    print("\n4. LLM 모델 초기화 중...")
-    chat_service.initialize_llm()
-
-    # EXAONE 베이스 모델 미리 로드 (서버 시작 시 - 전략 3: 하이브리드)
+    # EXAONE 베이스 모델 미리 로드
     if llm_provider == "exaone":
-        print("\n4-1. EXAONE 베이스 모델 미리 로드 중...")
+        print("\n2. EXAONE 베이스 모델 미리 로드 중...")
         from core.resource_manager.exaone_manager import ExaoneManager  # type: ignore
 
-        ExaoneManager().get_base_model()  # 베이스 모델만 사전 로드 (어댑터는 필요 시 로드)
+        ExaoneManager().get_base_model()
         print("[OK] EXAONE 베이스 모델 미리 로드 완료!")
 
-    # PGVector 스토어 초기화 (기존 함수 사용)
-    print("\n5. PGVector 스토어 초기화 중...")
-    # ChatService의 embeddings를 전역 변수에 할당 (기존 코드 호환성)
-    local_embeddings = chat_service.local_embeddings
-    local_llm = chat_service.local_llm
-    initialize_vector_store()
-
-    # RAG 체인 초기화
-    print("\n6. RAG 체인 초기화 중...")
-    chat_service.initialize_rag_chain()
-    # ChatService의 RAG 체인을 전역 변수에 할당 (기존 코드 호환성)
-    local_rag_chain = chat_service.local_rag_chain
-
+    # Embedding·벡터스토어는 Lazy Loading (첫 RAG 요청 시 로드 → 서버 기동 속도 개선)
+    print("\n3. Embedding·PGVector: Lazy Loading (첫 RAG 요청 시 로드)")
+    print("[INFO] 채팅에서 RAG 사용 시 첫 요청에만 Embedding 모델이 로드됩니다.")
     # 스팸 감지 모델은 Lazy Loading (첫 요청 시 로드)
-    print("\n7. 스팸 감지 모델: Lazy Loading 설정 (첫 요청 시 LLaMA 로드)")
+    print("\n4. 스팸 감지 모델: Lazy Loading (첫 요청 시 LLaMA 로드)")
     print("[INFO] VRAM 절약을 위해 스팸 테스트 요청 시 LLaMA 모델이 로드됩니다.")
 
     print("\n" + "=" * 50)
@@ -340,14 +295,6 @@ def initialize_embeddings():
             "[WARNING] 로컬 Embedding 모델 초기화에 실패했습니다. "
             "Embedding 기능이 비활성화됩니다. 벡터 스토어와 RAG 기능을 사용할 수 없습니다."
         )
-
-
-def initialize_llm():
-    """LLM 모델 초기화 - EXAONE은 LangGraph에서 사용되므로 여기서는 로딩하지 않음."""
-    global local_llm
-
-    # EXAONE은 LangGraph에서 사용되므로 local_llm은 None으로 설정
-    local_llm = None
 
 
 def initialize_vector_store():
@@ -462,96 +409,26 @@ def initialize_vector_store():
         raise
 
 
-def create_rag_chain(llm_model, embeddings_model):
-    """RAG 체인 생성 - LangChain 체인 기능 활용."""
-    try:
-        # 1. Retriever 생성 (현재 Embedding 모델 사용)
-        current_vector_store = PGVector(
-            embedding_function=embeddings_model,
-            collection_name=COLLECTION_NAME,
-            connection_string=CONNECTION_STRING,
-        )
-        retriever = current_vector_store.as_retriever(search_kwargs={"k": 3})
-
-        # 2. 대화 기록을 고려한 검색 쿼리 생성 프롬프트
-        contextualize_q_system_prompt = (
-            "대화 기록과 최신 사용자 질문이 주어졌을 때, "
-            "대화 기록의 맥락을 참고하여 독립적으로 이해할 수 있는 질문으로 재구성하세요. "
-            "질문에 답하지 말고, 필요시 재구성하고 그렇지 않으면 그대로 반환하세요."
-        )
-        contextualize_q_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", contextualize_q_system_prompt),
-                MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
-            ]
-        )
-
-        # 3. 대화 기록을 고려한 Retriever 생성
-        history_aware_retriever = create_history_aware_retriever(
-            llm_model, retriever, contextualize_q_prompt
-        )
-
-        # 4. 질문 답변 프롬프트
-        qa_system_prompt = (
-            "당신은 LangChain과 PGVector를 사용하는 도움이 되는 AI 어시스턴트입니다. "
-            "다음 검색된 컨텍스트 정보를 참고하여 사용자의 질문에 답변해주세요. "
-            "컨텍스트에 답변할 수 없는 질문이면, 정중하게 그렇게 말씀해주세요. "
-            "답변은 최대 3문장으로 간결하게 작성해주세요.\n\n"
-            "컨텍스트:\n{context}"
-        )
-        qa_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", qa_system_prompt),
-                MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
-            ]
-        )
-
-        # 5. 문서 결합 체인 생성
-        question_answer_chain = create_stuff_documents_chain(llm_model, qa_prompt)
-
-        # 6. 최종 RAG 체인 생성
-        rag_chain = create_retrieval_chain(
-            history_aware_retriever, question_answer_chain
-        )
-
-        return rag_chain
-    except Exception as e:
-        error_msg = str(e)
-        print(f"[ERROR] RAG 체인 생성 실패: {error_msg[:200]}...")
-        raise
-
-
-def initialize_rag_chain():
-    """RAG 체인 초기화 - 로컬 모델용 체인 생성."""
-    global local_rag_chain
-
-    # 로컬 모델용 RAG 체인 생성
-    if local_llm and local_embeddings:
-        try:
-            local_rag_chain = create_rag_chain(local_llm, local_embeddings)
-            print("[OK] 로컬 RAG 체인 초기화 완료")
-        except Exception as e:
-            print(f"[WARNING] 로컬 RAG 체인 초기화 실패: {str(e)[:100]}...")
-            local_rag_chain = None
-
-    if not local_rag_chain:
-        print("[WARNING] 로컬 RAG 체인 초기화에 실패했습니다.")
-        if not local_llm:
-            print("  - 로컬 LLM이 초기화되지 않았습니다.")
-        if not local_embeddings:
-            print("  - 로컬 Embeddings가 초기화되지 않았습니다.")
-        print("[WARNING] RAG 기능이 비활성화됩니다. 채팅 기능을 사용할 수 없습니다.")
+def ensure_rag_initialized() -> None:
+    """RAG용 Embedding·벡터스토어를 첫 사용 시 한 번만 초기화 (Lazy Loading)."""
+    global _rag_initialized
+    if _rag_initialized:
+        return
+    with _rag_init_lock:
+        if _rag_initialized:
+            return
+        if local_embeddings is None:
+            initialize_embeddings()
+        if local_embeddings and vector_store is None:
+            initialize_vector_store()
+        _rag_initialized = True
 
 
 # 라우터 등록 (순환 import 방지를 위해 여기서 import)
 from api.v1.agent.graph_router import (
     router as graph_router,  # type: ignore  # noqa: E402
 )
-from api.v1.chat.chat_router import router as chat_router  # type: ignore  # noqa: E402
-from api.v1.spam.email_router import email_router  # type: ignore  # noqa: E402
-from api.v1.spam.mcp_router import router as mcp_router  # type: ignore  # noqa: E402
+from api.v1.agent.email_router import email_router  # type: ignore  # noqa: E402
 
 # v10 라우터 등록 (soccer 라우터 통합)
 from api.v10.soccer.player_router import (
@@ -567,10 +444,11 @@ from api.v10.soccer.team_router import (
     router as team_router,  # type: ignore  # noqa: E402
 )
 
-app.include_router(chat_router)
 app.include_router(graph_router)
-app.include_router(mcp_router)
 app.include_router(email_router)
+
+# Fast MCP 통일: /mcp/health + /mcp/server 한 앱으로 마운트
+app.mount("/mcp", mcp_app)
 
 # v10 API 라우터 등록 (prefix: /api/v10)
 # 모든 타입이 /soccer/{type}/upload 패턴으로 통일
@@ -595,8 +473,6 @@ async def health_check():
     """헬스 체크 엔드포인트."""
     return {
         "status": "healthy",
-        "vector_store": "initialized" if vector_store else "not initialized",
-        "local_embeddings": "initialized" if local_embeddings else "not initialized",
-        "local_llm": "initialized" if local_llm else "not initialized",
-        "local_rag_chain": "initialized" if local_rag_chain else "not initialized",
+        "vector_store": "initialized" if vector_store else "lazy (not loaded yet)",
+        "local_embeddings": "initialized" if local_embeddings else "lazy (not loaded yet)",
     }

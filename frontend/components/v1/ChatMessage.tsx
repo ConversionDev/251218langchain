@@ -10,6 +10,7 @@ interface Message {
   timestamp: Date;
   provider?: string;
   usedRag?: boolean;
+  semantic_action?: string; // BLOCK, RULE_BASED, POLICY_BASED
 }
 
 interface ChatMessageProps {
@@ -151,6 +152,23 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           {!isUser && message.usedRag !== undefined && (
             <span className={`text-[0.7rem] px-1.5 py-0.5 rounded ${message.usedRag ? "bg-[rgba(74,222,128,0.2)] text-[#4ade80]" : ""}`}>
               {message.usedRag ? "📚 RAG" : ""}
+            </span>
+          )}
+          {!isUser && message.semantic_action && (
+            <span
+              className={`text-[0.7rem] px-1.5 py-0.5 rounded font-medium ${
+                message.semantic_action === "BLOCK"
+                  ? "bg-[rgba(239,68,68,0.2)] text-[#ef4444]"
+                  : message.semantic_action === "RULE_BASED"
+                    ? "bg-[rgba(59,130,246,0.2)] text-[#3b82f6]"
+                    : "bg-[rgba(168,85,247,0.2)] text-[#a855f7]"
+              }`}
+            >
+              {message.semantic_action === "BLOCK"
+                ? "🚫 차단"
+                : message.semantic_action === "RULE_BASED"
+                  ? "📋 규칙 기반"
+                  : "📌 정책 기반"}
             </span>
           )}
         </div>

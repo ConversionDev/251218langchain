@@ -10,16 +10,6 @@ import type {
   ToolInfo,
 } from "../types";
 
-// API 기본 URL (환경 변수 또는 기본값)
-const getApiUrl = () => {
-  // 클라이언트 사이드에서는 NEXT_PUBLIC_ 환경 변수 사용
-  if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  }
-  // 서버 사이드
-  return process.env.BACKEND_URL || "http://localhost:8000";
-};
-
 /**
  * LangGraph Agent 채팅 API 호출
  */
@@ -44,9 +34,12 @@ export async function sendAgentMessage(
 
 /**
  * LangGraph Agent 스트리밍 채팅
+ * @param request - 에이전트 요청
+ * @param signal - 취소 시 사용할 AbortSignal (선택)
  */
 export async function* sendAgentMessageStream(
-  request: AgentRequest
+  request: AgentRequest,
+  signal?: AbortSignal
 ): AsyncGenerator<string, void, unknown> {
   const response = await fetch("/api/v1/agent/chat/stream", {
     method: "POST",
@@ -54,6 +47,7 @@ export async function* sendAgentMessageStream(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(request),
+    signal,
   });
 
   if (!response.ok) {
@@ -70,6 +64,7 @@ export async function* sendAgentMessageStream(
   let buffer = "";
 
   while (true) {
+    if (signal?.aborted) break;
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -131,83 +126,3 @@ export async function getAgentHealth(): Promise<AgentHealth> {
   return response.json();
 }
 
-/**
- * 기존 LangChain API 채팅 (호환성용)
- */
-export async function sendLangChainMessage(
-  message: string,
-  history: { role: string; content: string }[],
-  modelType: "local"
-): Promise<{ response: string }> {
-  const response = await fetch("/api/v1/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message,
-      history,
-      model_type: modelType,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || `HTTP ${response.status}: 요청 실패`);
-  }
-
-  return response.json();
-}
-
-/**
- * LangChain 스트리밍 채팅
- */
-export async function* sendLangChainMessageStream(
-  message: string,
-  history: { role: string; content: string }[],
-  modelType: "local"
-): AsyncGenerator<string, void, unknown> {
-  const response = await fetch("/api/v1/chat/stream", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message,
-      history,
-      model_type: modelType,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || error.error || `HTTP ${response.status}: 스트리밍 요청 실패`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("스트리밍 응답을 읽을 수 없습니다.");
-  }
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6);
-        if (data === "[DONE]") {
-          return;
-        }
-        yield data;
-      }
-    }
-  }
-}

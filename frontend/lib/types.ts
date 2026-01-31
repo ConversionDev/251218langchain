@@ -13,13 +13,11 @@ export interface Message {
   timestamp: Date;
   provider?: string; // 응답 생성에 사용된 LLM 제공자
   usedRag?: boolean; // RAG 사용 여부
+  semantic_action?: string; // 시멘틱 분류: BLOCK, RULE_BASED, POLICY_BASED
 }
 
 // LLM 제공자 타입
 export type LLMProvider = "exaone";
-
-// API 모드 (LangChain vs LangGraph)
-export type APIMode = "langchain" | "langgraph";
 
 // 에이전트 요청
 export interface AgentRequest {
@@ -35,6 +33,7 @@ export interface AgentResponse {
   response: string;
   provider: string;
   used_rag: boolean;
+  semantic_action?: string; // BLOCK, RULE_BASED, POLICY_BASED
 }
 
 // LLM 제공자 정보

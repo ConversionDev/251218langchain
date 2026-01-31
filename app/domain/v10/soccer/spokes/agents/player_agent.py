@@ -22,7 +22,7 @@ class PlayerAgent:
         """
         self.logger = logging.getLogger(__name__)
         if store is None:
-            from domain.v10.soccer.hub.stores.player_store import PlayerStore  # type: ignore
+            from domain.v10.soccer.spokes.retrievers.player_store import PlayerStore  # type: ignore
             store = PlayerStore()
         self.store = store
 

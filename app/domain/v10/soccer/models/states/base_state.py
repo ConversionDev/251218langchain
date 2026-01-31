@@ -31,6 +31,7 @@ class BaseProcessingState(TypedDict, total=False):
     # DB 세션
     db: Any  # SQLAlchemy Session (Optional이지만 저장 시 필요)
     vector_store: Any  # 벡터 스토어 (Policy 기반 처리용)
+    auto_commit: Optional[bool]  # True면 서비스에서 commit, False면 오케스트레이터에서 한 번만 commit
 
     # 재시도 관련 (비선형 구조 지원)
     save_retry_count: Optional[int]  # 저장 재시도 횟수
