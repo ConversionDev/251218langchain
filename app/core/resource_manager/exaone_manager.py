@@ -1,13 +1,48 @@
 """
 EXAONE 관리자
 
-EXAONE 베이스 모델의 싱글톤 관리.
+EXAONE 베이스 모델의 싱글톤 관리. domain.hub.llm(ExaOne Provider)을 사용합니다.
 """
 
 import threading
 from typing import Any, Optional
 
-from core.llm.providers.exaone.exaone_model import ExaoneLLM  # type: ignore
+
+class _ExaoneWrapper:
+    """ExaOne LLM 래퍼 — invoke / get_langchain_model API 유지."""
+
+    def __init__(self) -> None:
+        self._llm: Any = None
+
+    def _get_llm(self) -> Any:
+        if self._llm is None:
+            from domain.hub.llm.exaone_provider import get_llm  # type: ignore
+
+            self._llm = get_llm(
+                provider="exaone",
+                temperature=0.3,
+                max_tokens=2048,
+            )
+        return self._llm
+
+    def invoke(
+        self,
+        prompt: str,
+        max_new_tokens: int = 256,
+        temperature: float = 0.3,
+    ) -> str:
+        """프롬프트로 텍스트 생성."""
+        from langchain_core.messages import HumanMessage  # type: ignore
+
+        llm = self._get_llm()
+        messages = [HumanMessage(content=prompt)]
+        out = llm.invoke(messages)
+        content = getattr(out, "content", None) or str(out)
+        return content if isinstance(content, str) else str(content)
+
+    def get_langchain_model(self) -> Any:
+        """LangChain 호환 LLM 반환."""
+        return self._get_llm()
 
 
 class ExaoneManager:
@@ -15,7 +50,7 @@ class ExaoneManager:
 
     _instance: Optional["ExaoneManager"] = None
     _lock = threading.Lock()
-    _base_model: Optional[ExaoneLLM] = None
+    _base_model: Optional[_ExaoneWrapper] = None
 
     def __new__(cls):
         """싱글톤 패턴."""
@@ -25,22 +60,13 @@ class ExaoneManager:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def get_base_model(self) -> ExaoneLLM:
-        """EXAONE 베이스 모델 인스턴스 반환 (싱글톤).
-
-        Returns:
-            EXAONE 베이스 모델
-        """
+    def get_base_model(self) -> _ExaoneWrapper:
+        """EXAONE 베이스 모델 인스턴스 반환 (싱글톤)."""
         if self._base_model is None:
             with self._lock:
                 if self._base_model is None:
                     print("[INFO] EXAONE 베이스 모델 로딩 중...")
-                    # 환경 변수에서 모델 경로 확인 (ExaoneLLM이 처리)
-                    self._base_model = ExaoneLLM(
-                        model_path=None,  # EXAONE_MODEL_DIR 환경 변수 사용
-                        device_map="auto",
-                        use_4bit=True,  # VRAM 절약
-                    )
+                    self._base_model = _ExaoneWrapper()
                     print("[OK] EXAONE 베이스 모델 로딩 완료")
         return self._base_model
 

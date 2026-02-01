@@ -2,7 +2,7 @@
 메인 진입점 - FastAPI 서버 실행.
 
 FastAPI 서버를 실행합니다.
-V10 도메인 초기화는 server.py의 lifespan에서 처리됩니다.
+V10 도메인 초기화는 fastapi_server의 lifespan에서 처리됩니다.
 """
 
 import logging
@@ -24,7 +24,7 @@ from core.config import get_settings  # type: ignore
 settings = get_settings()
 
 logging.info("Starting FastAPI server...")
-import server  # noqa: E402
+import fastapi_server  # noqa: E402
 import uvicorn  # noqa: E402
 
-uvicorn.run(server.app, host=settings.host, port=settings.port)
+uvicorn.run(fastapi_server.app, host=settings.host, port=settings.port)

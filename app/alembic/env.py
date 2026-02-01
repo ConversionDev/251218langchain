@@ -31,10 +31,12 @@ if str(current_dir) not in sys.path:
 # V10 모델들 import (Alembic이 메타데이터를 수집)
 # 임베딩 테이블은 별도 Base(embedding_tables)에 있어 제외; 마이그레이션 add_exaone_embedding_tables로 생성됨.
 from core.database import Base  # type: ignore
-from domain.v10.soccer.models.bases.player import Player  # noqa: F401
-from domain.v10.soccer.models.bases.team import Team  # noqa: F401
-from domain.v10.soccer.models.bases.schedule import Schedule  # noqa: F401
-from domain.v10.soccer.models.bases.stadium import Stadium  # noqa: F401
+from domain.models.bases.soccer import (  # noqa: F401
+    Player,
+    Schedule,
+    Stadium,
+    Team,
+)
 
 # V10 전용 데이터베이스 설정
 from core.config import get_settings  # type: ignore

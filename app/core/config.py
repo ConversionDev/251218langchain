@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     # ===================
     llm_provider: str = Field(
         default="exaone",
-        description="LLM 프로바이더 (exaone, ollama 등)",
+        description="LLM 프로바이더 (exaone)",
     )
 
     # ===================
@@ -160,6 +160,15 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(
         default=None,
         description="OpenAI API 키",
+    )
+
+    # ===================
+    # Hub MCP HTTP 서비스 (Fractal Star 아키텍처)
+    # hub/mcp = Llama·ExaOne 호출 수신, spokes = hub를 HTTP로 호출
+    # ===================
+    hub_service_url: str = Field(
+        default="http://127.0.0.1:8000",
+        description="Hub MCP Base URL (Llama·ExaOne 엔드포인트 호스트)",
     )
 
 
