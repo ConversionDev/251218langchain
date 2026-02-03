@@ -12,10 +12,10 @@ interface MenuItem {
 // 데이터 의존성 순서에 맞게 정렬 (Foreign Key 참조 순서)
 // 1. Stadiums → 2. Teams → 3. Players → 4. Schedules
 const menuItems: MenuItem[] = [
-  { id: "stadiums", label: "스타디움", icon: "🏟️", path: "/v10/upload/stadium" },
-  { id: "teams", label: "팀", icon: "⚽", path: "/v10/upload/team" },
-  { id: "players", label: "선수", icon: "👤", path: "/v10/upload/player" },
-  { id: "schedules", label: "스케줄", icon: "📅", path: "/v10/upload/schedule" },
+  { id: "stadiums", label: "스타디움", icon: "🏟️", path: "/upload/stadium" },
+  { id: "teams", label: "팀", icon: "⚽", path: "/upload/team" },
+  { id: "players", label: "선수", icon: "👤", path: "/upload/player" },
+  { id: "schedules", label: "스케줄", icon: "📅", path: "/upload/schedule" },
 ];
 
 export default function UploadSidebar() {
@@ -23,103 +23,27 @@ export default function UploadSidebar() {
   const router = useRouter();
 
   return (
-    <>
-      <aside className="sidebar">
-        <nav className="sidebar-nav">
-          {menuItems.map((item) => {
-            const isActive = pathname === item.path;
-            return (
-              <button
-                key={item.id}
-                className={`sidebar-item ${isActive ? "active" : ""}`}
-                onClick={() => router.push(item.path)}
-              >
-                <span className="sidebar-icon">{item.icon}</span>
-                <span className="sidebar-label">{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
-
-      <style jsx>{`
-        /* 사이드바 */
-        .sidebar {
-          width: 200px;
-          background: #ffffff;
-          border-right: 1px solid #e5e7eb;
-          padding: 1.5rem 0;
-          position: sticky;
-          top: 60px;
-          height: calc(100vh - 60px);
-          overflow-y: auto;
-        }
-
-        .sidebar-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          padding: 0 1rem;
-        }
-
-        .sidebar-item {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.75rem 1rem;
-          background: #ffffff;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          transition: all 0.2s;
-          text-align: left;
-          font-size: 0.875rem;
-          color: #6b7280;
-        }
-
-        .sidebar-item:hover {
-          background: #f9fafb;
-          border-color: #3b82f6;
-          color: #1f2937;
-        }
-
-        .sidebar-item.active {
-          background: #eff6ff;
-          border-color: #3b82f6;
-          color: #1f2937;
-          font-weight: 600;
-        }
-
-        .sidebar-icon {
-          font-size: 1.25rem;
-        }
-
-        .sidebar-label {
-          flex: 1;
-        }
-
-        @media (max-width: 768px) {
-          .sidebar {
-            width: 100%;
-            position: relative;
-            top: 0;
-            height: auto;
-            border-right: none;
-            border-bottom: 1px solid #e5e7eb;
-          }
-
-          .sidebar-nav {
-            flex-direction: row;
-            overflow-x: auto;
-            padding: 0.5rem 1rem;
-          }
-
-          .sidebar-item {
-            flex-shrink: 0;
-            white-space: nowrap;
-          }
-        }
-      `}</style>
-    </>
+    <aside className="w-full border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 md:h-[calc(100vh-60px)] md:w-52 md:border-b-0 md:border-r md:py-6 md:sticky md:top-[60px]">
+      <nav className="flex gap-2 overflow-x-auto md:flex-col md:overflow-visible md:px-3">
+        {menuItems.map((item) => {
+          const isActive = pathname === item.path;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`flex flex-shrink-0 items-center gap-3 rounded-lg border px-4 py-2.5 text-left text-sm transition-all md:whitespace-nowrap ${
+                isActive
+                  ? "border-blue-500 bg-blue-50 font-semibold text-slate-900 dark:border-blue-500 dark:bg-blue-950/50 dark:text-slate-100"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-blue-400 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-blue-600 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+              }`}
+              onClick={() => router.push(item.path)}
+            >
+              <span className="text-lg">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </aside>
   );
 }

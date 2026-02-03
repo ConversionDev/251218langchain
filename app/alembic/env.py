@@ -1,10 +1,7 @@
 """
-Alembic 환경 설정 - V10 전용
+Alembic 환경 설정
 
-V10 도메인의 데이터베이스 마이그레이션을 관리합니다.
-V1과 완전히 분리된 독립적인 마이그레이션 시스템입니다.
-
-[테이블 생성 · BP]
+데이터베이스 마이그레이션을 관리합니다.
 - Alembic이 모든 테이블 생성/관리: 일반(players, teams, schedules, stadiums) + ExaOne 임베딩(*_embeddings).
 - alembic upgrade head 한 번으로 전체 스키마 적용.
 """
@@ -28,7 +25,7 @@ current_dir = Path(__file__).parent.parent
 if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
 
-# V10 모델들 import (Alembic이 메타데이터를 수집)
+# 모델 import (Alembic이 메타데이터를 수집)
 # 임베딩 테이블은 별도 Base(embedding_tables)에 있어 제외; 마이그레이션 add_exaone_embedding_tables로 생성됨.
 from core.database import Base  # type: ignore
 from domain.models.bases.soccer import (  # noqa: F401
@@ -38,9 +35,9 @@ from domain.models.bases.soccer import (  # noqa: F401
     Team,
 )
 
-# V10 전용 데이터베이스 설정
+# 데이터베이스 설정
 from core.config import get_settings  # type: ignore
-from core.database import get_v10_engine  # type: ignore
+from core.database import get_engine  # type: ignore
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -51,7 +48,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# V10 전용 데이터베이스 연결 문자열 설정
+# 데이터베이스 연결 문자열 설정
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.connection_string)
 
@@ -112,8 +109,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # V10 전용 Engine 사용
-    connectable = get_v10_engine()
+    connectable = get_engine()
 
     with connectable.connect() as connection:
         context.configure(

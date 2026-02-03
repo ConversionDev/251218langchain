@@ -19,12 +19,24 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
-from domain.models import AgentState
+from domain.models import ChatState
 
 logger = logging.getLogger(__name__)
 
 
-# --- 1. 도구 (spokes MCP 호출) ---
+# --- 1. 도구 (오케스트레이터 → HTTP → Hub → call_tool → 도메인 MCP → Spoke) ---
+
+
+def _hub_result_to_str(result: Any) -> str:
+    """Hub call 결과를 문자열로."""
+    if result is None:
+        return "호출 실패"
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict):
+        import json
+        return json.dumps(result, ensure_ascii=False)
+    return str(result)
 
 
 @tool
@@ -38,43 +50,50 @@ def analyze_with_exaone(
     headers: Optional[Dict[str, Any]] = None,
     _policy_context: Optional[str] = None,
 ) -> str:
-    """EXAONE으로 이메일 분석. Spam MCP 경유."""
-    from domain.spokes.spam.mcp.spam_server import _analyze_email_impl  # type: ignore
+    """EXAONE으로 이메일 분석. HTTP → Hub → Spam MCP → Spoke."""
+    from domain.hub.mcp.http_client import spam_call  # type: ignore
 
-    return _analyze_email_impl(
-        subject=subject,
-        sender=sender,
-        body=body,
-        recipient=recipient,
-        date=date,
-        attachments=attachments,
-        headers=headers,
-        policy_context=_policy_context,
-    )
+    args: Dict[str, Any] = {
+        "subject": subject,
+        "sender": sender,
+        "body": body or "",
+        "recipient": recipient or "",
+        "date": date or "",
+        "policy_context": _policy_context or "",
+    }
+    if attachments is not None:
+        args["attachments"] = attachments
+    if headers is not None:
+        args["headers"] = headers
+    result = spam_call("analyze_email", args)
+    return _hub_result_to_str(result)
 
 
 @tool
 def search_documents(query: str) -> str:
-    """문서에서 관련 정보를 검색합니다. Chat MCP 경유."""
-    from domain.spokes.chat.mcp.chat_server import _search_documents_impl  # type: ignore
+    """문서에서 관련 정보를 검색합니다. HTTP → Hub → Chat MCP → Spoke."""
+    from domain.hub.mcp.http_client import chat_call  # type: ignore
 
-    return _search_documents_impl(query)
+    result = chat_call("search_documents", {"query": query})
+    return _hub_result_to_str(result)
 
 
 @tool
 def get_current_time() -> str:
-    """현재 시간을 반환합니다. Chat MCP 경유."""
-    from domain.spokes.chat.mcp.chat_server import _get_current_time_impl  # type: ignore
+    """현재 시간을 반환합니다. HTTP → Hub → Chat MCP → Spoke."""
+    from domain.hub.mcp.http_client import chat_call  # type: ignore
 
-    return _get_current_time_impl()
+    result = chat_call("get_current_time", {})
+    return _hub_result_to_str(result)
 
 
 @tool
 def calculate(expression: str) -> str:
-    """수학 표현식을 계산합니다. Chat MCP 경유."""
-    from domain.spokes.chat.mcp.chat_server import _calculate_impl  # type: ignore
+    """수학 표현식을 계산합니다. HTTP → Hub → Chat MCP → Spoke."""
+    from domain.hub.mcp.http_client import chat_call  # type: ignore
 
-    return _calculate_impl(expression)
+    result = chat_call("calculate", {"expression": expression})
+    return _hub_result_to_str(result)
 
 
 TOOLS = [
@@ -110,7 +129,7 @@ def _get_llm_provider():
     return LLMProvider
 
 
-def model_node(state: AgentState) -> Dict[str, Any]:
+def model_node(state: ChatState) -> ChatState:
     """모델 노드. LLM 호출·Tool Calling, 스트리밍 지원."""
     LLMProvider = _get_llm_provider()
     provider = state.get("model_provider") or LLMProvider.get_provider_name()
@@ -174,7 +193,7 @@ def model_node(state: AgentState) -> Dict[str, Any]:
     return {"messages": [response], "model_provider": provider}
 
 
-def tool_node(state: AgentState) -> Dict[str, Any]:
+def tool_node(state: ChatState) -> ChatState:
     """도구 노드. tool_calls 실행 후 ToolMessage 반환."""
     messages = state.get("messages", [])
     last_message = messages[-1] if messages else None
@@ -203,7 +222,7 @@ def tool_node(state: AgentState) -> Dict[str, Any]:
     return {"messages": results}
 
 
-def rag_node(state: AgentState) -> Dict[str, Any]:
+def rag_node(state: ChatState) -> ChatState:
     """RAG 노드. PGVector similarity_search로 컨텍스트 검색."""
     messages = state.get("messages", [])
 
@@ -253,9 +272,7 @@ def get_thread_config(thread_id: Optional[str] = None) -> Dict[str, Any]:
 
 
 # --- 4. 조건 (라우팅) ---
-
-
-def should_use_tools(state: AgentState) -> Literal["tools", "__end__"]:
+def should_use_tools(state: ChatState) -> Literal["tools", "__end__"]:
     """도구 사용 여부 결정. tool_calls 있으면 tools, 없으면 종료."""
     messages = state.get("messages", [])
     if not messages:
@@ -269,23 +286,19 @@ def should_use_tools(state: AgentState) -> Literal["tools", "__end__"]:
 
 
 # --- 5. 그래프 빌더 ---
-
 _default_graph = None
 
 
-def build_agent_graph(use_rag: bool = True, use_checkpointer: bool = True):
-    """에이전트 그래프 빌드."""
-    graph = StateGraph(AgentState)
-    if use_rag:
-        graph.add_node("rag", rag_node)
+def build_agent_graph(use_checkpointer: bool = True):
+    """에이전트 그래프 빌드. RAG는 항상 사용 (진입점: rag → model)."""
+    graph = StateGraph(ChatState)
+    graph.add_node("rag", rag_node)
     graph.add_node("model", model_node)
     graph.add_node("tools", tool_node)
 
-    if use_rag:
-        graph.set_entry_point("rag")
-        graph.add_edge("rag", "model")
-    else:
-        graph.set_entry_point("model")
+    # 진입점: rag → model (RAG 항상 사용)
+    graph.set_entry_point("rag")
+    graph.add_edge("rag", "model")
 
     graph.add_conditional_edges(
         "model",
@@ -302,7 +315,7 @@ def get_default_graph():
     """기본 에이전트 그래프 반환 (싱글톤)."""
     global _default_graph
     if _default_graph is None:
-        _default_graph = build_agent_graph(use_rag=True, use_checkpointer=True)
+        _default_graph = build_agent_graph(use_checkpointer=True)
     return _default_graph
 
 

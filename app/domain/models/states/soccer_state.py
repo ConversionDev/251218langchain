@@ -2,9 +2,18 @@
 Soccer 데이터 처리 LangGraph State 모델
 
 휴리스틱 처리만 수행하는 단순한 State 정의.
+채팅·스팸과 동일하게 messages는 add_messages 리듀서로 누적 관리.
+임베딩 State는 domain.models.bases.embedding_tables (PlayerEmbedding 등) 필드 구조를 참조.
 """
 
-from typing import Any, Dict, List, Optional, TypedDict
+from datetime import datetime
+from typing import Annotated, Any, Dict, List, Optional, TypedDict
+
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
+
+# embedding_tables.VECTOR_DIM = 384
+EMBEDDING_VECTOR_DIM = 384
 
 
 class SoccerDataState(TypedDict, total=False):
@@ -13,6 +22,9 @@ class SoccerDataState(TypedDict, total=False):
     휴리스틱 처리만 수행하므로 단순한 구조를 사용합니다.
     비선형 구조를 지원하기 위해 재시도 관련 필드를 추가합니다.
     """
+
+    # 대화·메시지 (채팅/스팸과 동일한 리듀서)
+    messages: Annotated[List[BaseMessage], add_messages]
 
     # 입력 데이터
     data: List[Dict[str, Any]]  # 처리할 전체 데이터 리스트
@@ -40,3 +52,67 @@ class SoccerDataState(TypedDict, total=False):
     decided_strategy: Optional[str]
     vector_store: Any
     auto_commit: Optional[bool]
+
+
+# ---------------------------------------------------------------------------
+# 임베딩 State (embedding_tables.py PlayerEmbedding 등 필드 구조 참조)
+# LangGraph에서 베이스 → 임베딩 플로우 또는 임베딩 단계 상태용.
+# ---------------------------------------------------------------------------
+
+
+class PlayerEmbeddingState(TypedDict, total=False):
+    """선수 임베딩 상태. PlayerEmbedding ORM 필드 대응."""
+
+    id: Optional[int]
+    player_id: int
+    content: str
+    embedding: Optional[List[float]]  # EMBEDDING_VECTOR_DIM(384)차원
+    created_at: Optional[datetime]
+
+
+class TeamEmbeddingState(TypedDict, total=False):
+    """팀 임베딩 상태. TeamEmbedding ORM 필드 대응."""
+
+    id: Optional[int]
+    team_id: int
+    content: str
+    embedding: Optional[List[float]]
+    created_at: Optional[datetime]
+
+
+class ScheduleEmbeddingState(TypedDict, total=False):
+    """경기 일정 임베딩 상태. ScheduleEmbedding ORM 필드 대응."""
+
+    id: Optional[int]
+    schedule_id: int
+    content: str
+    embedding: Optional[List[float]]
+    created_at: Optional[datetime]
+
+
+class StadiumEmbeddingState(TypedDict, total=False):
+    """경기장 임베딩 상태. StadiumEmbedding ORM 필드 대응."""
+
+    id: Optional[int]
+    stadium_id: int
+    content: str
+    embedding: Optional[List[float]]
+    created_at: Optional[datetime]
+
+
+# ---------------------------------------------------------------------------
+# 임베딩 동기화 LangGraph State (워커 → 오케스트레이터 그래프용)
+# ---------------------------------------------------------------------------
+
+
+class EmbeddingSyncState(TypedDict, total=False):
+    """임베딩 동기화 워크플로우 상태. LangGraph EmbeddingSync 그래프용."""
+
+    entities: List[str]
+    db: Any
+    embeddings_model: Any
+    batch_size: int
+    results: Dict[str, Any]
+    current_entity_index: int
+    processing_path: str
+    errors: Optional[List[Dict[str, Any]]]

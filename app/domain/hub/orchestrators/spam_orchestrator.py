@@ -13,15 +13,16 @@ Spam Orchestrator — 스팸 감지 워크플로우 통합 관리
   - 그래프 빌드/실행 API: build_spam_detection_graph, run_spam_detection
 """
 
+import json
 import logging
 import uuid
 from typing import Any, Dict, Optional
 
 from langgraph.graph import END, StateGraph
 
-from domain.hub.mcp.http_client import llama_classify, llama_classify_spam  # type: ignore
+from domain.hub.mcp.http_client import spam_call  # type: ignore
 from domain.hub.orchestrators.graph_orchestrator import get_checkpointer  # type: ignore
-from domain.models import SpamDetectionState  # type: ignore
+from domain.models import SpamState  # type: ignore
 from domain.spokes.spam.services.rule_service import RuleService  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -53,25 +54,30 @@ class SpamGatewayService:
         }
 
     def _classify_spam(self, email_metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """hub HTTP로 스팸 분류."""
+        """HTTP → Hub → Spam MCP → Spoke call_tool로 스팸 분류."""
         try:
-            return llama_classify_spam(email_metadata)
+            raw = spam_call("classify_spam", {"email_metadata": email_metadata})
+            if isinstance(raw, dict):
+                return raw
+            if isinstance(raw, str):
+                return json.loads(raw)
         except Exception as e:
-            logger.warning("LLaMA 스팸 분류 실패: %s", e)
+            logger.warning("Spam classify_spam 실패: %s", e)
         return {"spam_prob": 0.5, "confidence": "low", "label": "UNCERTAIN"}
 
     def _decide_routing_strategy(self, email_metadata: Dict[str, Any]) -> str:
-        """hub HTTP(classify)로 규칙/정책 판단."""
+        """HTTP → Hub → Spam MCP → Spoke call_tool로 규칙/정책 판단."""
         try:
             text = (
                 f"제목: {email_metadata.get('subject', '')} "
                 f"발신자: {email_metadata.get('sender', '')} "
                 f"본문: {str(email_metadata.get('body', ''))[:200]}"
             )
-            result = llama_classify(text)
-            return "rule" if result == "RULE_BASED" else "policy"
+            result = spam_call("classify_routing", {"text": text})
+            if isinstance(result, str):
+                return "rule" if result.strip().upper() == "RULE_BASED" else "policy"
         except Exception as e:
-            logger.warning("hub classify 실패, RuleService 사용: %s", e)
+            logger.warning("Spam classify_routing 실패, RuleService 사용: %s", e)
 
         is_rule_based = self._rule_service.is_rule_based(email_metadata)
         return "rule" if is_rule_based else "policy"
@@ -170,7 +176,7 @@ def _get_gateway_service() -> SpamGatewayService:
     return _gateway_service
 
 
-def gateway_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def gateway_node(state: SpamState) -> SpamState:
     """진입 노드: 게이트웨이 서비스로 텍스트 정제/추출 후 규칙 vs 정책 라우팅 결정."""
     email_metadata = state.get("email_metadata", {})
     routing_path = state.get("routing_path", "Start")
@@ -200,7 +206,7 @@ def gateway_node(state: Dict[str, Any]) -> Dict[str, Any]:
 # =============================================================================
 
 
-def policy_node(state: SpamDetectionState) -> Dict[str, Any]:
+def policy_node(state: SpamState) -> SpamState:
     """정책 노드: Policy Service(EXAONE)로 분석 후 exaone_result 반환."""
     from domain.spokes.spam.services.policy_service import PolicyService  # type: ignore
 
@@ -235,7 +241,7 @@ def policy_node(state: SpamDetectionState) -> Dict[str, Any]:
 # =============================================================================
 
 
-def final_decision_node(state: SpamDetectionState) -> Dict[str, Any]:
+def final_decision_node(state: SpamState) -> SpamState:
     """최종 결정 노드: spam.agents.spam_agents의 정책 기반 결정 호출."""
     from domain.spokes.spam.agents.spam_agents import decide_final_action  # type: ignore
 
@@ -252,7 +258,7 @@ def final_decision_node(state: SpamDetectionState) -> Dict[str, Any]:
 # =============================================================================
 
 
-def routing_decision(state: SpamDetectionState) -> str:
+def routing_decision(state: SpamState) -> str:
     """Gateway 이후: 규칙이면 final_decision, 정책이면 policy_service."""
     routing_strategy = state.get("routing_strategy")
     if routing_strategy == "rule":
@@ -274,7 +280,7 @@ def routing_decision(state: SpamDetectionState) -> str:
 def build_spam_detection_graph():
     """스팸 감지 그래프 빌드: Gateway → [규칙/정책 분기] → Final decision."""
     checkpointer = get_checkpointer()
-    g = StateGraph(SpamDetectionState)
+    g = StateGraph(SpamState)
     g.add_node("gateway", gateway_node)
     g.add_node("policy_service", policy_node)
     g.add_node("final_decision", final_decision_node)
@@ -309,7 +315,7 @@ def run_spam_detection(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         스팸 감지 결과 (action, reason_codes, confidence, spam_prob 등)
     """
-    initial_state: SpamDetectionState = {
+    initial_state: SpamState = {
         "email_metadata": email_metadata,
         "llama_result": None,
         "exaone_result": None,
@@ -320,7 +326,7 @@ def run_spam_detection(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
     config = {"configurable": {"thread_id": f"spam_{uuid.uuid4().hex[:8]}"}}
     try:
         graph = get_spam_detection_graph()
-        result = graph.invoke(initial_state, config=config)
+        result: SpamState = graph.invoke(initial_state, config=config)
         fd = result.get("final_decision", {})
         logger.debug(
             "스팸 감지 완료: action=%s, routing_strategy=%s",

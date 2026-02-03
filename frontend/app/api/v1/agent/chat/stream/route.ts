@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const response = await fetch(`${backendUrl}/agent/chat/stream`, {
+      const response = await fetch(`${backendUrl}/api/agent/chat/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

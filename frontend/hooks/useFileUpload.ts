@@ -58,7 +58,7 @@ export function useFileUpload(dataType: DataType) {
           stadiums: "stadium",
           schedules: "schedule",
         };
-        const endpoint = `${backendUrl}/api/v10/soccer/${typeMap[dataType]}/upload`;
+        const endpoint = `${backendUrl}/api/soccer/${typeMap[dataType]}/upload`;
 
         const response = await fetch(endpoint, {
           method: "POST",

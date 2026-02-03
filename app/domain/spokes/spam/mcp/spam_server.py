@@ -1,23 +1,25 @@
 """
-Spam MCP Server (호출자 Caller).
+Spam MCP Server (역할 통합).
 
-역할: hub/mcp를 HTTP로 호출. Central이 스팸 요청을 이 spoke로 라우팅.
-Llama·ExaOne은 직접 연결하지 않고 hub를 HTTP로 호출.
+- MCP: Central이 call_tool로 호출. Spoke로 call_tool 위임만 수행.
+- Spoke: Spam MCP가 call_tool로 호출. analyze_email/classify_spam 실행.
+- Llama·ExaOne은 hub HTTP로 호출.
 """
 
-import json
 from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 
 from domain.hub.mcp.http_client import (  # type: ignore
     exaone_analyze_email,
+    llama_classify,
     llama_classify_spam,
 )
+from domain.hub.mcp.utils import get_spam_spoke_mcp_url, result_to_str  # type: ignore
 
 
 # ---------------------------------------------------------------------------
-# 구현 (hub HTTP 호출)
+# Spoke 구현 (실행)
 # ---------------------------------------------------------------------------
 
 
@@ -31,7 +33,7 @@ def _analyze_email_impl(
     headers: Optional[Dict[str, Any]] = None,
     policy_context: Optional[str] = None,
 ) -> str:
-    """ExaOne 이메일 분석. hub/mcp HTTP 호출."""
+    """ExaOne 이메일 분석. hub HTTP 호출."""
     return exaone_analyze_email(
         subject=subject,
         sender=sender,
@@ -45,20 +47,86 @@ def _analyze_email_impl(
 
 
 def _classify_spam_impl(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
-    """Llama 스팸 분류. hub/mcp HTTP 호출."""
+    """Llama 스팸 분류. hub HTTP 호출."""
     return llama_classify_spam(email_metadata)
 
 
 # ---------------------------------------------------------------------------
-# Spam MCP 앱 (get_spam_mcp)
+# MCP Proxy (Central → Spoke call_tool)
+# ---------------------------------------------------------------------------
+
+mcp_proxy = FastMCP("Spam MCP (Routing + Spoke Proxy)")
+
+
+@mcp_proxy.tool
+async def analyze_email(
+    subject: str,
+    sender: str,
+    body: str = "",
+    recipient: str = "",
+    date: str = "",
+    attachments: list | None = None,
+    headers: dict | None = None,
+    policy_context: str = "",
+) -> str:
+    """ExaOne 이메일 분석. Spam Spoke call_tool."""
+    from fastmcp.client import Client  # type: ignore
+    args: Dict[str, Any] = {
+        "subject": subject,
+        "sender": sender,
+        "body": body,
+        "recipient": recipient,
+        "date": date,
+        "policy_context": policy_context,
+    }
+    if attachments is not None:
+        args["attachments"] = attachments
+    if headers is not None:
+        args["headers"] = headers
+    async with Client(get_spam_spoke_mcp_url()) as client:
+        result = await client.call_tool("analyze_email", args)
+        return result_to_str(result)
+
+
+@mcp_proxy.tool
+async def classify_spam(email_metadata: dict) -> str:
+    """Llama 스팸 분류. Spam Spoke call_tool."""
+    from fastmcp.client import Client  # type: ignore
+    async with Client(get_spam_spoke_mcp_url()) as client:
+        result = await client.call_tool("classify_spam", {"email_metadata": email_metadata})
+        return result_to_str(result)
+
+
+@mcp_proxy.tool
+async def classify_routing(text: str) -> str:
+    """규칙/정책 라우팅용 시멘틱 분류 (RULE_BASED | POLICY_BASED). Spam Spoke call_tool."""
+    from fastmcp.client import Client  # type: ignore
+    async with Client(get_spam_spoke_mcp_url()) as client:
+        result = await client.call_tool("classify_routing", {"text": text})
+        return result_to_str(result)
+
+
+# ---------------------------------------------------------------------------
+# Spoke MCP 앱 (Spam MCP가 call_tool로 호출)
 # ---------------------------------------------------------------------------
 
 
 def get_spam_mcp() -> FastMCP:
-    """Spam MCP 앱 반환."""
-    mcp = FastMCP("Spam MCP")
+    """Spam MCP 앱 반환 (Central이 call_tool로 호출하는 대상)."""
+    return mcp_proxy
 
-    @mcp.tool
+
+def get_spam_spoke_mcp() -> FastMCP:
+    """Spam Spoke MCP 앱 반환 (Spam MCP가 call_tool로 호출하는 대상)."""
+    import json
+    mcp_spoke = FastMCP("Spam Spoke MCP")
+
+    @mcp_spoke.tool
+    def classify_routing(text: str) -> str:
+        """규칙/정책 라우팅용 시멘틱 분류. Hub Llama HTTP 호출."""
+        return llama_classify(text)
+
+    @mcp_spoke.tool
     def analyze_email(
         subject: str,
         sender: str,
@@ -69,7 +137,6 @@ def get_spam_mcp() -> FastMCP:
         headers: Optional[Dict[str, Any]] = None,
         policy_context: Optional[str] = None,
     ) -> str:
-        """ExaOne으로 이메일 분석. hub HTTP 호출."""
         return _analyze_email_impl(
             subject=subject,
             sender=sender,
@@ -81,10 +148,9 @@ def get_spam_mcp() -> FastMCP:
             policy_context=policy_context,
         )
 
-    @mcp.tool
+    @mcp_spoke.tool
     def classify_spam(email_metadata: Dict[str, Any]) -> str:
-        """Llama로 스팸 분류. hub HTTP 호출."""
         result = _classify_spam_impl(email_metadata)
         return json.dumps(result, ensure_ascii=False)
 
-    return mcp
+    return mcp_spoke

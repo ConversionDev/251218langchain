@@ -19,11 +19,10 @@ export interface Message {
 // LLM 제공자 타입
 export type LLMProvider = "exaone";
 
-// 에이전트 요청
+// 에이전트 요청 (RAG는 백엔드에서 항상 사용)
 export interface AgentRequest {
   message: string;
   provider?: LLMProvider;
-  use_rag?: boolean;
   system_prompt?: string;
   chat_history?: { role: string; content: string }[];
 }

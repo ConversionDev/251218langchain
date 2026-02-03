@@ -63,9 +63,10 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
   return (
     <>
       <div className="upload-section">
+        <div className="jsonl-badge">JSONL 업로드</div>
         <h2 className="section-title">{title} 데이터 업로드</h2>
         <p className="section-description">
-          JSONL 파일을 드래그앤드롭하거나 클릭하여 선택하세요
+          <strong>.jsonl</strong> 파일을 이 영역에 드래그앤드롭하거나, 영역을 클릭해 파일을 선택하세요.
         </p>
 
         <div
@@ -115,10 +116,12 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
                 </svg>
                 <p className="drop-zone-text">
                   {isDragging
-                    ? "여기에 파일을 놓으세요"
-                    : "파일을 드래그하거나 클릭하여 선택"}
+                    ? "여기에 .jsonl 파일을 놓으세요"
+                    : "파일을 드래그하거나 여기를 클릭하여 .jsonl 선택"}
                 </p>
-                <p className="drop-zone-hint">JSONL 파일만 지원됩니다</p>
+                <p className="drop-zone-hint">
+                  <span className="drop-zone-hint-badge">.jsonl</span> 파일만 업로드 가능
+                </p>
               </>
             )}
           </label>
@@ -196,6 +199,19 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
           margin: 0 auto;
         }
 
+        .jsonl-badge {
+          display: inline-block;
+          margin-bottom: 0.75rem;
+          padding: 0.25rem 0.75rem;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: #1d4ed8;
+          background: #dbeafe;
+          border: 1px solid #3b82f6;
+          border-radius: 9999px;
+          letter-spacing: 0.025em;
+        }
+
         .section-title {
           font-size: 1.5rem;
           font-weight: 700;
@@ -208,26 +224,31 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
           margin-bottom: 2rem;
         }
 
+        .section-description strong {
+          color: #1d4ed8;
+        }
+
         /* 드롭 존 */
         .drop-zone {
-          border: 2px dashed #d1d5db;
+          border: 2px dashed #93c5fd;
           border-radius: 0.75rem;
           padding: 3rem 2rem;
+          min-height: 180px;
           text-align: center;
-          background: #ffffff;
+          background: #eff6ff;
           transition: all 0.3s;
           cursor: pointer;
         }
 
         .drop-zone:hover {
           border-color: #3b82f6;
-          background: #f9fafb;
+          background: #dbeafe;
         }
 
         .drop-zone.dragging {
           border-color: #3b82f6;
-          background: #eff6ff;
-          transform: scale(1.02);
+          background: #bfdbfe;
+          transform: scale(1.01);
         }
 
         .drop-zone.uploading {
@@ -264,6 +285,17 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
           font-size: 0.875rem;
           color: #6b7280;
           margin: 0;
+        }
+
+        .drop-zone-hint-badge {
+          display: inline-block;
+          padding: 0.125rem 0.5rem;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #1d4ed8;
+          background: #ffffff;
+          border: 1px solid #93c5fd;
+          border-radius: 0.375rem;
         }
 
         .upload-spinner {
@@ -434,6 +466,96 @@ export default function UploadDropZone({ dataType, title }: UploadDropZoneProps)
           margin-top: 0.5rem;
           font-size: 0.75rem;
           overflow-x: auto;
+        }
+
+        /* 다크 모드 */
+        :global(.dark) .jsonl-badge {
+          color: #93c5fd;
+          background: #1e3a8a;
+          border-color: #3b82f6;
+        }
+        :global(.dark) .upload-section .section-title {
+          color: #f1f5f9;
+        }
+        :global(.dark) .upload-section .section-description {
+          color: #94a3b8;
+        }
+        :global(.dark) .upload-section .section-description strong {
+          color: #93c5fd;
+        }
+        :global(.dark) .drop-zone {
+          border-color: #3b82f6;
+          background: #1e3a8a;
+        }
+        :global(.dark) .drop-zone:hover {
+          border-color: #3b82f6;
+          background: #334155;
+        }
+        :global(.dark) .drop-zone.dragging {
+          border-color: #3b82f6;
+          background: #1e3a5f;
+        }
+        :global(.dark) .drop-zone.uploading {
+          border-color: #22c55e;
+          background: #14532d;
+        }
+        :global(.dark) .drop-zone svg {
+          color: #94a3b8;
+        }
+        :global(.dark) .drop-zone.dragging svg,
+        :global(.dark) .drop-zone:hover svg {
+          color: #60a5fa;
+        }
+        :global(.dark) .drop-zone-text {
+          color: #f1f5f9;
+        }
+        :global(.dark) .drop-zone-hint {
+          color: #94a3b8;
+        }
+        :global(.dark) .drop-zone-hint-badge {
+          color: #93c5fd;
+          background: #0f172a;
+          border-color: #3b82f6;
+        }
+        :global(.dark) .upload-spinner {
+          border-color: #334155;
+          border-top-color: #3b82f6;
+        }
+        :global(.dark) .error-message {
+          background: #7f1d1d;
+          border-color: #b91c1c;
+          color: #fecaca;
+        }
+        :global(.dark) .success-message {
+          background: #14532d;
+          border-color: #166534;
+        }
+        :global(.dark) .success-header h3,
+        :global(.dark) .result-details {
+          color: #bbf7d0;
+        }
+        :global(.dark) .result-stats {
+          border-top-color: #166534;
+        }
+        :global(.dark) .preview-section h4,
+        :global(.dark) .preview-info {
+          color: #bbf7d0;
+        }
+        :global(.dark) .preview-item {
+          background: #1e293b;
+          border-color: #475569;
+        }
+        :global(.dark) .preview-row-number {
+          color: #60a5fa;
+        }
+        :global(.dark) .preview-data {
+          background: #0f172a;
+          border-color: #475569;
+          color: #e2e8f0;
+        }
+        :global(.dark) .preview-error pre {
+          background: #7f1d1d;
+          border-color: #b91c1c;
         }
       `}</style>
     </>

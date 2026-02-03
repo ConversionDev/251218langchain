@@ -16,7 +16,7 @@ export async function DELETE(
     }
 
     try {
-      const response = await fetch(`${backendUrl}/agent/threads/${thread_id}`, {
+      const response = await fetch(`${backendUrl}/api/agent/threads/${thread_id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

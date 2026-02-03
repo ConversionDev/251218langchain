@@ -8,7 +8,7 @@ import logging
 from typing import AsyncGenerator, List, Optional
 
 from core.config import settings  # type: ignore
-from domain.models import AgentState
+from domain.models import ChatState
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from .graph_orchestrator import (
@@ -32,18 +32,16 @@ _SEMANTIC_LABELS = {"RULE_BASED": "규칙 기반", "POLICY_BASED": "정책 기�
 def run_agent(
     user_text: str,
     provider: Optional[str] = None,
-    use_rag: bool = True,
     system_prompt: Optional[str] = None,
     chat_history: Optional[List[BaseMessage]] = None,
     thread_id: Optional[str] = None,
     semantic_action: Optional[str] = None,
 ) -> str:
-    """에이전트를 실행하고 응답을 반환합니다.
+    """에이전트를 실행하고 응답을 반환합니다. RAG는 항상 사용.
 
     Args:
         user_text: 사용자 메시지
         provider: LLM 제공자
-        use_rag: RAG 사용 여부
         system_prompt: 시스템 프롬프트
         chat_history: 이전 대화 기록
         thread_id: 대화 스레드 ID
@@ -53,11 +51,7 @@ def run_agent(
         에이전트 응답 문자열
     """
     use_checkpointer = bool(thread_id)
-
-    if use_rag and use_checkpointer:
-        graph = get_default_graph()
-    else:
-        graph = build_agent_graph(use_rag=use_rag, use_checkpointer=use_checkpointer)
+    graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
 
     messages: List[BaseMessage] = []
     base_prompt = system_prompt or "당신은 도움이 되는 AI 어시스턴트입니다."
@@ -70,13 +64,13 @@ def run_agent(
         messages.extend(chat_history)
     messages.append(HumanMessage(content=user_text))
 
-    initial_state: AgentState = {
+    initial_state: ChatState = {
         "messages": messages,
         "context": "",
         "model_provider": provider or "",
     }
     config = get_thread_config(thread_id)
-    result = graph.invoke(initial_state, config=config)
+    result: ChatState = graph.invoke(initial_state, config=config)
 
     response_messages = result.get("messages", [])
     for msg in reversed(response_messages):
@@ -88,18 +82,16 @@ def run_agent(
 async def run_agent_stream(
     user_text: str,
     provider: Optional[str] = None,
-    use_rag: bool = True,
     system_prompt: Optional[str] = None,
     chat_history: Optional[List[BaseMessage]] = None,
     thread_id: Optional[str] = None,
     semantic_action: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
-    """에이전트를 스트리밍 모드로 실행합니다.
+    """에이전트를 스트리밍 모드로 실행합니다. RAG는 항상 사용.
 
     Args:
         user_text: 사용자 메시지
         provider: LLM 제공자
-        use_rag: RAG 사용 여부
         system_prompt: 시스템 프롬프트
         chat_history: 이전 대화 기록
         thread_id: 대화 스레드 ID
@@ -109,11 +101,7 @@ async def run_agent_stream(
         응답 청크
     """
     use_checkpointer = bool(thread_id)
-
-    if use_rag and use_checkpointer:
-        graph = get_default_graph()
-    else:
-        graph = build_agent_graph(use_rag=use_rag, use_checkpointer=use_checkpointer)
+    graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
 
     messages: List[BaseMessage] = []
     base_prompt = system_prompt or "당신은 도움이 되는 AI 어시스턴트입니다."
@@ -126,7 +114,7 @@ async def run_agent_stream(
         messages.extend(chat_history)
     messages.append(HumanMessage(content=user_text))
 
-    initial_state: AgentState = {
+    initial_state: ChatState = {
         "messages": messages,
         "context": "",
         "model_provider": provider or "",
@@ -236,7 +224,6 @@ async def run_agent_stream(
         response = run_agent(
             user_text=user_text,
             provider=provider,
-            use_rag=use_rag,
             system_prompt=system_prompt,
             chat_history=chat_history,
             thread_id=thread_id,

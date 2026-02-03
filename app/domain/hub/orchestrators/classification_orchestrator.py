@@ -1,7 +1,8 @@
 """
 Classification Orchestrator — 시멘틱 분류 진입점
 
-규칙 기반 / 정책 기반 / 차단(BLOCK) 분류. domain.hub.llm 사용.
+- 규칙/정책 관련 질문일 때만 시멘틱 분류(BLOCK / RULE_BASED / POLICY_BASED) 수행.
+- 그 외(일반 질문)는 분류 없이 Chat 경로만 사용(일반 ExaOne).
 """
 
 from typing import Literal
@@ -11,9 +12,23 @@ from domain.hub.llm import (  # type: ignore
     is_classifier_available as _is_classifier_available,
 )
 
+# 규칙/정책 관련 키워드: 이 중 하나라도 있으면 시멘틱 분류 수행
+_RULE_POLICY_KEYWORDS = (
+    "규칙", "정책", "규정", "정책 기반", "규칙 기반", "차단",
+    "rule", "policy", "block", "RULE_BASED", "POLICY_BASED", "BLOCK",
+)
+
+
+def is_rule_policy_related(user_message: str) -> bool:
+    """질문이 규칙/정책 관련인지 여부. True면 시멘틱 분류 수행, False면 일반 ExaOne(Chat)만 사용."""
+    if not user_message or not user_message.strip():
+        return False
+    lower = user_message.strip().lower()
+    return any(kw.lower() in lower for kw in _RULE_POLICY_KEYWORDS)
+
 
 def classify(user_message: str) -> Literal["BLOCK", "RULE_BASED", "POLICY_BASED"]:
-    """사용자 메시지를 분류합니다.
+    """사용자 메시지를 시멘틱 분류합니다. 규칙/정책 관련 질문에만 호출 권장.
 
     Args:
         user_message: 채팅 입력 문자열.
@@ -32,4 +47,4 @@ def is_classifier_available() -> bool:
     return _is_classifier_available()
 
 
-__all__ = ["classify", "is_classifier_available"]
+__all__ = ["classify", "is_classifier_available", "is_rule_policy_related"]

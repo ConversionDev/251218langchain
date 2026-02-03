@@ -28,7 +28,7 @@ export default function BottomNavigation({
           <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" strokeWidth="2" />
         </svg>
       ),
-      path: "/v10/upload",
+      path: "/upload",
     },
   ];
 
@@ -37,20 +37,19 @@ export default function BottomNavigation({
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center py-2 z-[100] shadow-[0_-2px_8px_rgba(0,0,0,0.05)] md:max-w-[768px] md:left-1/2 md:-translate-x-1/2">
+    <nav className="fixed bottom-0 left-0 right-0 z-[100] flex justify-around border-t border-slate-200 bg-white py-2 shadow-[0_-2px_8px_rgba(0,0,0,0.05)] dark:border-slate-800 dark:bg-slate-900 md:left-1/2 md:max-w-[768px] md:-translate-x-1/2">
       {navItems.map((item) => {
-        // 업로드 페이지는 하위 경로도 활성화
         const isActive =
           pathname === item.path ||
           currentPage === item.id ||
-          (item.id === "upload" && pathname.startsWith("/v10/upload"));
+          (item.id === "upload" && pathname.startsWith("/upload"));
         return (
           <button
             key={item.id}
-            className={`flex flex-col items-center gap-1 bg-none border-none px-3 py-2 cursor-pointer transition-all flex-1 max-w-[80px] ${
+            className={`flex flex-1 max-w-[80px] flex-col items-center gap-1 border-none bg-none px-3 py-2 cursor-pointer transition-all ${
               isActive
-                ? "text-gray-800 [&>div]:scale-110 [&>span]:font-semibold"
-                : "text-gray-500 hover:text-gray-800"
+                ? "text-slate-900 [&>div]:scale-110 [&>span]:font-semibold dark:text-slate-100"
+                : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
             onClick={() => handleNavigation(item.path)}
             aria-label={item.label}

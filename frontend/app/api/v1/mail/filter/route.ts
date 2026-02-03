@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const response = await fetch(`${backendUrl}/mail/filter`, {
+      const response = await fetch(`${backendUrl}/api/mail/filter`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

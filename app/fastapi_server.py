@@ -58,7 +58,7 @@ mcp_app = get_http_app()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def _app_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     FastAPI 애플리케이션 라이프사이클 관리.
 
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             print("\n" + "=" * 50)
             print("DB·마이그레이션 초기화 중...")
             print("=" * 50)
-            await asyncio.to_thread(init_v10)
+            await asyncio.to_thread(init_db)
             print("\n" + "=" * 50)
             print("[OK] 백엔드 초기화 완료!")
             print("=" * 50)
@@ -104,7 +104,7 @@ app = FastAPI(
     title="LangChain Chatbot API",
     description="PGVector와 연동된 LangChain 챗봇 API",
     version="1.0.0",
-    lifespan=lifespan,
+    lifespan=_app_lifespan,
 )
 
 # 게이트웨이: CORS (진입부)
@@ -120,7 +120,7 @@ _rag_init_lock = threading.Lock()
 _rag_initialized = False
 
 
-def init_v10() -> None:
+def init_db() -> None:
     """DB 초기화: Alembic 마이그레이션으로 Soccer 등 관계형 테이블 자동 생성·업데이트."""
     try:
         # 설정 가져오기
@@ -136,7 +136,7 @@ def init_v10() -> None:
 
             # Alembic 설정
             from alembic.config import Config  # type: ignore
-            from core.database import get_v10_engine  # type: ignore
+            from core.database import get_engine  # type: ignore
             from domain.models.bases.soccer import (  # noqa: F401
                 Player,
                 Schedule,
@@ -158,13 +158,13 @@ def init_v10() -> None:
             if not alembic_versions_path.exists():
                 alembic_versions_path.mkdir(parents=True, exist_ok=True)
 
-            if current_settings.v10_auto_migrate:
+            if current_settings.auto_migrate:
                 # autogenerate 실행 (변경사항이 있으면 새 마이그레이션 파일 생성)
                 try:
                     command.revision(
                         alembic_cfg,
                         autogenerate=True,
-                        message="Auto-generated migration for V10 domain"
+                        message="Auto-generated migration"
                     )
                 except Exception as autogen_error:
                     # autogenerate 실패는 무시 (변경사항이 없을 수도 있음)
@@ -177,13 +177,13 @@ def init_v10() -> None:
 
                 # Alembic 마이그레이션 실행 (기존 + 새로 생성된 마이그레이션 모두 적용)
                 try:
-                    command.upgrade(alembic_cfg, current_settings.v10_migration_revision)
+                    command.upgrade(alembic_cfg, current_settings.migration_revision)
                     logging.info("✓ DB 마이그레이션 완료")
                 except Exception as upgrade_error:
                     # 마이그레이션 실패 시에만 테이블 확인
                     logging.error(f"마이그레이션 실행 실패: {upgrade_error}")
                     try:
-                        engine = get_v10_engine()
+                        engine = get_engine()
                         inspector = inspect(engine)
                         existing_tables = inspector.get_table_names()
                         expected_tables = ["players", "teams", "schedules", "stadiums"]
@@ -196,8 +196,8 @@ def init_v10() -> None:
                         pass  # 테이블 확인 실패는 무시
                     raise  # 마이그레이션 실패는 재발생
             else:
-                logging.warning("자동 마이그레이션이 비활성화되어 있습니다. (V10_AUTO_MIGRATE=false)")
-                logging.warning("테이블을 생성하려면 마이그레이션을 수동으로 실행하거나 V10_AUTO_MIGRATE=true로 설정하세요.")
+                logging.warning("자동 마이그레이션이 비활성화되어 있습니다. (AUTO_MIGRATE=false)")
+                logging.warning("테이블을 생성하려면 마이그레이션을 수동으로 실행하거나 AUTO_MIGRATE=true로 설정하세요.")
 
         except Exception as e:
             logging.error(f"관계형 테이블 생성 중 오류: {e}")
@@ -441,6 +441,7 @@ register_routes(
     chat_router=chat_router,
     email_router=email_router,
     soccer_router=soccer_router,
+
 )
 
 

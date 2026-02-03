@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const response = await fetch(`${backendUrl}/agent/tools`, {
+      const response = await fetch(`${backendUrl}/api/agent/tools`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

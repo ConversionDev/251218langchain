@@ -16,7 +16,7 @@ export async function GET(
     }
 
     try {
-      const response = await fetch(`${backendUrl}/agent/threads/${thread_id}/history`, {
+      const response = await fetch(`${backendUrl}/api/agent/threads/${thread_id}/history`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

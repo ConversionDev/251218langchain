@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { ServiceWorkerRegistration } from "./components/ServiceWorkerRegistration";
 
 export const metadata: Metadata = {
-  title: "LangGraph 에이전트",
-  description: "LangGraph 에이전트 챗봇 (도구·RAG)",
+  title: "Success DNA",
+  description: "Success DNA 플랫폼",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
@@ -17,7 +16,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0a0a1a",
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({
@@ -34,7 +33,6 @@ export default function RootLayout({
         <meta name="theme-color" content="#0a0a1a" />
       </head>
       <body>
-        <ServiceWorkerRegistration />
         {children}
       </body>
     </html>

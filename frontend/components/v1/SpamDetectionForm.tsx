@@ -97,10 +97,14 @@ export default function SpamDetectionForm({
     setFormData(sample);
   };
 
+  const inputClass =
+    "px-3 py-3 rounded-lg text-sm font-inherit transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-300 bg-white text-slate-900 placeholder:text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400";
+  const labelClass = "text-sm font-medium text-slate-700 dark:text-slate-300";
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6 bg-[rgba(255,255,255,0.05)] rounded-xl border border-[rgba(102,126,234,0.2)]">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <Label htmlFor="subject" className="text-sm text-[#e0e0e0] font-medium">이메일 제목 *</Label>
+        <Label htmlFor="subject" className={labelClass}>이메일 제목 *</Label>
         <Input
           type="text"
           id="subject"
@@ -110,12 +114,12 @@ export default function SpamDetectionForm({
           placeholder="예: 회의 일정 안내"
           required
           disabled={isLoading}
-          className="px-3 py-3 border border-[rgba(102,126,234,0.3)] rounded-lg bg-[rgba(0,0,0,0.3)] text-[#e0e0e0] text-sm font-inherit transition-all focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputClass}
         />
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="sender" className="text-sm text-[#e0e0e0] font-medium">발신자 *</Label>
+        <Label htmlFor="sender" className={labelClass}>발신자 *</Label>
         <Input
           type="text"
           id="sender"
@@ -125,12 +129,12 @@ export default function SpamDetectionForm({
           placeholder="예: sender@example.com"
           required
           disabled={isLoading}
-          className="px-3 py-3 border border-[rgba(102,126,234,0.3)] rounded-lg bg-[rgba(0,0,0,0.3)] text-[#e0e0e0] text-sm font-inherit transition-all focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputClass}
         />
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="body" className="text-sm text-[#e0e0e0] font-medium">이메일 본문</Label>
+        <Label htmlFor="body" className={labelClass}>이메일 본문</Label>
         <Textarea
           id="body"
           name="body"
@@ -139,12 +143,12 @@ export default function SpamDetectionForm({
           placeholder="이메일 내용을 입력하세요..."
           rows={6}
           disabled={isLoading}
-          className="px-3 py-3 border border-[rgba(102,126,234,0.3)] rounded-lg bg-[rgba(0,0,0,0.3)] text-[#e0e0e0] text-sm font-inherit transition-all resize-y min-h-[120px] focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`${inputClass} resize-y min-h-[120px]`}
         />
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="date" className="text-sm text-[#e0e0e0] font-medium">날짜</Label>
+        <Label htmlFor="date" className={labelClass}>날짜</Label>
         <Input
           type="date"
           id="date"
@@ -152,25 +156,25 @@ export default function SpamDetectionForm({
           value={formData.date}
           onChange={handleChange}
           disabled={isLoading}
-          className="px-3 py-3 border border-[rgba(102,126,234,0.3)] rounded-lg bg-[rgba(0,0,0,0.3)] text-[#e0e0e0] text-sm font-inherit transition-all focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputClass}
         />
       </div>
 
-      <div className="flex flex-col gap-4 mt-2">
+      <div className="flex flex-col gap-4 pt-2">
         <Button
           type="submit"
-          className="px-6 py-3 bg-gradient-to-br from-[#667eea] to-[#764ba2] border-none rounded-lg text-white text-base font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(102,126,234,0.4)] disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
+          className="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 border-none rounded-lg text-white text-base font-semibold cursor-pointer transition-all shadow-sm hover:shadow disabled:opacity-60 disabled:cursor-not-allowed dark:bg-blue-600 dark:hover:bg-blue-700"
           disabled={isLoading || !formData.subject || !formData.sender}
         >
           {isLoading ? "분석 중..." : "스팸 감지 실행"}
         </Button>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-[#a0a0a0]">샘플 데이터:</span>
+          <span className="text-sm text-slate-500 dark:text-slate-400">샘플 데이터:</span>
           <Button
             type="button"
             variant="outline"
-            className="px-3 py-1.5 border border-[rgba(102,126,234,0.3)] rounded-lg bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] text-sm cursor-pointer transition-all hover:bg-[rgba(102,126,234,0.2)] hover:border-[#667eea] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-sm cursor-pointer transition-all hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             onClick={() => loadSample(SAMPLE_SPAM)}
             disabled={isLoading}
           >
@@ -179,7 +183,7 @@ export default function SpamDetectionForm({
           <Button
             type="button"
             variant="outline"
-            className="px-3 py-1.5 border border-[rgba(102,126,234,0.3)] rounded-lg bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] text-sm cursor-pointer transition-all hover:bg-[rgba(102,126,234,0.2)] hover:border-[#667eea] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-sm cursor-pointer transition-all hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             onClick={() => loadSample(SAMPLE_NORMAL)}
             disabled={isLoading}
           >
@@ -188,7 +192,7 @@ export default function SpamDetectionForm({
           <Button
             type="button"
             variant="outline"
-            className="px-3 py-1.5 border border-[rgba(102,126,234,0.3)] rounded-lg bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] text-sm cursor-pointer transition-all hover:bg-[rgba(102,126,234,0.2)] hover:border-[#667eea] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-sm cursor-pointer transition-all hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             onClick={() => loadSample(SAMPLE_UNCERTAIN)}
             disabled={isLoading}
           >

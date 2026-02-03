@@ -89,9 +89,9 @@ class PolicyService:
     def _analyze_with_exaone(
         self, email_metadata: Dict[str, Any], policies: list
     ) -> Dict[str, Any]:
-        """Spam MCP를 통해 EXAONE으로 이메일 분석."""
+        """HTTP → Hub → Spam MCP → Spoke call_tool로 EXAONE 이메일 분석."""
         try:
-            from domain.spokes.spam.mcp.spam_server import _analyze_email_impl  # type: ignore
+            from domain.hub.mcp.http_client import spam_call  # type: ignore
 
             policy_text = None
             if policies:
@@ -99,17 +99,18 @@ class PolicyService:
                     f"- {policy.get('content', '')}" for policy in policies
                 ])
 
-            tool_result_json = _analyze_email_impl(
-                subject=email_metadata.get("subject", ""),
-                sender=email_metadata.get("sender", ""),
-                body=email_metadata.get("body"),
-                recipient=email_metadata.get("recipient"),
-                date=email_metadata.get("date"),
-                attachments=email_metadata.get("attachments"),
-                headers=email_metadata.get("headers"),
-                policy_context=policy_text,
-            )
-
+            args: Dict[str, Any] = {
+                "subject": email_metadata.get("subject", ""),
+                "sender": email_metadata.get("sender", ""),
+                "body": email_metadata.get("body") or "",
+                "recipient": email_metadata.get("recipient") or "",
+                "date": email_metadata.get("date") or "",
+                "attachments": email_metadata.get("attachments"),
+                "headers": email_metadata.get("headers"),
+                "policy_context": policy_text or "",
+            }
+            raw_result = spam_call("analyze_email", args)
+            tool_result_json = raw_result if isinstance(raw_result, str) else json.dumps(raw_result)
             tool_result = json.loads(tool_result_json)
 
             # 기존 형식으로 변환
@@ -197,7 +198,7 @@ class PolicyService:
         Returns:
             파싱된 딕셔너리
         """
-        result = {
+        result: Dict[str, Any] = {
             "is_spam": None,
             "confidence": "medium",
             "reason_codes": [],

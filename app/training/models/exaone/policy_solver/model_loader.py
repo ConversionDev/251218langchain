@@ -348,7 +348,7 @@ class TrainingDataLoader:
             quantization_config=self.bnb_config,
             device_map=device_map_value,
             trust_remote_code=True,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
         )
 
         # PEFT 모델 준비 (중간 모델 객체는 자동으로 GC 처리됨)

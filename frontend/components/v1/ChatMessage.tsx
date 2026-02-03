@@ -10,7 +10,7 @@ interface Message {
   timestamp: Date;
   provider?: string;
   usedRag?: boolean;
-  semantic_action?: string; // BLOCK, RULE_BASED, POLICY_BASED
+  semantic_action?: string | null; // BLOCK, RULE_BASED, POLICY_BASED, null=미분류
 }
 
 interface ChatMessageProps {
@@ -82,16 +82,16 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       <div className={`max-w-full px-5 py-5 rounded-2xl break-words md:max-w-[85%] ${
         isUser
           ? "bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white rounded-br-sm"
-          : "bg-[rgba(255,255,255,0.09)] text-[#f5f5f5] border border-[rgba(102,126,234,0.3)] rounded-bl-sm shadow-[0_2px_12px_rgba(0,0,0,0.15)]"
+          : "bg-slate-200/90 border border-slate-300 text-slate-900 rounded-bl-sm shadow-sm dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100"
       }`}>
-        <div className={`leading-[1.8] text-base tracking-[0.01em] ${isUser ? "text-white" : "text-[#f5f5f5]"} md:text-sm`}>
+        <div className={`leading-[1.8] text-base tracking-[0.01em] ${isUser ? "text-white" : "text-slate-900 dark:text-slate-100"} md:text-sm`}>
           {isUser ? (
             // 사용자 메시지는 마크다운 없이 그대로 표시
             <div>{message.content}</div>
           ) : (
             // 어시스턴트 메시지는 마크다운 렌더링 (일반 텍스트도 자동 포맷팅)
             <ReactMarkdown
-              className="markdown-content [&_p]:my-3 [&_p]:leading-[1.85] [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_p]:whitespace-pre-wrap [&_strong]:font-semibold [&_em]:italic [&_em]:opacity-90 [&_ul]:my-3 [&_ul]:pl-7 [&_ol]:my-3 [&_ol]:pl-7 [&_li]:my-2 [&_li]:leading-[1.7] [&_li]:pl-1 [&_ul_li]:list-disc [&_ol_li]:list-decimal [&_h1]:mt-5 [&_h1]:mb-3 [&_h1]:font-semibold [&_h1]:leading-[1.4] [&_h1]:text-2xl [&_h1:first-child]:mt-0 [&_h2]:mt-5 [&_h2]:mb-3 [&_h2]:font-semibold [&_h2]:leading-[1.4] [&_h2]:text-xl [&_h2:first-child]:mt-0 [&_h3]:mt-5 [&_h3]:mb-3 [&_h3]:font-semibold [&_h3]:leading-[1.4] [&_h3]:text-lg [&_h3:first-child]:mt-0 [&_h4]:mt-5 [&_h4]:mb-3 [&_h4]:font-semibold [&_h4]:leading-[1.4] [&_h4:first-child]:mt-0 [&_code]:bg-[rgba(102,126,234,0.2)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-[0.9em] [&_code]:text-[#a0a0ff] [&_pre]:block [&_pre]:bg-[rgba(0,0,0,0.3)] [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-[0.9em] [&_pre]:leading-[1.6] [&_pre]:my-4 [&_pre]:m-0 [&_a]:text-[#667eea] [&_a]:underline [&_a]:decoration-[rgba(102,126,234,0.5)] [&_a]:transition-all [&_a:hover]:text-[#764ba2] [&_a:hover]:decoration-[rgba(118,75,162,0.7)] [&_blockquote]:border-l-[3px] [&_blockquote]:border-[rgba(102,126,234,0.5)] [&_blockquote]:pl-4 [&_blockquote]:my-4 [&_blockquote]:opacity-80 [&_blockquote]:italic [&_hr]:border-0 [&_hr]:border-t [&_hr]:border-[rgba(102,126,234,0.3)] [&_hr]:my-6"
+              className="markdown-content text-slate-800 dark:text-slate-100 [&>*]:text-slate-800 dark:[&>*]:text-slate-100 [&_p]:my-3 [&_p]:leading-[1.85] [&_p]:text-slate-800 [&_p]:dark:text-slate-100 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_p]:whitespace-pre-wrap [&_strong]:font-semibold [&_em]:italic [&_em]:opacity-90 [&_ul]:my-3 [&_ul]:pl-7 [&_ol]:my-3 [&_ol]:pl-7 [&_li]:my-2 [&_li]:leading-[1.7] [&_li]:pl-1 [&_ul_li]:list-disc [&_ol_li]:list-decimal [&_h1]:mt-5 [&_h1]:mb-3 [&_h1]:font-semibold [&_h1]:leading-[1.4] [&_h1]:text-2xl [&_h1]:text-slate-800 [&_h1]:dark:text-slate-100 [&_h1:first-child]:mt-0 [&_h2]:mt-5 [&_h2]:mb-3 [&_h2]:font-semibold [&_h2]:leading-[1.4] [&_h2]:text-xl [&_h2]:text-slate-800 [&_h2]:dark:text-slate-100 [&_h2:first-child]:mt-0 [&_h3]:mt-5 [&_h3]:mb-3 [&_h3]:font-semibold [&_h3]:leading-[1.4] [&_h3]:text-lg [&_h3]:text-slate-800 [&_h3]:dark:text-slate-100 [&_h3:first-child]:mt-0 [&_h4]:mt-5 [&_h4]:mb-3 [&_h4]:font-semibold [&_h4]:leading-[1.4] [&_h4]:text-slate-800 [&_h4]:dark:text-slate-100 [&_h4:first-child]:mt-0 [&_code]:bg-slate-200 [&_code]:text-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-[0.9em] dark:[&_code]:bg-slate-700 dark:[&_code]:text-slate-200 [&_pre]:block [&_pre]:bg-slate-200 [&_pre]:text-slate-800 dark:[&_pre]:bg-slate-700 dark:[&_pre]:text-slate-200 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-[0.9em] [&_pre]:leading-[1.6] [&_pre]:my-4 [&_pre]:m-0 [&_a]:text-blue-600 [&_a]:underline [&_a]:decoration-blue-400 [&_a]:transition-all [&_a:hover]:text-blue-700 dark:[&_a]:text-blue-400 dark:[&_a:hover]:text-blue-300 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-4 [&_blockquote]:my-4 [&_blockquote]:opacity-90 [&_blockquote]:italic [&_blockquote]:text-slate-700 dark:[&_blockquote]:border-slate-600 dark:[&_blockquote]:text-slate-300 [&_hr]:border-0 [&_hr]:border-t [&_hr]:border-slate-200 [&_hr]:my-6 dark:[&_hr]:border-slate-600"
               remarkPlugins={[]}
               rehypePlugins={[]}
               components={{
@@ -140,35 +140,39 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           )}
         </div>
         <div className={`flex items-center gap-2 mt-2 flex-wrap ${isUser ? "justify-end" : "justify-start"}`}>
-          <span className={`text-[0.7rem] opacity-60 ${isUser ? "text-right" : "text-left"}`}>
+          <span className={`text-[0.7rem] ${isUser ? "text-white/80 text-right" : "text-slate-500 dark:text-slate-400 text-left"}`}>
             {formattedTime}
           </span>
-          {/* 어시스턴트 메시지에 추가 정보 표시 */}
+          {/* 어시스턴트 메시지에 추가 정보 표시 - 밝은/어두운 배경 모두 대비 확보 */}
           {!isUser && message.provider && (
-            <span className="text-[0.7rem] px-1.5 py-0.5 bg-[rgba(102,126,234,0.2)] rounded text-[#a0a0ff]">
+            <span className="text-[0.7rem] px-1.5 py-0.5 rounded font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200">
               {message.provider === "exaone" ? "🇰🇷 EXAONE" : message.provider}
             </span>
           )}
-          {!isUser && message.usedRag !== undefined && (
-            <span className={`text-[0.7rem] px-1.5 py-0.5 rounded ${message.usedRag ? "bg-[rgba(74,222,128,0.2)] text-[#4ade80]" : ""}`}>
-              {message.usedRag ? "📚 RAG" : ""}
+          {!isUser && message.usedRag !== undefined && message.usedRag && (
+            <span className="text-[0.7rem] px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+              📚 RAG
             </span>
           )}
-          {!isUser && message.semantic_action && (
+          {!isUser && message.semantic_action !== undefined && (
             <span
               className={`text-[0.7rem] px-1.5 py-0.5 rounded font-medium ${
                 message.semantic_action === "BLOCK"
-                  ? "bg-[rgba(239,68,68,0.2)] text-[#ef4444]"
+                  ? "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200"
                   : message.semantic_action === "RULE_BASED"
-                    ? "bg-[rgba(59,130,246,0.2)] text-[#3b82f6]"
-                    : "bg-[rgba(168,85,247,0.2)] text-[#a855f7]"
+                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+                    : message.semantic_action === "POLICY_BASED"
+                      ? "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200"
+                      : "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
               }`}
             >
               {message.semantic_action === "BLOCK"
                 ? "🚫 차단"
                 : message.semantic_action === "RULE_BASED"
                   ? "📋 규칙 기반"
-                  : "📌 정책 기반"}
+                  : message.semantic_action === "POLICY_BASED"
+                    ? "📌 정책 기반"
+                    : "❓ 미분류"}
             </span>
           )}
         </div>

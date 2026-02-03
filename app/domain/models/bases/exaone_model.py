@@ -187,7 +187,7 @@ class ExaoneLLM(BaseLLM):
         model_path: Optional[str] = None,
         model_id: str = "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct",
         device_map: str = "auto",
-        torch_dtype: str = "auto",
+        dtype: str = "auto",
         trust_remote_code: bool = True,
         use_4bit: Optional[bool] = None,
     ):
@@ -197,14 +197,14 @@ class ExaoneLLM(BaseLLM):
             model_path: 로컬 모델 경로 (None이면 model_id 사용)
             model_id: HuggingFace 모델 ID
             device_map: 디바이스 매핑 ("auto", "cuda" 등, GPU 전용)
-            torch_dtype: 토치 데이터 타입 ("auto", "float16", "bfloat16", "float32")
+            dtype: 토치 데이터 타입 ("auto", "float16", "bfloat16", "float32")
             trust_remote_code: 원격 코드 신뢰 여부
             use_4bit: 4-bit 양자화 사용 여부 (None이면 환경변수 EXAONE_USE_4BIT 확인, 기본 True)
         """
         self.model_path = model_path
         self.model_id = model_id
         self.device_map = device_map
-        self.torch_dtype = torch_dtype
+        self.dtype = dtype
         self.trust_remote_code = trust_remote_code
 
         # 4-bit 양자화 설정 (Settings에서 확인, 기본값 True)
@@ -291,9 +291,9 @@ class ExaoneLLM(BaseLLM):
                 quantization_config = None
                 quantization_info = "없음 (FP16)"
 
-            # Transformers API는 torch_dtype 사용 (dtype 아님). 명시 시 fp32 로드 후 캐스팅 방지로 로딩 속도·메모리 개선.
+            # dtype 명시 시 fp32 로드 후 캐스팅 방지. (torch_dtype deprecated → dtype 사용)
             load_kwargs: Dict[str, Any] = {
-                "torch_dtype": dtype,
+                "dtype": dtype,
                 "device_map": {"": "cuda:0"},
                 "trust_remote_code": self.trust_remote_code,
                 "low_cpu_mem_usage": True,
@@ -780,7 +780,7 @@ def load_exaone_model(
         model_path=model_path,
         model_id=model_id,
         device_map="auto",
-        torch_dtype="auto",
+        dtype="auto",
         trust_remote_code=True,
     )
 

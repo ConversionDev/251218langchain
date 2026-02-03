@@ -63,9 +63,15 @@ async def agent_chat(request: AgentRequest):
 
         provider = request.provider or get_provider_name()
 
+        # 규칙/정책 관련 질문일 때만 시멘틱 분류 → BLOCK이면 차단, RULE_BASED/POLICY_BASED면 Chat에 시멘틱 반영
+        # 그 외(일반 질문)는 분류 없이 일반 ExaOne(Chat)만 사용
         try:
-            from domain.hub.orchestrators import classify, is_classifier_available
-            if is_classifier_available():
+            from domain.hub.orchestrators import (
+                classify,
+                is_classifier_available,
+                is_rule_policy_related,
+            )
+            if is_classifier_available() and is_rule_policy_related(request.message):
                 semantic_action = classify(request.message)
                 msg_preview = (request.message[:80] + "…") if len(request.message) > 80 else request.message
                 logger.info("[시멘틱 분류] 질문: %s → %s", msg_preview, semantic_action)
@@ -100,7 +106,6 @@ async def agent_chat(request: AgentRequest):
         response = run_agent(
             user_text=request.message,
             provider=provider,
-            use_rag=request.use_rag,
             system_prompt=request.system_prompt,
             chat_history=chat_history,
             thread_id=request.thread_id,
@@ -131,9 +136,14 @@ async def agent_chat_stream(request: AgentRequest):
         provider = request.provider or get_provider_name()
         stream_semantic_action: Optional[str] = None
 
+        # 규칙/정책 관련 질문일 때만 시멘틱 분류 (일반 질문은 stream_semantic_action=None → 일반 ExaOne)
         try:
-            from domain.hub.orchestrators import classify, is_classifier_available
-            if is_classifier_available():
+            from domain.hub.orchestrators import (
+                classify,
+                is_classifier_available,
+                is_rule_policy_related,
+            )
+            if is_classifier_available() and is_rule_policy_related(request.message):
                 action = classify(request.message)
                 msg_preview = (request.message[:80] + "…") if len(request.message) > 80 else request.message
                 logger.info("[시멘틱 분류] 질문: %s → %s", msg_preview, action)
@@ -175,7 +185,6 @@ async def agent_chat_stream(request: AgentRequest):
                 async for chunk in run_agent_stream(
                     user_text=request.message,
                     provider=provider,
-                    use_rag=request.use_rag,
                     system_prompt=request.system_prompt,
                     chat_history=chat_history,
                     thread_id=request.thread_id,

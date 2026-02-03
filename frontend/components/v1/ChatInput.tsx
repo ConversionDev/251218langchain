@@ -27,7 +27,7 @@ export default function ChatInput({ onSend, disabled = false }: ChatInputProps) 
   };
 
   return (
-    <div className="p-4 bg-[#16213e] border-t border-[rgba(102,126,234,0.2)] md:p-3">
+    <div className="p-4 bg-slate-50 border-t border-slate-200 md:p-3 dark:bg-slate-900/50 dark:border-slate-800">
       <div className="flex gap-3 items-end max-w-full">
         <Textarea
           value={input}
@@ -36,12 +36,12 @@ export default function ChatInput({ onSend, disabled = false }: ChatInputProps) 
           placeholder="메시지를 입력하세요... (Enter로 전송, Shift+Enter로 줄바꿈)"
           disabled={disabled}
           rows={1}
-          className="flex-1 px-4 py-3 border border-[rgba(102,126,234,0.3)] rounded-[1.5rem] text-[0.95rem] font-inherit resize-none max-h-[120px] overflow-y-auto transition-all bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] placeholder:text-[#666] focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] disabled:bg-[rgba(255,255,255,0.02)] disabled:cursor-not-allowed disabled:text-[#666] md:text-sm md:px-[0.9rem] md:py-[0.6rem]"
+          className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-[0.95rem] font-inherit resize-none max-h-[120px] overflow-y-auto transition-all bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400 dark:disabled:bg-slate-800 md:text-sm md:px-[0.9rem] md:py-[0.6rem]"
         />
         <Button
           onClick={handleSend}
           disabled={disabled || !input.trim()}
-          className="w-11 h-11 border-none rounded-full bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white cursor-pointer flex items-center justify-center transition-all flex-shrink-0 hover:scale-105 hover:shadow-[0_4px_12px_rgba(102,126,234,0.4)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed md:w-10 md:h-10"
+          className="w-11 h-11 border-none rounded-full bg-blue-600 text-white cursor-pointer flex items-center justify-center transition-all flex-shrink-0 hover:bg-blue-700 hover:shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed md:w-10 md:h-10"
           aria-label="메시지 전송"
         >
           <svg

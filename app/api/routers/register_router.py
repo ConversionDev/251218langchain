@@ -4,7 +4,7 @@
 역할:
 - /api 하위 REST 라우터 등록 (chat, email, soccer)
 - /mcp 하위 FastMCP 중앙 허브 마운트
-- /internal 하위 hub/mcp Llama·ExaOne HTTP 서비스 (spokes가 호출)
+- /internal 하위 hub/mcp Llama·ExaOne·Soccer HTTP 서비스 (spokes가 호출)
 """
 
 from fastapi import FastAPI
@@ -29,5 +29,7 @@ def register_routes(
 
     # Hub MCP: Llama·ExaOne 호출 수신 (spokes가 HTTP로 호출)
     from api.routers.hub_llm_router import router as hub_llm_router  # type: ignore
+    from api.routers.soccer_router import internal_soccer_router  # type: ignore
 
     app.include_router(hub_llm_router)
+    app.include_router(internal_soccer_router)

@@ -1,8 +1,9 @@
 """
 Hub MCP HTTP 클라이언트.
 
-spokes(chat, spam)가 hub/mcp를 HTTP로 호출할 때 사용.
-hub/mcp = Llama·ExaOne 호출 수신 (receiver), spokes = 호출하는 쪽 (caller).
+spokes(chat, spam, soccer)가 hub를 HTTP로 호출할 때 사용.
+hub = Llama·ExaOne 등 호출 수신 (receiver), spokes = 호출하는 쪽 (caller).
+Chat/Spam: Llama·ExaOne 내부 API. Soccer: /internal/soccer/* (Hub가 Soccer MCP 위임).
 """
 
 import json
@@ -122,3 +123,113 @@ def exaone_analyze_email(
             return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         return json.dumps(default_result, ensure_ascii=False)
+
+
+# ---------------------------------------------------------------------------
+# Chat / Spam call (오케스트레이터 → HTTP → Hub → call_tool → 도메인 MCP → Spoke)
+# ---------------------------------------------------------------------------
+
+
+def chat_call(tool: str, arguments: Optional[Dict[str, Any]] = None, *, timeout: float = 60.0) -> Any:
+    """Chat 도구 호출. HTTP POST hub/internal/chat/call → Hub가 Chat MCP call_tool 위임."""
+    base = _get_hub_base_url()
+    url = f"{base}/internal/chat/call"
+    payload = {"tool": tool, "arguments": arguments or {}}
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("result")
+    except Exception as e:
+        print(f"[WARNING] Chat call HTTP 실패: {e}")
+        return None
+
+
+def spam_call(tool: str, arguments: Optional[Dict[str, Any]] = None, *, timeout: float = 60.0) -> Any:
+    """Spam 도구 호출. HTTP POST hub/internal/spam/call → Hub가 Spam MCP call_tool 위임."""
+    base = _get_hub_base_url()
+    url = f"{base}/internal/spam/call"
+    payload = {"tool": tool, "arguments": arguments or {}}
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("result")
+    except Exception as e:
+        print(f"[WARNING] Spam call HTTP 실패: {e}")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Soccer HTTP 클라이언트
+# ---------------------------------------------------------------------------
+
+
+def soccer_route(question: str, *, timeout: float = 30.0) -> str:
+    """Soccer 라우팅. HTTP POST hub/internal/soccer/route."""
+    base = _get_hub_base_url()
+    url = f"{base}/internal/soccer/route"
+    payload = {"question": question}
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("result", "")
+    except Exception as e:
+        print(f"[WARNING] Soccer route HTTP 실패: {e}")
+        return ""
+
+
+def soccer_call(
+    orchestrator: str,
+    tool: str,
+    arguments: Optional[Dict[str, Any]] = None,
+    *,
+    timeout: float = 60.0,
+) -> Any:
+    """Soccer MCP → Spoke call_tool 프록시. HTTP POST hub/internal/soccer/call."""
+    base = _get_hub_base_url()
+    url = f"{base}/internal/soccer/call"
+    payload = {
+        "orchestrator": orchestrator,
+        "tool": tool,
+        "arguments": arguments or {},
+    }
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("result")
+    except Exception as e:
+        print(f"[WARNING] Soccer call HTTP 실패: {e}")
+        return None
+
+
+def soccer_route_and_call(
+    question: str,
+    tool: str,
+    arguments: Optional[Dict[str, Any]] = None,
+    *,
+    timeout: float = 60.0,
+) -> Any:
+    """라우팅 후 Soccer MCP → Spoke call_tool. HTTP POST hub/internal/soccer/route_and_call."""
+    base = _get_hub_base_url()
+    url = f"{base}/internal/soccer/route_and_call"
+    payload = {
+        "question": question,
+        "tool": tool,
+        "arguments": arguments or {},
+    }
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("result")
+    except Exception as e:
+        print(f"[WARNING] Soccer route_and_call HTTP 실패: {e}")
+        return None

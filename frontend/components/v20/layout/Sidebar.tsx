@@ -2,40 +2,58 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  Users, 
-  BrainCircuit, 
-  ShieldCheck, 
+import {
+  Users,
+  BrainCircuit,
+  ShieldCheck,
   BarChart3,
-  LayoutDashboard
+  LayoutDashboard,
+  MessageCircle,
+  ShieldAlert,
+  Upload
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
   {
     name: '대시보드',
-    href: '/v20',
+    href: '/',
     icon: LayoutDashboard,
   },
   {
     name: 'Core HR',
-    href: '/v20/core',
+    href: '/core',
     icon: Users,
   },
   {
     name: 'Talent Intelligence',
-    href: '/v20/intelligence',
+    href: '/intelligence',
     icon: BrainCircuit,
   },
   {
     name: 'Verified Credential',
-    href: '/v20/credential',
+    href: '/credential',
     icon: ShieldCheck,
   },
   {
     name: 'Performance Analytics',
-    href: '/v20/performance',
+    href: '/performance',
     icon: BarChart3,
+  },
+  {
+    name: '직원 상담',
+    href: '/chat',
+    icon: MessageCircle,
+  },
+  {
+    name: '스팸 감지',
+    href: '/spam-detection',
+    icon: ShieldAlert,
+  },
+  {
+    name: '파일 업로드',
+    href: '/upload',
+    icon: Upload,
   },
 ];
 
@@ -51,7 +69,7 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+          const isActive = item.href === '/' ? pathname === '/' : (pathname === item.href || pathname?.startsWith(item.href + '/'));
           return (
             <Link
               key={item.name}

@@ -18,11 +18,11 @@ LangGraph를 사용하여 Policy 기반과 Rule 기반을 자동 판단하여 �
 import json
 import logging
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from langgraph.graph import END, StateGraph
 
-from domain.models.states.soccer_state import SoccerDataState  # type: ignore
+from domain.models.states.soccer_state import EmbeddingSyncState, SoccerDataState  # type: ignore
 from domain.spokes.soccer.agents.soccer_agent import PlayerAgent  # type: ignore
 from domain.hub.service import (  # type: ignore
     PlayerService,
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def validate_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def validate_node(state: SoccerDataState) -> SoccerDataState:
     """입력 데이터 검증 — validated_data 설정 또는 errors 설정."""
     data = state.get("data", [])
     path = state.get("processing_path", "Start")
@@ -50,7 +50,7 @@ def validate_node(state: Dict[str, Any]) -> Dict[str, Any]:
     return {"validated_data": data, "processing_path": path + " -> Validate"}
 
 
-def error_handler_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def error_handler_node(state: SoccerDataState) -> SoccerDataState:
     """검증 오류 로깅 후 다음 단계로 진행."""
     errors = state.get("errors", [])
     path = state.get("processing_path", "Start")
@@ -59,7 +59,7 @@ def error_handler_node(state: Dict[str, Any]) -> Dict[str, Any]:
     return {"processing_path": path + " -> ErrorHandler"}
 
 
-def save_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def save_node(state: SoccerDataState) -> SoccerDataState:
     """transformed_data를 data_type에 맞는 Service로 저장."""
     transformed = state.get("transformed_data") or state.get("validated_data") or []
     db = state.get("db")
@@ -94,13 +94,13 @@ def save_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-def retry_save_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def retry_save_node(state: SoccerDataState) -> SoccerDataState:
     """재시도 횟수만 증가시키고 다시 Save로 보냄."""
     count = state.get("save_retry_count", 0) + 1
     return {"save_retry_count": count}
 
 
-def finalize_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def finalize_node(state: SoccerDataState) -> SoccerDataState:
     """최종 result 구성 (호출 측에서 db commit 등에 사용)."""
     saved = state.get("saved_count") or 0
     path = state.get("processing_path", "Start")
@@ -145,7 +145,7 @@ def _log_preview_data(orchestrator_name: str, preview_data: List[Dict[str, Any]]
 
 def _handle_graph_result(
     orchestrator_name: str,
-    result: Dict[str, Any],
+    result: SoccerDataState,
     data_len: int,
 ) -> Dict[str, Any]:
     """그래프 실행 결과를 처리하고 트랜잭션을 커밋합니다."""
@@ -208,7 +208,7 @@ def _handle_graph_error(
 # =============================================================================
 
 
-def _player_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
+def _player_determine_strategy_node(state: SoccerDataState) -> SoccerDataState:
     """Player 전략 판단 노드 — 데이터 복잡도에 따라 Policy/Rule 결정."""
     validated_data = state.get("validated_data", [])
     processing_path = state.get("processing_path", "Start")
@@ -227,7 +227,7 @@ def _player_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
     }
 
 
-def _player_policy_process_node(state: SoccerDataState) -> Dict[str, Any]:
+def _player_policy_process_node(state: SoccerDataState) -> SoccerDataState:
     """Player Policy 기반 처리 노드 — PlayerAgent(LLM) 사용."""
     validated_data = state.get("validated_data", [])
     vector_store = state.get("vector_store")
@@ -260,7 +260,7 @@ def _player_policy_process_node(state: SoccerDataState) -> Dict[str, Any]:
         }
 
 
-def _player_rule_process_node(state: SoccerDataState) -> Dict[str, Any]:
+def _player_rule_process_node(state: SoccerDataState) -> SoccerDataState:
     """Player Rule 기반 처리 노드 — PlayerService 사용."""
     validated_data = state.get("validated_data", [])
     db = state.get("db")
@@ -403,7 +403,7 @@ class PlayerOrchestrator:
 
         try:
             graph = get_player_graph()
-            result = graph.invoke(initial_state, config=config)
+            result: SoccerDataState = graph.invoke(initial_state, config=config)
             return _handle_graph_result("PlayerOrchestrator", result, len(data))
         except Exception as e:
             return _handle_graph_error("PlayerOrchestrator", e, len(data))
@@ -414,7 +414,7 @@ class PlayerOrchestrator:
 # =============================================================================
 
 
-def _stadium_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
+def _stadium_determine_strategy_node(state: SoccerDataState) -> SoccerDataState:
     """Stadium 전략 판단 노드 — 항상 Rule 기반."""
     processing_path = state.get("processing_path", "Start")
     logger.info("[Stadium:DetermineStrategy] Stadium은 항상 Rule 기반 사용")
@@ -424,7 +424,7 @@ def _stadium_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
     }
 
 
-def _stadium_rule_process_node(state: SoccerDataState) -> Dict[str, Any]:
+def _stadium_rule_process_node(state: SoccerDataState) -> SoccerDataState:
     """Stadium Rule 기반 처리 노드 — StadiumService 사용."""
     validated_data = state.get("validated_data", [])
     db = state.get("db")
@@ -564,7 +564,7 @@ class StadiumOrchestrator:
 
         try:
             graph = get_stadium_graph()
-            result = graph.invoke(initial_state, config=config)
+            result: SoccerDataState = graph.invoke(initial_state, config=config)
             return _handle_graph_result("StadiumOrchestrator", result, len(data))
         except Exception as e:
             return _handle_graph_error("StadiumOrchestrator", e, len(data))
@@ -575,7 +575,7 @@ class StadiumOrchestrator:
 # =============================================================================
 
 
-def _team_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
+def _team_determine_strategy_node(state: SoccerDataState) -> SoccerDataState:
     """Team 전략 판단 노드 — 항상 Rule 기반."""
     processing_path = state.get("processing_path", "Start")
     logger.info("[Team:DetermineStrategy] Team은 항상 Rule 기반 사용")
@@ -585,7 +585,7 @@ def _team_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
     }
 
 
-def _team_rule_process_node(state: SoccerDataState) -> Dict[str, Any]:
+def _team_rule_process_node(state: SoccerDataState) -> SoccerDataState:
     """Team Rule 기반 처리 노드 — TeamService 사용."""
     validated_data = state.get("validated_data", [])
     db = state.get("db")
@@ -725,7 +725,7 @@ class TeamOrchestrator:
 
         try:
             graph = get_team_graph()
-            result = graph.invoke(initial_state, config=config)
+            result: SoccerDataState = graph.invoke(initial_state, config=config)
             return _handle_graph_result("TeamOrchestrator", result, len(data))
         except Exception as e:
             return _handle_graph_error("TeamOrchestrator", e, len(data))
@@ -736,7 +736,7 @@ class TeamOrchestrator:
 # =============================================================================
 
 
-def _schedule_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
+def _schedule_determine_strategy_node(state: SoccerDataState) -> SoccerDataState:
     """Schedule 전략 판단 노드 — 항상 Rule 기반."""
     processing_path = state.get("processing_path", "Start")
     logger.info("[Schedule:DetermineStrategy] Schedule은 항상 Rule 기반 사용")
@@ -746,7 +746,7 @@ def _schedule_determine_strategy_node(state: SoccerDataState) -> Dict[str, Any]:
     }
 
 
-def _schedule_rule_process_node(state: SoccerDataState) -> Dict[str, Any]:
+def _schedule_rule_process_node(state: SoccerDataState) -> SoccerDataState:
     """Schedule Rule 기반 처리 노드 — ScheduleService 사용."""
     validated_data = state.get("validated_data", [])
     db = state.get("db")
@@ -886,7 +886,128 @@ class ScheduleOrchestrator:
 
         try:
             graph = get_schedule_graph()
-            result = graph.invoke(initial_state, config=config)
+            result: SoccerDataState = graph.invoke(initial_state, config=config)
             return _handle_graph_result("ScheduleOrchestrator", result, len(data))
         except Exception as e:
             return _handle_graph_error("ScheduleOrchestrator", e, len(data))
+
+
+# =============================================================================
+# 5) Embedding Sync — LangGraph (Validate → ProcessEntity 반복 → Finalize)
+# =============================================================================
+
+EMBEDDING_SYNC_ENTITY_TYPES = ["players", "teams", "schedules", "stadiums"]
+
+
+def _embedding_sync_validate_node(state: EmbeddingSyncState) -> EmbeddingSyncState:
+    entities = state.get("entities") or list(EMBEDDING_SYNC_ENTITY_TYPES)
+    valid = [e for e in entities if e in EMBEDDING_SYNC_ENTITY_TYPES]
+    if not valid:
+        valid = list(EMBEDDING_SYNC_ENTITY_TYPES)
+    path = state.get("processing_path", "Start")
+    logger.info("[EmbeddingSync] Validate entities=%s", valid)
+    return {
+        "entities": valid,
+        "results": state.get("results") or {},
+        "current_entity_index": 0,
+        "processing_path": path + " -> Validate",
+    }
+
+
+def _embedding_sync_process_entity_node(state: EmbeddingSyncState) -> EmbeddingSyncState:
+    from domain.spokes.soccer.services.embedding_service import (  # type: ignore
+        run_embedding_sync_single_entity,
+    )
+
+    entities = state.get("entities") or []
+    idx = state.get("current_entity_index", 0)
+    results = dict(state.get("results") or {})
+    path = state.get("processing_path", "Start")
+    db = state.get("db")
+    embeddings_model = state.get("embeddings_model")
+    batch_size = state.get("batch_size", 32)
+
+    if idx >= len(entities) or not db or not embeddings_model:
+        return {"processing_path": path + " -> ProcessEntity(skip)", "results": results}
+
+    table_key = entities[idx]
+    logger.info("[EmbeddingSync] ProcessEntity table_key=%s index=%s", table_key, idx)
+    one_result = run_embedding_sync_single_entity(db, embeddings_model, table_key, batch_size=batch_size)
+    results[table_key] = one_result
+    return {
+        "results": results,
+        "current_entity_index": idx + 1,
+        "processing_path": path + f" -> ProcessEntity({table_key})",
+    }
+
+
+def _embedding_sync_finalize_node(state: EmbeddingSyncState) -> EmbeddingSyncState:
+    path = state.get("processing_path", "Start")
+    results = state.get("results") or {}
+    logger.info("[EmbeddingSync] Finalize results=%s", results)
+    return {"processing_path": path + " -> Finalize"}
+
+
+def _embedding_sync_route_after_process(state: EmbeddingSyncState) -> str:
+    entities = state.get("entities") or []
+    idx = state.get("current_entity_index", 0)
+    return "process_entity" if idx < len(entities) else "finalize"
+
+
+def build_embedding_sync_graph():
+    g = StateGraph(EmbeddingSyncState)
+    g.add_node("validate", _embedding_sync_validate_node)
+    g.add_node("process_entity", _embedding_sync_process_entity_node)
+    g.add_node("finalize", _embedding_sync_finalize_node)
+    g.set_entry_point("validate")
+    g.add_edge("validate", "process_entity")
+    g.add_conditional_edges(
+        "process_entity",
+        _embedding_sync_route_after_process,
+        {"process_entity": "process_entity", "finalize": "finalize"},
+    )
+    g.add_edge("finalize", END)
+    return g.compile()
+
+
+_embedding_sync_graph: Any = None
+
+
+def get_embedding_sync_graph():
+    global _embedding_sync_graph
+    if _embedding_sync_graph is None:
+        _embedding_sync_graph = build_embedding_sync_graph()
+    return _embedding_sync_graph
+
+
+def run_embedding_sync_orchestrate(
+    db,
+    embeddings_model: Any,
+    entities: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    임베딩 동기화를 LangGraph로 실행.
+    그래프: Validate → ProcessEntity(반복) → Finalize.
+    """
+    logger.info("[EmbeddingSyncOrchestrate] 임베딩 동기화 시작 entities=%s", entities)
+    try:
+        initial_state: EmbeddingSyncState = {
+            "entities": entities or list(EMBEDDING_SYNC_ENTITY_TYPES),
+            "db": db,
+            "embeddings_model": embeddings_model,
+            "batch_size": 32,
+            "results": {},
+            "current_entity_index": 0,
+            "processing_path": "Start",
+            "errors": None,
+        }
+        config = {"configurable": {"thread_id": f"embed_sync_{uuid.uuid4().hex[:8]}"}}
+        graph = get_embedding_sync_graph()
+        result_state: EmbeddingSyncState = graph.invoke(initial_state, config=config)
+        results = result_state.get("results") or {}
+        out = {"success": True, "results": results}
+        logger.info("[EmbeddingSyncOrchestrate] 완료 results=%s", results)
+        return out
+    except Exception as e:
+        logger.exception("[EmbeddingSyncOrchestrate] 실패: %s", e)
+        raise

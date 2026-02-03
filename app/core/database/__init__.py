@@ -10,16 +10,11 @@ from core.database.base import Base  # type: ignore
 # Session 관리
 from core.database.session import (  # type: ignore
     get_db,
-    get_v10_db,
-    V1SessionLocal,
-    V10SessionLocal,
+    SessionLocal,
 )
 
 # Engine 관리
-from core.database.engine import (  # type: ignore
-    get_engine,
-    get_v10_engine,
-)
+from core.database.engine import get_engine  # type: ignore
 
 # 믹스인
 from core.database.mixin import (  # type: ignore
@@ -36,22 +31,16 @@ from core.database.connection import (  # type: ignore
 )
 
 # 벡터 스토어
-from core.database.vector_store import (  # type: ignore
-    get_v10_vector_store,
-    get_v1_vector_store,
-)
+from core.database.vector_store import get_vector_store  # type: ignore
 
 __all__ = [
     # Base
     "Base",
     # Session
     "get_db",
-    "get_v10_db",
-    "V1SessionLocal",
-    "V10SessionLocal",
+    "SessionLocal",
     # Engine
     "get_engine",
-    "get_v10_engine",
     # Mixin
     "TimestampMixin",
     "SoftDeleteMixin",
@@ -61,6 +50,5 @@ __all__ = [
     "get_vector_count",
     "check_collection_exists",
     # Vector Store
-    "get_v10_vector_store",
-    "get_v1_vector_store",
+    "get_vector_store",
 ]

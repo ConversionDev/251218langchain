@@ -94,11 +94,13 @@ _load_model_once._model = None  # type: ignore
 _load_model_once._tokenizer = None  # type: ignore
 
 
-def classify(user_message: str) -> Literal["BLOCK", "RULE_BASED", "POLICY_BASED"]:
-    """사용자 메시지를 분류합니다."""
+def classify(user_message: str) -> str:
+    """사용자 메시지를 분류합니다. ChatPolicy.*.value 반환."""
+    from domain.models.enums import ChatPolicy  # type: ignore
+
     model, tokenizer = _load_model_once()
     if model is None or tokenizer is None:
-        return "POLICY_BASED"
+        return ChatPolicy.POLICY_BASED.value
 
     try:
         import torch
@@ -141,21 +143,21 @@ def classify(user_message: str) -> Literal["BLOCK", "RULE_BASED", "POLICY_BASED"
         reply_upper = reply.upper()
         if "액션:" in reply or "ACTION:" in reply_upper:
             if "BLOCK" in reply_upper:
-                return "BLOCK"
+                return ChatPolicy.BLOCK.value
             if "RULE_BASED" in reply_upper or "RULE" in reply_upper:
-                return "RULE_BASED"
+                return ChatPolicy.RULE_BASED.value
             if "POLICY_BASED" in reply_upper or "POLICY" in reply_upper:
-                return "POLICY_BASED"
+                return ChatPolicy.POLICY_BASED.value
         if "BLOCK" in reply_upper:
-            return "BLOCK"
+            return ChatPolicy.BLOCK.value
         if "RULE_BASED" in reply_upper or "RULE" in reply_upper:
-            return "RULE_BASED"
+            return ChatPolicy.RULE_BASED.value
         if "POLICY_BASED" in reply_upper or "POLICY" in reply_upper:
-            return "POLICY_BASED"
+            return ChatPolicy.POLICY_BASED.value
 
-        return "POLICY_BASED"
+        return ChatPolicy.POLICY_BASED.value
     except Exception:
-        return "POLICY_BASED"
+        return ChatPolicy.POLICY_BASED.value
 
 
 def is_classifier_available() -> bool:

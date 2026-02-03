@@ -88,21 +88,16 @@ class Settings(BaseSettings):
     )
 
     # ===================
-    # V10 도메인 설정
+    # DB·마이그레이션 설정
     # ===================
-    v10_auto_migrate: bool = Field(
+    auto_migrate: bool = Field(
         default=True,
-        description="V10 마이그레이션 자동 실행 여부",
+        description="Alembic 마이그레이션 자동 실행 여부",
     )
 
-    v10_migration_revision: str = Field(
+    migration_revision: str = Field(
         default="head",
         description="적용할 마이그레이션 버전 (기본값: head)",
-    )
-
-    v10_collection_name: str = Field(
-        default="v10_soccer_collection",
-        description="V10 전용 벡터 컬렉션 이름",
     )
 
     exaone_model_dir: Optional[str] = Field(
@@ -163,12 +158,52 @@ class Settings(BaseSettings):
     )
 
     # ===================
+    # Upstash Redis (임베딩 job 큐)
+    # ===================
+    upstash_redis_rest_url: Optional[str] = Field(
+        default=None,
+        description="UPSTASH_REDIS_REST_URL (.env에서 로드)",
+    )
+    upstash_redis_rest_token: Optional[str] = Field(
+        default=None,
+        description="UPSTASH_REDIS_REST_TOKEN (.env에서 로드)",
+    )
+
+    # ===================
     # Hub MCP HTTP 서비스 (Fractal Star 아키텍처)
     # hub/mcp = Llama·ExaOne 호출 수신, spokes = hub를 HTTP로 호출
     # ===================
     hub_service_url: str = Field(
         default="http://127.0.0.1:8000",
         description="Hub MCP Base URL (Llama·ExaOne 엔드포인트 호스트)",
+    )
+
+    # ===================
+    # 도메인 MCP URL (Central → MCP → Spoke, call_tool)
+    # ===================
+    chat_mcp_url: str = Field(
+        default="http://127.0.0.1:9011/server",
+        description="Chat MCP 서버 URL (Central이 call_tool로 호출)",
+    )
+    chat_spoke_mcp_url: str = Field(
+        default="http://127.0.0.1:9012/server",
+        description="Chat Spoke MCP URL (Chat MCP가 call_tool로 호출)",
+    )
+    spam_mcp_url: str = Field(
+        default="http://127.0.0.1:9021/server",
+        description="Spam MCP 서버 URL (Central이 call_tool로 호출)",
+    )
+    spam_spoke_mcp_url: str = Field(
+        default="http://127.0.0.1:9022/server",
+        description="Spam Spoke MCP URL (Spam MCP가 call_tool로 호출)",
+    )
+    soccer_mcp_url: str = Field(
+        default="http://127.0.0.1:9031/server",
+        description="Soccer MCP 서버 URL (Central이 call_tool로 호출)",
+    )
+    soccer_spoke_mcp_url: str = Field(
+        default="http://127.0.0.1:9032/server",
+        description="Soccer Spoke MCP URL (Soccer MCP가 call_tool로 호출)",
     )
 
 

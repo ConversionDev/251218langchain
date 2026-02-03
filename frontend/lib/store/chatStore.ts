@@ -20,7 +20,6 @@ interface ChatState {
 
   // 설정
   provider: LLMProvider;
-  useRag: boolean;
 
   // 에이전트 정보
   agentStatus: "unknown" | "healthy" | "error";
@@ -30,7 +29,6 @@ interface ChatState {
   sendMessage: (content: string) => Promise<void>;
   cancelRequest: () => void;
   setProvider: (provider: LLMProvider) => void;
-  toggleRag: () => void;
   clearMessages: () => void;
   clearError: () => void;
   checkAgentHealth: () => Promise<void>;
@@ -44,7 +42,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: "assistant",
       content:
         "안녕하세요! LangGraph 에이전트 챗봇입니다. 🚀\n\n" +
-        "도구 사용·RAG가 가능한 에이전트입니다. 상단에서 제공자와 RAG 옵션을 선택하고 메시지를 보내보세요!",
+        "도구 사용·RAG가 항상 적용된 에이전트입니다. 상단에서 제공자를 선택하고 메시지를 보내보세요!",
       timestamp: new Date(),
     },
   ],
@@ -53,14 +51,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   abortController: null,
 
   provider: "exaone",
-  useRag: true,
 
   agentStatus: "unknown",
   availableProviders: [],
 
   // 메시지 전송
   sendMessage: async (content: string) => {
-    const { messages, provider, useRag } = get();
+    const { messages, provider } = get();
 
     if (!content.trim() || get().isLoading) return;
 
@@ -92,7 +89,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           content: "",
           timestamp: new Date(),
           provider: provider,
-          usedRag: useRag,
+          usedRag: true,
         };
 
         // 스트리밍 메시지를 먼저 추가
@@ -108,16 +105,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
             {
               message: content,
               provider,
-              use_rag: useRag,
               chat_history: chatHistory,
             },
             controller.signal
           )) {
-            if (!semanticAction) {
+            if (semanticAction === undefined) {
               try {
-                const parsed = JSON.parse(chunk) as { semantic_action?: string };
-                if (parsed.semantic_action) {
-                  semanticAction = parsed.semantic_action;
+                const parsed = JSON.parse(chunk) as { semantic_action?: string | null };
+                if (parsed.semantic_action !== undefined) {
+                  semanticAction = parsed.semantic_action ?? undefined;
                   set((state) => ({
                     messages: state.messages.map((msg) =>
                       msg.id === assistantMessageId
@@ -149,7 +145,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const result = await sendAgentMessage({
             message: content,
             provider,
-            use_rag: useRag,
             chat_history: chatHistory,
           });
 
@@ -204,11 +199,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // 제공자 변경
   setProvider: (provider: LLMProvider) => {
     set({ provider });
-  },
-
-  // RAG 토글
-  toggleRag: () => {
-    set((state) => ({ useRag: !state.useRag }));
   },
 
   // 메시지 초기화
