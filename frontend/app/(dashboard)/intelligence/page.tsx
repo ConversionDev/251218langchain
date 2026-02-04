@@ -1,288 +1,210 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useStore } from "@/store/useStore";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { Sparkles, ShieldCheck, ArrowRight, Brain } from "lucide-react";
+import { DNARadarChart } from "@/modules/intelligence/components/DNARadarChart";
+import { DNAGrowthChart } from "@/modules/intelligence/components/DNAGrowthChart";
+import { DNAGrowthTrajectoryChart } from "@/modules/intelligence/components/DNAGrowthTrajectoryChart";
+import { TransitionTrendChart } from "@/modules/intelligence/components/TransitionTrendChart";
+import { DNABadge } from "@/modules/shared/components/DNABadge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { BrainCircuit, TrendingUp, Search, Eye, ArrowRight } from 'lucide-react';
-import Link from 'next/link';
+  getIntelligenceEmployee,
+  getTransitionReadinessSummary,
+  getDNAGrowthHistory,
+  getDNAGrowthTrajectory,
+  getDNAGrowthTrajectoryFromDNA,
+} from "@/modules/intelligence/services";
+import type { IntelligenceEmployee } from "@/modules/intelligence/types";
+import { S2_BENCHMARK } from "@/modules/intelligence/types";
+import type { SuccessDNA } from "@/modules/shared/types";
 
-// Mock 데이터: AI 분석 완료된 직원 리스트
-const mockAnalyzedEmployees = [
-  {
-    id: 1,
-    name: '홍길동',
-    employeeId: 'EMP001',
-    department: '개발팀',
-    position: '시니어 개발자',
-    analyzedDate: '2024-01-15',
-    successDnaMatch: 87.5,
-    status: '완료',
-  },
-  {
-    id: 2,
-    name: '김철수',
-    employeeId: 'EMP002',
-    department: '마케팅팀',
-    position: '마케팅 매니저',
-    analyzedDate: '2024-01-14',
-    successDnaMatch: 92.3,
-    status: '완료',
-  },
-  {
-    id: 3,
-    name: '이영희',
-    employeeId: 'EMP003',
-    department: '인사팀',
-    position: 'HR 전문가',
-    analyzedDate: '2024-01-13',
-    successDnaMatch: 78.9,
-    status: '완료',
-  },
-  {
-    id: 4,
-    name: '박민수',
-    employeeId: 'EMP004',
-    department: '개발팀',
-    position: '주니어 개발자',
-    analyzedDate: '2024-01-12',
-    successDnaMatch: 85.2,
-    status: '완료',
-  },
-  {
-    id: 5,
-    name: '최지은',
-    employeeId: 'EMP005',
-    department: '디자인팀',
-    position: 'UI/UX 디자이너',
-    analyzedDate: '2024-01-11',
-    successDnaMatch: 91.7,
-    status: '완료',
-  },
-  {
-    id: 6,
-    name: '정수진',
-    employeeId: 'EMP006',
-    department: '영업팀',
-    position: '영업 대표',
-    analyzedDate: '2024-01-10',
-    successDnaMatch: 88.4,
-    status: '완료',
-  },
-];
+const DIMENSION_LABELS_KO: Record<keyof SuccessDNA, string> = {
+  leadership: "리더십",
+  technical: "기술력",
+  creativity: "창의성",
+  collaboration: "협업",
+  adaptability: "적응력",
+};
+
+const defaultEmployee = getIntelligenceEmployee();
 
 export default function IntelligencePage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const hydrated = useHydrated();
+  const selectedEmployee = useStore((s) => s.selectedEmployee);
+  const [highlightedDimension, setHighlightedDimension] = useState<keyof SuccessDNA | null>(null);
 
-  const filteredEmployees = mockAnalyzedEmployees.filter(
-    (employee) =>
-      employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.department.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const { employee, summary } = useMemo((): {
+    employee: IntelligenceEmployee;
+    summary: ReturnType<typeof getTransitionReadinessSummary>;
+  } => {
+    const base = defaultEmployee;
+    const emp: IntelligenceEmployee = hydrated && selectedEmployee
+      ? {
+          ...selectedEmployee,
+          successDna: selectedEmployee.successDna ?? base.successDna ?? undefined,
+          ifrsMetrics: selectedEmployee.ifrsMetrics ?? base.ifrsMetrics ?? undefined,
+          transitionTrend: base.transitionTrend,
+        }
+      : base;
 
-  // Success DNA 일치율 통계
-  const avgMatch = mockAnalyzedEmployees.reduce((sum, emp) => sum + emp.successDnaMatch, 0) / mockAnalyzedEmployees.length;
-  const highMatch = mockAnalyzedEmployees.filter(emp => emp.successDnaMatch >= 90).length;
-  const mediumMatch = mockAnalyzedEmployees.filter(emp => emp.successDnaMatch >= 80 && emp.successDnaMatch < 90).length;
-  const lowMatch = mockAnalyzedEmployees.filter(emp => emp.successDnaMatch < 80).length;
+    const sum = getTransitionReadinessSummary(emp);
+    return { employee: emp, summary: sum };
+  }, [selectedEmployee, hydrated]);
 
-  const getMatchColor = (match: number) => {
-    if (match >= 90) return 'text-green-600 dark:text-green-400';
-    if (match >= 80) return 'text-blue-600 dark:text-blue-400';
-    return 'text-yellow-600 dark:text-yellow-400';
-  };
+  const successDna = employee.successDna;
+  const strengthLabel = successDna
+    ? DIMENSION_LABELS_KO[summary.strengthDimension]
+    : "";
 
-  const getMatchBadgeVariant = (
-    match: number
-  ): 'default' | 'outline' | 'destructive' | 'secondary' => {
-    if (match >= 90) return 'default';
-    if (match >= 80) return 'secondary';
-    return 'outline';
-  };
+  if (!hydrated) {
+    return (
+      <div className="space-y-8">
+        <div className="h-10 w-48 animate-pulse rounded bg-muted" />
+        <div className="h-32 animate-pulse rounded-xl bg-muted/50" />
+        <div className="h-80 animate-pulse rounded-xl bg-muted/50" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Talent Intelligence
-          </h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-            AI(EXAONE) 기반 비정형 데이터 분석 및 Success DNA 매칭
-          </p>
+    <div className="space-y-8">
+      <div>
+        <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
+          <Brain className="h-3.5 w-3.5 shrink-0" />
+          <span className="text-xs">Talent Intelligence: AI 기반 비정형 행동 패턴 및 역량 추출 엔진</span>
         </div>
-        <Button variant="outline" asChild>
-          <Link href="/intelligence/matching">
-            <BrainCircuit className="mr-2 h-4 w-4" />
-            매칭 툴
-          </Link>
-        </Button>
+        <h1 className="text-2xl font-bold text-foreground">Talent Intelligence</h1>
+        <p className="mt-1 text-muted-foreground">
+          Success DNA 역량과 IFRS S2 전환 준비도 분석
+        </p>
       </div>
 
-      {/* Success DNA 일치율 통계 카드 */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">평균 일치율</CardTitle>
-            <TrendingUp className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${getMatchColor(avgMatch)}`}>
-              {avgMatch.toFixed(1)}%
+      {/* AI 전환 가능성 리포트 요약 */}
+      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex items-center gap-2 text-primary">
+          <Sparkles className="h-5 w-5" />
+          <h2 className="text-lg font-semibold">AI가 분석한 전환 가능성 리포트</h2>
+        </div>
+        <div className="mt-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">현재 상태 분석</h3>
+            <p className="mt-1 text-foreground leading-relaxed">{summary.currentState}</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">전환(Transition) 제언</h3>
+            <p className="mt-1 text-foreground leading-relaxed">{summary.transitionRecommendation}</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">리스크 알림</h3>
+            <p className="mt-1 text-foreground leading-relaxed">{summary.riskNotice}</p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <div className="rounded-lg bg-primary/10 px-4 py-2">
+            <span className="text-sm text-muted-foreground">전환 가능성</span>
+            <p className="text-2xl font-bold text-primary">{summary.transitionProbability}%</p>
+          </div>
+          {strengthLabel && (
+            <div className="rounded-lg bg-muted/50 px-4 py-2">
+              <span className="text-sm text-muted-foreground">핵심 강점 역량</span>
+              <p className="font-medium text-foreground">{strengthLabel}</p>
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              전체 직원 평균
-            </p>
-          </CardContent>
-        </Card>
+          )}
+          {successDna && (
+            <DNABadge dna={successDna} showTitle={true} />
+          )}
+        </div>
+      </section>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">높은 일치율</CardTitle>
-            <BrainCircuit className="h-4 w-4 text-green-600 dark:text-green-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {highMatch}
+      {/* Success DNA 레이더 차트 + DNA 성장 이력 */}
+      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-foreground">Success DNA 역량 비교</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          본인 vs 전사 고성과자 평균 · 1년 전 대비 성장 서사
+        </p>
+        {successDna && (
+          <div className="mt-6 space-y-8">
+            <div className="grid items-stretch gap-8 lg:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">역량 레이더</h3>
+                <DNARadarChart
+                  data={successDna}
+                  trainingHours={employee.trainingHours ?? undefined}
+                  onDimensionClick={(key) =>
+                    setHighlightedDimension((prev) => (prev === key ? null : key))
+                  }
+                  highlightedDimension={highlightedDimension}
+                />
+              </div>
+              <div className="flex min-h-[320px] min-w-0 flex-1 flex-col">
+                <h3 className="text-sm font-medium text-muted-foreground">역량별 성장 궤적 (지난 1년)</h3>
+                <DNAGrowthTrajectoryChart
+                  data={(() => {
+                    const t = getDNAGrowthTrajectory(employee);
+                    return t.length > 0 ? t : getDNAGrowthTrajectoryFromDNA(successDna);
+                  })()}
+                  highlightDimension={highlightedDimension}
+                  onHighlightChange={setHighlightedDimension}
+                />
+              </div>
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              90% 이상 ({((highMatch / mockAnalyzedEmployees.length) * 100).toFixed(0)}%)
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">보통 일치율</CardTitle>
-            <BrainCircuit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {mediumMatch}
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">DNA 성장 이력 (1년 전 → 현재)</h3>
+              <DNAGrowthChart data={getDNAGrowthHistory(employee)} />
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              80-90% ({((mediumMatch / mockAnalyzedEmployees.length) * 100).toFixed(0)}%)
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        )}
+      </section>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">낮은 일치율</CardTitle>
-            <BrainCircuit className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-              {lowMatch}
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              80% 미만 ({((lowMatch / mockAnalyzedEmployees.length) * 100).toFixed(0)}%)
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 검색 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>검색</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="이름, 사번, 부서로 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-10 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      {/* 전환 준비도 추이 */}
+      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-foreground">전환 준비도 추이 (Transition Trend)</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          최근 12개월 전환 준비도 변화. 목표선(S2 Benchmark)은 해당 산업으로 전환하기 위한 최소 준비 점수이며, 이 위에 있으면 전환 준비 완료로 간주합니다.
+        </p>
+        {employee.ifrsMetrics && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            현재 역량 갭(Skill Gap): <strong className="text-foreground">{employee.ifrsMetrics.skillGap}점</strong>
+            {employee.ifrsMetrics.transitionReadyScore < S2_BENCHMARK ? (
+              <span className="ml-2">
+                — 목표까지 <strong className="text-primary">{S2_BENCHMARK - employee.ifrsMetrics.transitionReadyScore}점</strong> 남음
+              </span>
+            ) : (
+              <span className="ml-2 text-green-600 dark:text-green-400">— S2 목표 달성</span>
+            )}
+          </p>
+        )}
+        {employee.transitionTrend?.length > 0 && (
+          <div className="mt-6">
+            <TransitionTrendChart
+              data={employee.transitionTrend}
+              goalScore={S2_BENCHMARK}
             />
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </section>
 
-      {/* AI 분석 완료된 직원 리스트 */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>최근 AI 분석 완료 직원</CardTitle>
-              <CardDescription>
-                EXAONE AI가 분석한 직원 리스트 및 Success DNA 일치율
-              </CardDescription>
-            </div>
+      {/* 블록체인 안내 + 검증하기 */}
+      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
+            <p className="text-sm text-muted-foreground">
+              이 분석 결과는 블록체인에 기록되어 위변조로부터 보호됩니다.
+            </p>
           </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>사번</TableHead>
-                <TableHead>이름</TableHead>
-                <TableHead>부서</TableHead>
-                <TableHead>직급</TableHead>
-                <TableHead>분석 완료일</TableHead>
-                <TableHead className="text-center">Success DNA 일치율</TableHead>
-                <TableHead>상태</TableHead>
-                <TableHead className="text-right">작업</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredEmployees.map((employee) => (
-                <TableRow key={employee.id}>
-                  <TableCell className="font-medium">{employee.employeeId}</TableCell>
-                  <TableCell>{employee.name}</TableCell>
-                  <TableCell>{employee.department}</TableCell>
-                  <TableCell>{employee.position}</TableCell>
-                  <TableCell>{employee.analyzedDate}</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className={`text-lg font-bold ${getMatchColor(employee.successDnaMatch)}`}>
-                        {employee.successDnaMatch.toFixed(1)}%
-                      </span>
-                      <div className="h-2 w-20 rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className={`h-2 rounded-full ${
-                            employee.successDnaMatch >= 90
-                              ? 'bg-green-500'
-                              : employee.successDnaMatch >= 80
-                              ? 'bg-blue-500'
-                              : 'bg-yellow-500'
-                          }`}
-                          style={{ width: `${employee.successDnaMatch}%` }}
-                        />
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getMatchBadgeVariant(employee.successDnaMatch)}>
-                      {employee.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/intelligence/${employee.id}`}>
-                        <Eye className="mr-2 h-4 w-4" />
-                        상세 보기
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          <Link
+            href={`/credential?id=${employee.id}`}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            검증하기 (Verify)
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

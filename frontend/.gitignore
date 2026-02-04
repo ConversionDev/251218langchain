@@ -10,13 +10,12 @@
 .yarn/build-state.yml
 .pnp.*
 
-# package managers
+# package managers (pnpm only)
 pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-npm-debug.log*
-lerna-debug.log*
 .pnpm-debug.log*
+
+# ignore npm lockfile if someone runs npm by mistake
+package-lock.json
 
 # testing
 /coverage
@@ -43,11 +42,7 @@ dist/
 *.pid.lock
 
 # debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
 # local env files
 .env*.local

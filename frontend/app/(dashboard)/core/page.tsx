@@ -1,175 +1,156 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Building2, Calendar, DollarSign, Search, Plus, Filter } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
+"use client";
 
-export default function CoreHRPage() {
-  // 임시 데이터 (나중에 API로 대체)
-  const employees = [
-    { id: 1, name: '홍길동', department: '개발팀', position: '시니어 개발자', status: '재직', joinDate: '2020-01-15' },
-    { id: 2, name: '김철수', department: '마케팅팀', position: '마케팅 매니저', status: '재직', joinDate: '2019-03-20' },
-    { id: 3, name: '이영희', department: '인사팀', position: 'HR 전문가', status: '재직', joinDate: '2021-06-10' },
-    { id: 4, name: '박민수', department: '개발팀', position: '주니어 개발자', status: '재직', joinDate: '2023-09-01' },
-    { id: 5, name: '최지은', department: '디자인팀', position: 'UI/UX 디자이너', status: '재직', joinDate: '2022-02-14' },
-  ];
+import { useEffect, useState } from "react";
+import { Plus, Database } from "lucide-react";
+import { useStore } from "@/store/useStore";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { INITIAL_EMPLOYEES } from "@/modules/core/services";
+import { ISOComplianceDashboard } from "@/modules/core/components/ISOComplianceDashboard";
+import { EmployeeListTable } from "@/modules/core/components/EmployeeListTable";
+import { EmployeeFormModal } from "@/modules/core/components/EmployeeFormModal";
+import { ProfileSheet } from "@/modules/hr-profile/components";
+import { Button } from "@/components/ui/button";
+import type { Employee } from "@/modules/shared/types";
+
+export default function CorePage() {
+  const hydrated = useHydrated();
+  const { employees, setEmployees, addEmployee, updateEmployee, deleteEmployee, setSelectedEmployee } = useStore();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
+  const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
+  const profileEmployee = profileEmployeeId ? employees.find((e) => e.id === profileEmployeeId) ?? null : null;
+
+  // 초기 로드 시: 목데이터(E001~E010)에 있는 직원은 항상 INITIAL_EMPLOYEES 기준으로 덮어써
+  // 수아·미래 등 학력/경력이 항상 표시되도록 함 (persist에 resume 없이 저장된 경우 대비)
+  useEffect(() => {
+    if (!hydrated) return;
+    if (employees.length === 0) {
+      setEmployees(INITIAL_EMPLOYEES);
+      return;
+    }
+    const initialById = new Map(INITIAL_EMPLOYEES.map((e) => [e.id, e]));
+    const merged = employees.map((e) => {
+      const seed = initialById.get(e.id);
+      if (!seed) return e;
+      return seed;
+    });
+    const changed =
+      merged.length !== employees.length ||
+      merged.some((e, i) => e !== employees[i]);
+    if (changed) setEmployees(merged);
+  }, [hydrated, employees, setEmployees]);
+
+  const nextId = (() => {
+    const ids = employees.map((e) => e.id);
+    const num = ids
+      .map((s) => parseInt(s.replace(/\D/g, ""), 10))
+      .filter((n) => !Number.isNaN(n));
+    const max = num.length ? Math.max(...num) : 10;
+    return `E${String(max + 1).padStart(3, "0")}`;
+  })();
+
+  const handleSave = (employee: Employee) => {
+    if (editingEmployee) {
+      updateEmployee(employee.id, employee);
+    } else {
+      addEmployee(employee);
+    }
+    setEditingEmployee(null);
+    setModalOpen(false);
+  };
+
+  const handleEdit = (emp: Employee) => {
+    setEditingEmployee(emp);
+    setModalOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("이 직원 데이터를 삭제할까요?")) {
+      deleteEmployee(id);
+      setSelectedEmployee(null);
+    }
+  };
+
+  const handleAddNew = () => {
+    setEditingEmployee(null);
+    setModalOpen(true);
+  };
+
+  const handleOpenProfile = (emp: Employee) => {
+    setProfileEmployeeId(emp.id);
+    setProfileSheetOpen(true);
+  };
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-8">
+        <div className="h-10 w-48 animate-pulse rounded bg-muted" />
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="h-28 animate-pulse rounded-xl bg-muted/50" />
+          <div className="h-28 animate-pulse rounded-xl bg-muted/50" />
+          <div className="h-28 animate-pulse rounded-xl bg-muted/50" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Core HR
-          </h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-            정형 HR 데이터 관리 및 직원 정보 시스템
+          <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
+            <Database className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs">Structured Root: ISO-30414 표준 기반 인사 정형 데이터 시스템</span>
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">Core HR</h1>
+          <p className="mt-1 text-muted-foreground">
+            ISO 30414 인적 자본 공시 준수 현황
           </p>
         </div>
-        <Button asChild>
-          <Link href="/core/employees/new">
-            <Plus className="mr-2 h-4 w-4" />
-            신규 직원 등록
-          </Link>
+        <Button onClick={handleAddNew} className="inline-flex items-center gap-2">
+          <Plus className="h-4 w-4" />
+          직원 등록
         </Button>
       </div>
 
-      {/* 통계 카드 */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">총 직원 수</CardTitle>
-            <Users className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              <span className="text-green-600 dark:text-green-400">+12</span> 이번 달
-            </p>
-          </CardContent>
-        </Card>
+      <ISOComplianceDashboard employees={employees.length > 0 ? employees : INITIAL_EMPLOYEES} />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">부서 수</CardTitle>
-            <Building2 className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              조직 구조
-            </p>
-          </CardContent>
-        </Card>
+      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-foreground">직원 리스트</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          행 클릭 또는 상세 버튼으로 이력 상세를 확인할 수 있습니다. 수정/삭제는 행 내 버튼을 사용하세요.
+        </p>
+        <div className="mt-4">
+          <EmployeeListTable
+            employees={employees}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onOpenProfile={handleOpenProfile}
+          />
+        </div>
+      </section>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">출근률</CardTitle>
-            <Calendar className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">96.5%</div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              이번 달 평균
-            </p>
-          </CardContent>
-        </Card>
+      <ProfileSheet
+        employee={profileEmployee}
+        open={profileSheetOpen}
+        onOpenChange={(open) => {
+          setProfileSheetOpen(open);
+          if (!open) setProfileEmployeeId(null);
+        }}
+        onResumeUpdate={(id, resume) => updateEmployee(id, { resume })}
+      />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">평균 급여</CardTitle>
-            <DollarSign className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₩4.2M</div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              월 평균
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 빠른 액션 */}
-      <div className="grid gap-6 md:grid-cols-4">
-        <Link href="/core/employees">
-          <Card className="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-base">직원 관리</CardTitle>
-              <CardDescription>직원 목록 및 정보 관리</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/core/organization">
-          <Card className="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-base">조직도</CardTitle>
-              <CardDescription>조직 구조 시각화 및 관리</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/core/payroll">
-          <Card className="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-base">급여 관리</CardTitle>
-              <CardDescription>급여 계산 및 관리</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/core/attendance">
-          <Card className="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-base">근태 관리</CardTitle>
-              <CardDescription>출퇴근 및 근태 관리</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-      </div>
-
-      {/* 최근 직원 목록 */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>최근 직원 목록</CardTitle>
-              <CardDescription>최근 등록된 직원 정보</CardDescription>
-            </div>
-            <Link href="/core/employees">
-              <Button variant="outline" size="sm">
-                전체 보기
-              </Button>
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {employees.slice(0, 5).map((employee) => (
-              <div
-                key={employee.id}
-                className="flex items-center justify-between rounded-lg border border-slate-200 p-4 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-                    <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{employee.name}</p>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      {employee.department} · {employee.position}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Badge variant="outline">{employee.status}</Badge>
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    입사일: {employee.joinDate}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <EmployeeFormModal
+        open={modalOpen}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          if (!open) setEditingEmployee(null);
+        }}
+        employee={editingEmployee}
+        onSave={handleSave}
+        nextId={nextId}
+      />
     </div>
   );
 }

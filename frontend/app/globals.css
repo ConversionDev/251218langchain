@@ -2,134 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 기본 리셋 및 전역 스타일 */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html,
-body {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-  background: #0a0a1a;
-  color: #e0e0e0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* 스크롤바 스타일 (Webkit 브라우저) */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(102, 126, 234, 0.3);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(102, 126, 234, 0.5);
-}
-
-/* 포커스 스타일 */
-:focus-visible {
-  outline: 2px solid #667eea;
-  outline-offset: 2px;
-}
-
-/* 선택 스타일 */
-::selection {
-  background: rgba(102, 126, 234, 0.3);
-  color: #fff;
-}
-
-/* 링크 기본 스타일 */
-a {
-  color: #667eea;
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-/* 버튼 기본 리셋 */
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
-
-/* 입력 필드 기본 리셋 */
-input,
-textarea,
-select {
-  font-family: inherit;
-}
-
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --card-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --border: 214 32% 91%;
+    --ring: 221 83% 53%;
     --radius: 0.5rem;
+    /* 차트: 라이트 모드 */
+    --chart-tooltip-bg: 0 0% 100%;
+    --chart-tooltip-border: 214 32% 91%;
+    --chart-cursor-fill: 214 32% 91%;
+    --chart-cursor-opacity: 0.25;
   }
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 14%;
+    --card-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 17%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --border: 217 33% 22%;
+    --ring: 217 91% 60%;
+    /* 차트: 다크 모드 (Slate-900/Zinc-950 톤) */
+    --chart-tooltip-bg: 222 47% 9%;
+    --chart-tooltip-border: 215 28% 17%;
+    --chart-cursor-fill: 215 20% 65%;
+    --chart-cursor-opacity: 0.2;
   }
+}
+
+/* 다크모드: 막대 채도 완화 */
+.dark .recharts-bar-rectangle {
+  opacity: 0.92;
+}
+
+/* 다크모드: 역량 궤적 차트 선 은은한 스트로크 글로우 */
+.dark .dna-trajectory-chart .recharts-line path,
+.dark .dna-trajectory-chart .recharts-curve {
+  filter: drop-shadow(0 0 8px hsl(var(--primary) / 0.35));
+}
+.dark .dna-trajectory-chart .recharts-dot circle,
+.dark .dna-trajectory-chart .recharts-line .recharts-dot {
+  filter: drop-shadow(0 0 6px hsl(var(--primary) / 0.4));
 }
 
 @layer base {
@@ -137,16 +63,124 @@ select {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
 }
 
-/* 로딩 애니메이션 */
-@keyframes loading {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
+/* 공시 리포트 미리보기: 라이트/다크 공통으로 용지 스타일 유지 (잘림 방지 + 다크에서도 가독) */
+.report-preview-modal {
+  background: #e2e8f0 !important;
+}
+.report-preview-modal .report-paper {
+  background: #ffffff !important;
+  color: #0f172a;
+}
+.dark .report-preview-modal .report-paper,
+.dark .report-preview-modal .report-paper * {
+  border-color: #e2e8f0 !important;
+  color: inherit;
+}
+.dark .report-preview-modal .report-paper h1,
+.dark .report-preview-modal .report-paper h2,
+.dark .report-preview-modal .report-paper .font-bold {
+  color: #0f172a !important;
+}
+.dark .report-preview-modal .report-paper p,
+.dark .report-preview-modal .report-paper td,
+.dark .report-preview-modal .report-paper th,
+.dark .report-preview-modal .report-paper span {
+  color: #334155 !important;
+}
+.dark .report-preview-modal .report-paper .text-slate-500,
+.dark .report-preview-modal .report-paper .text-slate-400 {
+  color: #64748b !important;
+}
+.dark .report-preview-modal .report-paper section .rounded-lg,
+.dark .report-preview-modal .report-paper .bg-slate-50 {
+  background-color: #f1f5f9 !important;
+}
+.dark .report-preview-modal .report-paper .bg-slate-50\/50,
+.dark .report-preview-modal .report-paper .bg-slate-50\/30 {
+  background-color: rgba(248, 250, 252, 0.8) !important;
+}
+
+/* 공시 리포트 전용 페이지: 다크 모드 시 테마 색상 적용 (인쇄 시에는 흰 배경 유지) */
+.dark .performance-report-page .performance-report-main {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: 0.5rem;
+}
+.dark .performance-report-page .performance-report-main .text-slate-900,
+.dark .performance-report-page .performance-report-main .text-slate-700,
+.dark .performance-report-page .performance-report-main .text-slate-600 {
+  color: hsl(var(--foreground)) !important;
+}
+.dark .performance-report-page .performance-report-main .text-slate-500,
+.dark .performance-report-page .performance-report-main .text-slate-400 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+.dark .performance-report-page .performance-report-main .bg-slate-50,
+.dark .performance-report-page .performance-report-main .bg-slate-50\/50,
+.dark .performance-report-page .performance-report-main .bg-slate-50\/30 {
+  background: hsl(var(--muted)) !important;
+}
+.dark .performance-report-page .performance-report-main .border-slate-200,
+.dark .performance-report-page .performance-report-main .border-slate-100 {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* 이사회 보고 모드(전체화면): flex 레이아웃 고정, 겹침 방지, 문서형 가독성 */
+.report-mode-fullscreen {
+  background: #ffffff !important;
+}
+.report-mode-fullscreen.report-paper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.report-mode-layout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.report-mode-fullscreen .report-mode-layout section {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+}
+.report-mode-fullscreen {
+  font-size: 1.1em;
+}
+.report-mode-fullscreen .text-xs {
+  font-size: 0.95em;
+}
+.report-mode-fullscreen .text-xl {
+  font-size: 1.35rem;
+}
+
+.report-grid-bg {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.5) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.report-grid-bg.report-grid-bg-official {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.8) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.8) 1px, transparent 1px);
+  background-size: 24px 24px;
+  position: relative;
+}
+
+.report-grid-bg.report-grid-bg-official::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* 은은한 워터마크: 작은 크기·매우 낮은 투명도로 콘텐츠 가림 방지 */
+  background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23999' fill-opacity='0.04' font-size='32' font-family='system-ui' transform='rotate(-25)'%3EOFFICIAL%3C/text%3E%3C/svg%3E");
+  background-repeat: repeat;
+  pointer-events: none;
 }

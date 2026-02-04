@@ -14,13 +14,13 @@ LangChain과 PGVector를 연동한 챗봇 서비스입니다.
 ### 1. 의존성 설치
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 2. 개발 서버 실행
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 브라우저에서 [http://localhost:3000](http://localhost:3000)을 열어 확인하세요.
@@ -28,8 +28,8 @@ npm run dev
 ### 3. 프로덕션 빌드
 
 ```bash
-npm run build
-npm start
+pnpm build
+pnpm start
 ```
 
 ## 환경 변수 설정

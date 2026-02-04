@@ -1,39 +1,35 @@
-import type { Metadata, Viewport } from "next";
-import "./globals.css";
+import type { Metadata } from "next";
+import { Toaster } from "sonner";
+import { RegisterSw } from "@/components/RegisterSw";
+import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Success DNA",
-  description: "Success DNA 플랫폼",
-  manifest: "/manifest.json",
-  icons: {
-    icon: "/favicon.ico",
-    apple: "/icon-192x192.png",
-  },
+  title: "Success DNA | Enterprise HR Solution",
+  description: "엔터프라이즈 HR 솔루션 - Core, Intelligence, Credential, Performance",
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: "#0f172a",
-};
+const themeScript = `
+  (function() {
+    const key = 'theme';
+    const stored = localStorage.getItem(key);
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = stored === 'dark' || (stored !== 'light' && prefersDark);
+    document.documentElement.classList.toggle('dark', dark);
+  })();
+`;
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0a0a1a" />
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>
+      <body className="min-h-screen bg-background font-sans text-foreground">
         {children}
+        <Toaster richColors position="top-right" closeButton duration={1500} />
+        <RegisterSw />
       </body>
     </html>
   );
