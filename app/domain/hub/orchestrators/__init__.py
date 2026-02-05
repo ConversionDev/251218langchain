@@ -6,6 +6,7 @@ Hub Orchestrators — v1 실행 진입점
 - spam_orchestrator: 스팸 감지 워크플로우 (run_spam_detection, SpamGatewayService, 그래프)
 - graph_orchestrator: 채팅 그래프 빌더 (도구·노드·체크포인터)
 - soccer_orchestrator: 축구 데이터 처리 (Player, Stadium, Team, Schedule)
+- disclosure_orchestrator: ISO 30414 disclosure RAG 적재 (LangGraph)
 """
 
 from .chat_orchestrator import (
@@ -30,6 +31,11 @@ from .graph_orchestrator import (
     get_thread_config,
     should_use_tools,
 )
+from .disclosure_orchestrator import (
+    build_disclosure_ingest_graph,
+    get_disclosure_ingest_graph,
+    run_disclosure_ingest_orchestrate,
+)
 from .soccer_orchestrator import (
     PlayerOrchestrator,
     ScheduleOrchestrator,
@@ -46,6 +52,10 @@ from .soccer_orchestrator import (
 )
 
 __all__ = [
+    # disclosure
+    "build_disclosure_ingest_graph",
+    "get_disclosure_ingest_graph",
+    "run_disclosure_ingest_orchestrate",
     # classification
     "classify",
     "is_classifier_available",

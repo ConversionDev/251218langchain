@@ -15,6 +15,7 @@ def register_routes(
     mcp_app,
     *,
     chat_router,
+    disclosure_router,
     email_router,
     soccer_router,
 ) -> None:
@@ -24,6 +25,7 @@ def register_routes(
 
     # 통합 API: prefix /api 로 일원화
     app.include_router(chat_router, prefix="/api")  # /api/agent/...
+    app.include_router(disclosure_router, prefix="/api")  # /api/disclosure/...
     app.include_router(email_router, prefix="/api")  # /api/mail/...
     app.include_router(soccer_router, prefix="/api")  # /api/soccer/...
 

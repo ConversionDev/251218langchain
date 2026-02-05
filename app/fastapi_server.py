@@ -430,6 +430,7 @@ def ensure_rag_initialized() -> None:
 # 게이트웨이: 라우터/MCP 등록 (통합: api/routers + MCP)
 from api.routers import (  # type: ignore  # noqa: E402
     chat_router,
+    disclosure_router,
     email_router,
     soccer_router,
 )
@@ -439,9 +440,9 @@ register_routes(
     app,
     mcp_app,
     chat_router=chat_router,
+    disclosure_router=disclosure_router,
     email_router=email_router,
     soccer_router=soccer_router,
-
 )
 
 

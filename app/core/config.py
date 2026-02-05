@@ -57,6 +57,11 @@ class Settings(BaseSettings):
         description="벡터 컬렉션 이름",
     )
 
+    disclosure_collection_name: str = Field(
+        default="disclosure_collection",
+        description="ISO 30414 등 공시 문서 전용 벡터 컬렉션 이름",
+    )
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def connection_string(self) -> str:

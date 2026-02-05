@@ -1,0 +1,590 @@
+© ISO 2018
+Human resource management — 
+Guidelines for internal and external 
+human capital reporting
+Management des ressources humaines — Lignes directrices sur le 
+bilan du capital humain interne et externe
+INTERNATIONAL 
+STANDARD
+ISO
+30414
+First edition
+2018-12
+Reference number
+ISO 30414:2018(E)
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+﻿
+ii
+© ISO 2018 – All rights reserved
+COPYRIGHT PROTECTED DOCUMENT
+©  ISO 2018
+All rights reserved. Unless otherwise specified, or required in the context of its implementation, no part of this publication may 
+be reproduced or utilized otherwise in any form or by any means, electronic or mechanical, including photocopying, or posting 
+on the internet or an intranet, without prior written permission. Permission can be requested from either ISO at the address 
+below or ISO’s member body in the country of the requester.
+ISO copyright office
+CP 401 • Ch. de Blandonnet 8
+CH-1214 Vernier, Geneva
+Phone: +41 22 749 01 11
+Fax: +41 22 749 09 47
+Email: copyright@iso.org
+Website: www.iso.org
+Published in Switzerland
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+﻿
+Foreword.........................................................................................................................................................................................................................................iv
+Introduction...................................................................................................................................................................................................................................v
+1	
+Scope..................................................................................................................................................................................................................................1
+2	
+Normative references.......................................................................................................................................................................................1
+3 
+Terms and definitions......................................................................................................................................................................................1
+4	
+Human capital reporting process........................................................................................................................................................2
+4.1	
+General............................................................................................................................................................................................................ 2
+4.2	
+Guiding principles................................................................................................................................................................................. 3
+4.3	
+Target groups and stakeholder relevance........................................................................................................................ 3
+4.4	
+Tools and procedures for data collection.......................................................................................................................... 4
+4.5	
+Reporting structure............................................................................................................................................................................. 5
+4.5.1	
+Internal and external reporting........................................................................................................................... 5
+4.5.2	
+Comparability of reporting...................................................................................................................................... 6
+4.6	
+Risk management.................................................................................................................................................................................. 6
+4.7	
+Reporting areas....................................................................................................................................................................................... 8
+4.7.1	
+General...................................................................................................................................................................................... 8
+4.7.2	
+Compliance and ethics..............................................................................................................................................11
+4.7.3	
+Costs.........................................................................................................................................................................................12
+4.7.4	
+Diversity................................................................................................................................................................................14
+4.7.5	
+Leadership...........................................................................................................................................................................16
+4.7.6	
+Organizational culture..............................................................................................................................................16
+4.7.7	
+Organizational health, safety and well-being........................................................................................17
+4.7.8	
+Productivity........................................................................................................................................................................20
+4.7.9	
+Recruitment, mobility and turnover.............................................................................................................22
+4.7.10	 Skills and capabilities................................................................................................................................................24
+4.7.11	 Succession planning....................................................................................................................................................26
+4.7.12	 Workforce availability...............................................................................................................................................27
+4.8	
+Reporting documents......................................................................................................................................................................29
+4.9	
+Reporting frequency........................................................................................................................................................................29
+Annex A (informative) Recommendations specially for small and medium-sized enterprises............30
+Annex B (informative) Examples of human capital reports with a combination of metrics....................31
+Bibliography..............................................................................................................................................................................................................................34
+© ISO 2018 – All rights reserved
+iii
+Contents
+Page
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+Foreword
+ISO (the International Organization for Standardization) is a worldwide federation of national standards 
+bodies (ISO member bodies). The work of preparing International Standards is normally carried out 
+through ISO technical committees. Each member body interested in a subject for which a technical 
+committee has been established has the right to be represented on that committee. International 
+organizations, governmental and non-governmental, in liaison with ISO, also take part in the work. 
+ISO collaborates closely with the International Electrotechnical Commission (IEC) on all matters of 
+electrotechnical standardization. 
+The procedures used to develop this document and those intended for its further maintenance are 
+described in the ISO/IEC Directives, Part 1. In particular, the different approval criteria needed for the 
+different types of ISO documents should be noted. This document was drafted in accordance with the 
+editorial rules of the ISO/IEC Directives, Part 2 (see www​.iso​.org/directives).
+Attention is drawn to the possibility that some of the elements of this document may be the subject of 
+patent rights. ISO shall not be held responsible for identifying any or all such patent rights. Details of 
+any patent rights identified during the development of the document will be in the Introduction and/or 
+on the ISO list of patent declarations received (see www​.iso​.org/patents).
+Any trade name used in this document is information given for the convenience of users and does not 
+constitute an endorsement. 
+For an explanation of the voluntary nature of standards, the meaning of ISO specific terms and 
+expressions related to conformity assessment, as well as information about ISO's adherence to the 
+World Trade Organization (WTO) principles in the Technical Barriers to Trade (TBT) see www​.iso​
+.org/iso/foreword​.html.
+This document was prepared by Technical Committee ISO/TC 260, Human resource management.
+Any feedback or questions on this document should be directed to the user’s national standards body. A 
+complete listing of these bodies can be found at www​.iso​.org/members​.html.
+﻿
+iv
+© ISO 2018 – All rights reserved
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+Introduction
+Human capital includes the cumulative knowledge, skills and abilities of an organization’s people and 
+the impact on an organization’s long-term performance, as well as competitive advantage through 
+optimizing organizational outcomes.
+The measurement of human capital facilitates the ability of an organization to manage one of its most 
+critical resources and risks, people. Research shows that organizations that do not manage their human 
+capital may damage the ability and opportunity for the business to create long-term and sustainable 
+value achieved through their people[1].
+This document is guided by the principles of human rights at work[2], and coupled with the human 
+governance standard (ISO 30408[3]), it establishes guidelines on human capital data capture, 
+measurement, analysis and reporting.
+The benefits of a standardized approach to human capital reporting (HCR) include
+—	 the use of standardized and agreed data, which describes organizational value in a broadly 
+comparable sense;
+—	 the improvement of HRM processes that support good practice in establishing and maintaining 
+positive employment relations;
+—	 greater understanding of the financial and non-financial returns that are generated as a result of 
+investments in human capital;
+—	 accessible and transparent reporting of human capital data and insights that enhances internal 
+and external understanding and assessment of an organization’s human capital and its present and 
+future performance.
+HCR is following guiding principles which are outlined in 4.2.
+﻿
+© ISO 2018 – All rights reserved
+v
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+Human resource management — Guidelines for internal 
+and external human capital reporting
+1	 Scope
+This document provides guidelines for internal and external human capital reporting (HCR). The 
+objective is to consider and to make transparent the human capital contribution to the organization 
+in order to support sustainability of the workforce. This document is applicable to all organizations, 
+regardless of the type, size, nature or complexity of the business, whether in the public, private or 
+voluntary sector, or a not-for-profit organization.
+This document provides guidelines on the following core HCR areas:
+—	 compliance and ethics;
+—	 costs;
+—	 diversity;
+—	 leadership;
+—	 organizational culture;
+—	 organizational health, safety and well-being;
+—	 productivity;
+—	 recruitment, mobility and turnover;
+—	 skills and capabilities;
+—	 succession planning;
+—	 workforce availability.
+NOTE	
+These guidelines and associated metrics can result in better organizational performance. However, 
+some organizations do not have the objective or the capacity to use the entire set of metrics. Recommendations 
+for SME use are provided in Table 2 and Annex A.
+2	 Normative references
+The following documents are referred to in the text in such a way that some or all of their content 
+constitutes requirements of this document. For dated references, only the edition cited applies. For 
+undated references, the latest edition of the referenced document (including any amendments) applies.
+ISO 30400, Human resource management — Vocabulary
+3 Terms and definitions
+For the purposes of this document, the terms and definitions given in ISO 30400 and the following apply.
+ISO and IEC maintain terminological databases for use in standardization at the following addresses:
+—	 ISO Online browsing platform: available at https:​//www​.iso​.org/obp
+—	 IEC Electropedia: available at http:​//www​.electropedia​.org/
+INTERNATIONAL STANDARD
+ISO 30414:2018(E)
+© ISO 2018 – All rights reserved
+1
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+3.1
+employee
+individual who is, according to national law or practices, employed by the organization
+Note 1 to entry: Employees are often reported as FTE (full time equivalents) or headcount.
+Note 2 to entry: An employment contract as recognized under national law or practice is a written, verbal or 
+implicit agreement (that is, when all the characteristics of employment are present but without a written or 
+witnessed verbal contract).
+3.2
+supervised worker
+individual who performs regular work on-site for, or on behalf of, the organization but is not recognized 
+as an employee under national law or practice
+EXAMPLE	
+Supervised workers include, for example, temporary/contingent workers.
+3.3
+independent contractors
+persons or organizations working for an organization, a contractor or a sub-contractor, with a 
+relationship determined by an agreement
+EXAMPLE	
+Independent contractors include, for example, consultants, suppliers and gig-workers.
+3.4
+small and medium-sized enterprise
+SME
+organization of a small or medium size, as defined by the recognized authority within the country 
+or region
+Note  1  to  entry:  Organization size is determined by multiple dimensions including turnover, balance sheet, 
+resources, size of economy and number of employees.
+[SOURCE: ISO/IEC Guide 17:2016, 3.1, modified — definition changed and NOTE replaced]
+4	 Human capital reporting process
+4.1	 General
+In the context of the organization’s strategy, values, leadership and business model, the following should 
+be considered:
+1.	
+The principles which guide the measurement, analysis and reporting process. 4.2 provides guiding 
+principles.
+NOTE	
+A useful reference point is ISO 30408:2016, 6.1.
+2.	
+Relevant target groups and stakeholders. 4.3 identifies the relevant stakeholders.
+3.	
+Responsibilities for HCR and a process for collecting relevant data. 4.4 provides recommendations 
+for tools and procedures for data collection.
+4.	
+The distinction between internal and external reporting. 4.5 gives further recommendations for 
+reporting structures.
+5.	
+Human-capital-related risks and opportunities. 4.6 provides an overview about human capital 
+risk areas.
+6.	
+Quantitative metrics relevant to human capital issues, which should be consistent over time. 4.7 
+provides classification of human capital areas for potential metrics, differentiated according to 
+﻿
+2
+© ISO 2018 – All rights reserved
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+internal and external reporting. Annex A provides special recommendations for the adaption of the 
+HCR-guidelines for SMEs.
+7.	
+Suitable reporting document [e.g. annual report, HR report (see ISO 30408), sustainability report, 
+corporate social responsibility report, homepage], that can be used for internal and external 
+reporting. The type of reporting mechanism for internal and external data includes formal 
+statutory reporting methods, physical, digital, online or machine-readable formats as well as 
+scorecard presentation of KPIs. 4.8 gives recommendations for the use of reporting documents.
+8.	
+Reporting frequency. 4.9 gives recommendations for reporting frequencies.
+HCR provides insight that will help external and internal stakeholders interpret the metrics, while 
+disclosing any material risks or any other material information related to human capital.
+In some instances, the context or strategy of an organization may require the identification of other key 
+metrics and the necessary data elements that need to be captured and reported. The captured human 
+capital metrics signal the consistency between an organization’s strategy and its governance.
+The external and internal metrics can support decision-making processes and management of human-
+capital-related issues. HCR provides material information and insight that will help external and 
+internal stakeholders to interpret the metrics and identify the organization’s human capital risks and 
+opportunities.
+4.2	 Guiding principles
+The following guiding principles apply:
+a)	 strategic focus and materiality of human capital metrics that are consonant with the organization’s 
+strategy and values;
+b)	 an approach that is practicable to the organization’s operating model and external context, based on 
+a cost benefit comparison including opportunity cost (e.g. time, quality, volume) analysis (financial 
+and/or non‐financial value);
+c)	
+relevance for organizations of all types, sizes, sectors and geographic locations;
+d)	 valid and reliable evidence‐based measures and the integration of high-quality data to provide 
+insight that informs business decision making;
+e)	 comparability of reported metrics across similar organization types and sectors (see 4.5.2);
+f)	
+HCR narrative based on the concept of materiality that identifies the important aspects for the 
+organization and its internal and external stakeholders (see 4.9);
+g)	 transparency of reporting that clearly identifies human capital risks and opportunities to key 
+governance bodies and stakeholders.
+It is useful and advisable to ensure that established good practice on information, communication and 
+consultation between management and workforce representatives is respected and protected during 
+HCR and the implementation of any related changes.
+NOTE	
+Additional guidance on involvement of employee representatives is given in ISO 45001:2018, 5.4[5].
+4.3	 Target groups and stakeholder relevance
+Given the diverse interests of the multitude of stakeholders of an organization, these guidelines consist 
+of a common set of metrics (for human capital), with relevance for internal and external stakeholders.
+With increasing investment in human capital and its potential impact on organizational performance, 
+sustainability and future viability, there is increasing interest in human capital measurements among 
+internal and external stakeholders.
+﻿
+© ISO 2018 – All rights reserved
+3
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+Internal stakeholders include the workforce and their representatives, corporate governance bodies 
+(e.g. top management, supervisory boards, board members).
+External stakeholders include individuals looking for employment, the community and investors who 
+also have an interest in external HCR. Investors are particularly interested in using strategic human 
+capital metrics that can help to determine the relationship between human capital investment and the 
+impact on the success of the organization.
+A HCR framework discloses financial and social value creation by an organization and provides evidence 
+of underlying strengths or risks that might otherwise be overlooked in conventional headcount 
+reporting.
+Figure  1 gives an overview of the elements of HCR. The figure includes the context in which the 
+organization operates with consideration given to the macro, meso and micro elements influencing HCR.
+Figure 1 — HCR for internal and external stakeholders
+4.4	 Tools and procedures for data collection
+Data collection and processing for HCR is a prerequisite for creating transparency through key metrics. 
+This applies especially when data are acquired and consolidated from across the organizational 
+networks and/or national borders.
+The provision of HCR metrics requires not only a suitable organizational infrastructure but also cross-
+functional cooperation, regardless of size and type of organization.
+In principle, HR has responsibility for HCR data quality, integrity and security as follows:
+a)	 Reporting responsibility: qualitative responsibility for the content and form of HCR, including the 
+definition of data.
+b)	 System responsibility: guaranteeing continuing functionality of those systems that supply data by 
+means of a description of requirements to be met by those systems/partners/facilities that supply 
+data, oriented toward the definitions of HCR.
+﻿
+4
+© ISO 2018 – All rights reserved
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+c)	
+Resource and content responsibility: ability to prioritize (order) and decide whether, which and in 
+what form key metrics should be selected with regard to
+—	 causal relationship and correlation of data with the intended indication;
+—	 reliability of the sources in terms of data quality;
+—	 need, meaning and interpretability.
+d)	 Interpretation, insight and communication responsibility: lead on and support the interpretation 
+of human capital data and the development of insights and how these are to be communicated.
+The reporting and communication responsibility, as well as the resource and content, traditionally 
+lie with HR. Departments that are involved in finance, governance and information systems are 
+increasingly involved in the delivery of HCR, depending on the type and size of an organization.
+The system-related responsibility for the procurement and processing of data rests either with the HR 
+manager, the internal IT department of the organization and/or external service providers. For HCR 
+required (also non-IT-supported) systems usually include, but are not limited to,
+a)	 systems to store and process human capital master data (such as demographic data as authorized/
+prevented or restricted by data protection mechanisms in various jurisdictions), systems to process 
+time management data (e.g. normal weekly working time, hours of attendance paid/unpaid, hours 
+of absence paid/unpaid, number of public holidays);
+b)	 systems to calculate wages and salaries (e.g. wage and salary expenditures, expenditures for social 
+services, statutory levies);
+c)	
+systems to maintain and manage organizational data (e.g. cost centres, departments, locations, 
+enterprises, countries, regions);
+d)	 special systems which are required for the management and execution of HR processes, including:
+—	 workforce planning (demand and supply gap analysis), recruitment processes (e.g. vacancies, 
+duration of the recruitment process, number of applicants);
+—	 HR development (e.g. analysis of potential, career and succession planning, learning and 
+development, retention).
+The systems identified above are frequently referred to as human resource information systems (HRIS).
+In addition, there are further data sources for HCR. These can be finance or business administration 
+systems or externally available data sources (rankings, benchmarks) but also the results from 
+organization-internal or external surveys (e.g. employee surveys, empirical surveys on specific topics).
+Challenges of implementing HCR include the competence of the people involved in all parts of the 
+process; the availability, suitability, quality and security of human capital data and the transfer of data 
+available within and outside of the organization into a system which permits various interfaces with 
+the data-supplying sources.
+HCR comprises contextual, procedural and technical dimensions. Alongside the selection, development 
+and definition of the key figures and key performance indicators (KPI), the aim is to develop techniques 
+to determine, consolidate and store data, as well as to evaluate and extrapolate analyses and 
+recommended courses of action.
+4.5	 Reporting structure
+4.5.1	
+Internal and external reporting
+Internal and external HCR is key to demonstrating how the organization values its people and also the 
+sustainable value proposition it offers to various stakeholders.
+﻿
+© ISO 2018 – All rights reserved
+5
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+Internal HCR provides an overview of key human capital aspects to an organization’s people, 
+management and workforce representation, for example unions or work councils. All internal 
+stakeholders should get a clear and transparent picture about their organization, the opportunities 
+and challenges regarding human capital. HCR will contain information that internal stakeholders can 
+leverage with external stakeholders thus enhancing the latter’s support to and understanding of an 
+organization.
+External HCR shows the ability and value of a workforce to stakeholders, who have a valid interest 
+in investing, funding or committing to an organization or in exploring the future potential and 
+development opportunities of an organization.
+The HCR-guidelines recommend which metrics should be reported internally and externally depending 
+on the organization type (additional information given in Table 2).
+4.5.2	
+Comparability of reporting
+Comparability is important, especially for external stakeholders. Comparability between organizations 
+within one country across similar sectors or between types of organizations should be possible. 
+International comparability (benchmarking) between organizations might be more challenging. It is 
+recommended that the KPIs are reported by the following two dimensions:
+a)	 key indicators linked to organizational strategy and values that are measurable and comparable 
+over time:
+—	 validity of reporting is dependent on the quality of data and continuity of data provision;
+—	 tracing the development of an organization needs the provision of data for the current and the 
+two previous reporting periods;
+—	 for the first time of reporting one year is an acceptable reporting period.
+b)	 segmented workforce priorities:
+—	 strategic workforce groups (e.g. critical workforce segments, job families, capabilities, 
+locations);
+—	 strategic entities, including gender or other diversity dimensions (e.g. hierarchy, job levels and 
+economic regions/countries);
+—	 multi-dimensional segmentation for all reporting areas.
+4.6	 Risk management
+HCR serves the purpose of reporting in a transparent way about an organization’s people-related issues 
+and should also be used for human capital risk management.
+An ‘active risk management’ section that requires a narrative summary of the key risks and 
+opportunities is recommended for each reporting area.
+NOTE	
+For recommendations on risk management and quality management see ISO 31000 and ISO 9001, 
+especially with regard to the context of the organization and the needs and expectations of stakeholders.
+Table 1 gives examples of risk areas, risk types and mitigation measures. Not all of these might be 
+relevant for each organization. Organizations should figure out individually which of the depicted 
+human capital risk types can be applied and make sense for their specific situation.
+﻿
+6
+© ISO 2018 – All rights reserved
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
+
+--- Page Break ---
+﻿
+ISO 30414:2018(E)
+Table 1 — Examples of human capital risk management
+Risk area
+Risk type
+Risk management considerations
+Employee lifecycle
+Risks related to hiring process
+—	 ensure 
+an 
+organization 
+hires 
+suitable 
+candidates from a broad pool to meet defined 
+standards of integrity and the skills and 
+qualifications required for the role
+Capability risks
+—	 ensure that incumbent workforce possess the 
+skills, qualifications and knowledge required to 
+carry out their designated role
+Key staff/succession risk
+—	 ensure adequate pipeline of successors for 
+key roles
+Remuneration risk
+—	 ensure alignment of performance and reward 
+for segmented priorities
+—	 ensure distribution of variable and incentive 
+compensation, if any, is aligned to performance 
+or other approved criteria
+—	 ensure design and delivery of reward elements 
+is fair and equitable across all workforce 
+segments
+Risk related to the termination 
+process
+—	 ensure timely off-boarding of terminated staff
+—	 ensure 
+any 
+termination 
+payment 
+is 
+in 
+compliance with internal policy
+Workforce performance risk
+—	 ensure managers are enabled and have the 
+ability to effectively motivate and manage 
+workforce 
+performance 
+(expectations, 
+feedback)
+Compliance
+Labour law risk
+—	 ensure knowledge on the regulatory context for 
+the organization to effectively manage the risk
+Discrimination/harassment risk —	 ensure appropriate acceptance and treatment, 
+escalation, 
+investigation, 
+confidentiality 
+and disciplinary processes are in place and 
+activated to manage inappropriate behaviours 
+leading to discrimination and/or harassment
+Workforce planning
+Workforce planning risk
+—	 ensure supply of talent is in line with defined 
+strategic workforce requirements
+Additionally, for HR professionals the quality of HR function itself plays an important role. For the 
+evaluation and monitoring of the quality of HR processes in the organization it is recommended that 
+surveys are carried out of internal (and, if applicable, external) stakeholders for the following different 
+processes (list not exhaustive):
+a)	 recruitment (staffing and onboarding);
+b)	 employment conditions and work environment;
+c)	
+internal training;
+d)	 advice and guidance for supervisors and managers in the various aspects of leadership, conflict 
+management and change management;
+e)	 management of terminations.
+﻿
+© ISO 2018 – All rights reserved
+7
+iTeh STANDARD PREVIEW
+(standards.iteh.ai)
+ISO 30414:2018
+https://standards.iteh.ai/catalog/standards/sist/4fbf6254-05e5-4ac1-92d1-
+9ec5ca4ae21b/iso-30414-2018
