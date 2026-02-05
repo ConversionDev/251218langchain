@@ -178,34 +178,3 @@ def run_embedding_sync_single_entity(
         db.rollback()
         logger.exception("[embedding_sync] %s 처리 중 오류: %s", table_key, e)
         return {"processed": 0, "failed": 0, "error": str(e)}
-
-
-def run_embedding_sync(
-    db: Session,
-    embeddings_model: Any,
-    entities: Optional[List[str]] = None,
-    batch_size: int = 32,
-) -> dict:
-    """관계형 테이블 → to_embedding_text → 임베딩 → *_embeddings 저장."""
-    if entities is None:
-        entities = list(SYNC_ENTITY_TYPES)
-    results: dict = {}
-    for table_key in entities:
-        results[table_key] = run_embedding_sync_single_entity(db, embeddings_model, table_key, batch_size=batch_size)
-    return {"success": True, "results": results}
-
-
-# __init__에서 참조하는 코드 생성용 (미니멀 스텁)
-def generate_embedding_module_code(entity_type: str) -> Dict[str, Any]:
-    """코드 생성 스텁."""
-    return {"code": "", "entity_type": entity_type}
-
-
-def generate_and_write_soccer_embeddings() -> Dict[str, Any]:
-    """코드 생성 스텁."""
-    return {"success": False, "message": "stub"}
-
-
-def generate_and_write_embedding_module(entity_type: str) -> Dict[str, Any]:
-    """코드 생성 스텁."""
-    return generate_and_write_soccer_embeddings()

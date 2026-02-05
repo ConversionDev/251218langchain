@@ -109,6 +109,12 @@ export interface Employee {
   joinedAt?: string;
   /** Success DNA 역량 점수 (선택) */
   successDna?: SuccessDNA;
+  /** 비정형 데이터(회의록·메신저) 분석 기반 역량 점수 (선택) */
+  behavioralDna?: SuccessDNA;
+  /** behavioralDna 분석 출처 요약 (예: 최근 3개의 주간 회의록 기반 분석됨) */
+  behavioralSource?: string;
+  /** 분석에 사용된 원문 목록 — UI에서 회의록/이메일/슬랙 내용 직접 확인용 */
+  behavioralSourceItems?: BehavioralSourceItem[];
   /** IFRS 공시 지표 (선택) */
   ifrsMetrics?: IfrsMetrics;
   /** 성별 (ISO 30414) */
@@ -123,4 +129,14 @@ export interface Employee {
   resume?: Resume;
   /** 시스템 추천 부서 (매칭 결과) */
   matchedDepartment?: string;
+}
+
+/** 비정형 분석 출처 한 건 (회의록·이메일·슬랙 등 원문 노출용) */
+export interface BehavioralSourceItem {
+  /** 출처 종류 */
+  kind: "meeting" | "email" | "slack";
+  /** 제목 (선택, 예: "2024-01-15 주간 회의") */
+  title?: string;
+  /** 원문 내용 */
+  content: string;
 }

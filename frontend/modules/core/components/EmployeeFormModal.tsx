@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Info } from "lucide-react";
+import { Info, Upload } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Employee, SuccessDNA, IfrsMetrics, Gender, AgeBand, EmploymentType } from "@/modules/shared/types";
+import { parseResumeToBaseline } from "@/modules/core/services/resumeToBaseline";
+import type { Employee, IfrsMetrics, Gender, AgeBand, EmploymentType } from "@/modules/shared/types";
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "male", label: "남" },
@@ -35,14 +36,6 @@ const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
   { value: "part_time", label: "파트타임" },
   { value: "intern", label: "인턴" },
 ];
-
-const defaultDna: SuccessDNA = {
-  leadership: 0,
-  technical: 0,
-  creativity: 0,
-  collaboration: 0,
-  adaptability: 0,
-};
 
 interface EmployeeFormModalProps {
   open: boolean;
@@ -71,19 +64,19 @@ export function EmployeeFormModal({
     ageBand: "30-39",
     employmentType: "regular",
     trainingHours: 0,
-    successDna: { ...defaultDna },
     ifrsMetrics: {
       transitionReadyScore: 0,
       skillGap: 0,
       humanCapitalROI: 0,
     },
   });
+  const [uploadLoading, setUploadLoading] = useState(false);
 
   useEffect(() => {
     if (employee) {
       setForm({
         ...employee,
-        successDna: employee.successDna ?? { ...defaultDna },
+        successDna: employee.successDna,
         ifrsMetrics: employee.ifrsMetrics ?? {
           transitionReadyScore: 0,
           skillGap: 0,
@@ -102,18 +95,39 @@ export function EmployeeFormModal({
         ageBand: "30-39",
         employmentType: "regular",
         trainingHours: 0,
-        successDna: { ...defaultDna },
+        successDna: undefined,
         ifrsMetrics: { transitionReadyScore: 0, skillGap: 0, humanCapitalROI: 0 },
       });
     }
   }, [employee, nextId, open]);
 
   const update = (patch: Partial<Employee>) => setForm((prev) => ({ ...prev, ...patch }));
-  const updateDna = (patch: Partial<SuccessDNA>) =>
-    setForm((prev) => ({
-      ...prev,
-      successDna: { ...(prev.successDna ?? defaultDna), ...patch },
-    }));
+
+  const handleResumeFile = useCallback(
+    async (file: File) => {
+      setUploadLoading(true);
+      try {
+        const result = await parseResumeToBaseline(file);
+        setForm((prev) => ({
+          ...prev,
+          name: result.name,
+          jobTitle: result.jobTitle,
+          department: result.department,
+          email: result.email,
+          joinedAt: result.joinedAt,
+          resume: result.resume,
+          successDna: result.successDna,
+        }));
+        toast.success("이력서를 분석했습니다. 아래 내용을 확인한 뒤 등록해 주세요.");
+      } catch {
+        toast.error("이력서 처리에 실패했습니다.");
+      } finally {
+        setUploadLoading(false);
+      }
+    },
+    []
+  );
+
   const updateIfrs = (patch: Partial<IfrsMetrics>) =>
     setForm((prev) => ({
       ...prev,
@@ -140,6 +154,44 @@ export function EmployeeFormModal({
           <DialogTitle>{isEdit ? "직원 수정" : "직원 등록"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* 이력서 업로드 (등록 시 메인 트리거, 목 데이터로 기본 정보 + Baseline DNA 채움) */}
+          {!isEdit && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground">이력서 업로드</legend>
+              <div
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer?.files?.[0];
+                  if (file) handleResumeFile(file);
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                className={`flex min-h-[100px] flex-col items-center justify-center rounded-xl border-2 border-dashed p-4 text-center text-sm transition-colors ${
+                  uploadLoading ? "cursor-wait bg-muted/50" : "border-border bg-muted/30 hover:border-primary/50"
+                }`}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.txt,application/pdf,text/plain"
+                  className="hidden"
+                  id="core-resume-upload"
+                  disabled={uploadLoading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleResumeFile(f);
+                    e.target.value = "";
+                  }}
+                />
+                <label htmlFor="core-resume-upload" className={uploadLoading ? "pointer-events-none" : "cursor-pointer"}>
+                  <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-1 font-medium text-foreground">
+                    {uploadLoading ? "분석 중…" : "이력서를 놓거나 클릭해 업로드"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">PDF, TXT · AI가 기본 정보와 Baseline DNA를 채웁니다</p>
+                </label>
+              </div>
+            </fieldset>
+          )}
+
           {/* 기본 정보 */}
           <fieldset className="space-y-3">
             <legend className="text-sm font-semibold text-foreground">기본 정보</legend>
@@ -259,33 +311,6 @@ export function EmployeeFormModal({
                   className="mt-1"
                 />
               </div>
-            </div>
-          </fieldset>
-
-          {/* 초기 DNA 점수 */}
-          <fieldset className="space-y-3">
-            <legend className="text-sm font-semibold text-foreground">초기 DNA 점수</legend>
-            <div className="grid grid-cols-2 gap-3">
-              {(["leadership", "technical", "creativity", "collaboration", "adaptability"] as const).map((key) => (
-                <div key={key}>
-                  <Label htmlFor={key}>
-                    {key === "leadership" && "리더십"}
-                    {key === "technical" && "기술력"}
-                    {key === "creativity" && "창의성"}
-                    {key === "collaboration" && "협업"}
-                    {key === "adaptability" && "적응력"}
-                  </Label>
-                  <Input
-                    id={key}
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={form.successDna?.[key] ?? 0}
-                    onChange={(e) => updateDna({ [key]: Number(e.target.value) || 0 })}
-                    className="mt-1"
-                  />
-                </div>
-              ))}
             </div>
           </fieldset>
 

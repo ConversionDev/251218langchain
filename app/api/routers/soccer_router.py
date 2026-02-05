@@ -170,9 +170,9 @@ class EmbeddingJobRequest(BaseModel):
 
 def _run_embedding_sync_background(job_id: str, entities: Optional[List[str]]) -> None:
     """백그라운드에서 임베딩 동기화 실행. 완료 시 Redis 상태를 completed/failed로 갱신."""
-    from api.shared.embedding_worker import _run_job  # type: ignore
+    from api.shared.embedding_sync import run_embedding_sync_task  # type: ignore
 
-    _run_job({"job_id": job_id, "entities": entities})
+    run_embedding_sync_task(job_id, entities)
 
 
 @router.post("/soccer/embedding")

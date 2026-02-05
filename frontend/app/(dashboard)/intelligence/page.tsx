@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { Sparkles, ShieldCheck, ArrowRight, Brain } from "lucide-react";
+import { Sparkles, ShieldCheck, ArrowRight, Brain, Info, FileText } from "lucide-react";
 import { DNARadarChart } from "@/modules/intelligence/components/DNARadarChart";
 import { DNAGrowthChart } from "@/modules/intelligence/components/DNAGrowthChart";
 import { DNAGrowthTrajectoryChart } from "@/modules/intelligence/components/DNAGrowthTrajectoryChart";
@@ -17,9 +17,34 @@ import {
   getDNAGrowthTrajectory,
   getDNAGrowthTrajectoryFromDNA,
 } from "@/modules/intelligence/services";
+import {
+  analyzeBehavioralDataFromMultiple,
+  mergeDnaWithWeights,
+} from "@/modules/intelligence/services/unstructuredAnalyzer";
 import type { IntelligenceEmployee } from "@/modules/intelligence/types";
 import { S2_BENCHMARK } from "@/modules/intelligence/types";
-import type { SuccessDNA } from "@/modules/shared/types";
+import type { BehavioralSourceItem, SuccessDNA } from "@/modules/shared/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+/** 데모: 선택된 직원에 대해 회의록 기반 분석이 없을 때 샘플 3건으로 분석 후 스토어 반영 */
+const SAMPLE_TRANSCRIPTS = [
+  "이번 주 회의에서 팀 방향을 제시하고 결정을 주도했고, 기술 개선안을 제안했습니다. 데이터 분석 결과를 공유하고 팀과 협업해 합의를 이끌었습니다.",
+  "새로운 아이디어와 개선안을 논의했고, 변화에 맞춰 유연하게 대응하기로 했습니다. 개발과 설계 부분을 조율하고 지원 요청에 응했습니다.",
+  "리더로서 방향을 정하고, 기술 검증과 시스템 개선을 논의했습니다. 창의적인 대안을 함께 검토하고 적응력 있는 전환 계획을 수립했습니다.",
+];
+
+/** 회의록 내용 보기 다이얼로그용 목 데이터 — 실제 데이터가 없을 때 항상 표시 */
+const MOCK_SOURCE_ITEMS: BehavioralSourceItem[] = SAMPLE_TRANSCRIPTS.map((content, i) => ({
+  kind: "meeting",
+  title: `회의록 ${i + 1}`,
+  content,
+}));
 
 const DIMENSION_LABELS_KO: Record<keyof SuccessDNA, string> = {
   leadership: "리더십",
@@ -34,6 +59,7 @@ const defaultEmployee = getIntelligenceEmployee();
 export default function IntelligencePage() {
   const hydrated = useHydrated();
   const selectedEmployee = useStore((s) => s.selectedEmployee);
+  const updateEmployee = useStore((s) => s.updateEmployee);
   const [highlightedDimension, setHighlightedDimension] = useState<keyof SuccessDNA | null>(null);
 
   const { employee, summary } = useMemo((): {
@@ -45,6 +71,9 @@ export default function IntelligencePage() {
       ? {
           ...selectedEmployee,
           successDna: selectedEmployee.successDna ?? base.successDna ?? undefined,
+          behavioralDna: selectedEmployee.behavioralDna,
+          behavioralSource: selectedEmployee.behavioralSource,
+          behavioralSourceItems: selectedEmployee.behavioralSourceItems,
           ifrsMetrics: selectedEmployee.ifrsMetrics ?? base.ifrsMetrics ?? undefined,
           transitionTrend: base.transitionTrend,
         }
@@ -54,7 +83,26 @@ export default function IntelligencePage() {
     return { employee: emp, summary: sum };
   }, [selectedEmployee, hydrated]);
 
+  // 선택된 직원에 대해 비정형(회의록) 분석이 없으면 샘플 회의록 3건으로 분석 후 스토어 반영
+  useEffect(() => {
+    if (!hydrated || !selectedEmployee?.id) return;
+    if (selectedEmployee.behavioralDna != null) return;
+
+    const result = analyzeBehavioralDataFromMultiple(SAMPLE_TRANSCRIPTS);
+    updateEmployee(selectedEmployee.id, {
+      behavioralDna: result.dna,
+      behavioralSource: result.source,
+      behavioralSourceItems: result.sourceItems,
+    });
+  }, [hydrated, selectedEmployee?.id, selectedEmployee?.behavioralDna, updateEmployee]);
+
+  // 차트: 기존 DNA와 비정형 분석이 둘 다 있으면 가중 평균 (기존 0.7 + 비정형 0.3), 없으면 있는 쪽만 사용
+  const chartDna: SuccessDNA | undefined =
+    employee.successDna && employee.behavioralDna
+      ? mergeDnaWithWeights(employee.successDna, employee.behavioralDna)
+      : (employee.behavioralDna ?? employee.successDna);
   const successDna = employee.successDna;
+  const dataSourceLabel = employee.behavioralSource ?? "이력/평가 기반 데이터";
   const strengthLabel = successDna
     ? DIMENSION_LABELS_KO[summary.strengthDimension]
     : "";
@@ -125,13 +173,53 @@ export default function IntelligencePage() {
         <p className="mt-1 text-sm text-muted-foreground">
           본인 vs 전사 고성과자 평균 · 1년 전 대비 성장 서사
         </p>
-        {successDna && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            Source: {dataSourceLabel}
+          </span>
+          <Dialog>
+            <DialogTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded hover:underline focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                회의록 내용 보기
+              </button>
+            </DialogTrigger>
+            <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col overflow-hidden">
+              <DialogHeader>
+                <DialogTitle className="text-base">분석에 사용된 출처 원문</DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 space-y-4 overflow-y-auto pr-2">
+                {(employee.behavioralSourceItems?.length
+                  ? employee.behavioralSourceItems
+                  : MOCK_SOURCE_ITEMS
+                ).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-lg border border-border bg-muted/30 p-3"
+                  >
+                    <p className="mb-2 text-sm font-medium text-foreground">
+                      {item.title ?? `${item.kind} ${idx + 1}`}
+                    </p>
+                    <pre className="whitespace-pre-wrap break-words font-sans text-xs text-muted-foreground">
+                      {item.content}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+        {chartDna && (
           <div className="mt-6 space-y-8">
             <div className="grid items-stretch gap-8 lg:grid-cols-2">
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">역량 레이더</h3>
                 <DNARadarChart
-                  data={successDna}
+                  data={chartDna}
                   trainingHours={employee.trainingHours ?? undefined}
                   onDimensionClick={(key) =>
                     setHighlightedDimension((prev) => (prev === key ? null : key))
@@ -143,8 +231,9 @@ export default function IntelligencePage() {
                 <h3 className="text-sm font-medium text-muted-foreground">역량별 성장 궤적 (지난 1년)</h3>
                 <DNAGrowthTrajectoryChart
                   data={(() => {
-                    const t = getDNAGrowthTrajectory(employee);
-                    return t.length > 0 ? t : getDNAGrowthTrajectoryFromDNA(successDna);
+                    const empWithChartDna = { ...employee, successDna: chartDna };
+                    const t = getDNAGrowthTrajectory(empWithChartDna);
+                    return t.length > 0 ? t : getDNAGrowthTrajectoryFromDNA(chartDna);
                   })()}
                   highlightDimension={highlightedDimension}
                   onHighlightChange={setHighlightedDimension}
@@ -153,7 +242,7 @@ export default function IntelligencePage() {
             </div>
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">DNA 성장 이력 (1년 전 → 현재)</h3>
-              <DNAGrowthChart data={getDNAGrowthHistory(employee)} />
+              <DNAGrowthChart data={getDNAGrowthHistory({ ...employee, successDna: chartDna })} />
             </div>
           </div>
         )}

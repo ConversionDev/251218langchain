@@ -2,7 +2,7 @@
 Upstash Redis + JWT access token + BullMQ 연동 (단일 파일).
 
 - UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN: Redis 클라이언트 및 BullMQ(Node)와 동일 인스턴스 공유.
-- Soccer 임베딩 job 큐: soccer:embedding:jobs, soccer:embedding:status:{job_id}
+- Soccer 임베딩 job 상태: soccer:embedding:status:{job_id} (create_embedding_job_inline + BackgroundTasks)
 """
 
 import os
@@ -16,7 +16,6 @@ from typing import Any, Dict, Optional
 
 _redis: Optional[Any] = None
 
-EMBEDDING_QUEUE_KEY = "soccer:embedding:jobs"
 EMBEDDING_STATUS_KEY_PREFIX = "soccer:embedding:status:"
 EMBEDDING_STATUS_TTL = 86400
 
@@ -67,22 +66,6 @@ def is_redis_token_valid() -> bool:
 # Soccer 임베딩 job 큐·상태
 # ---------------------------------------------------------------------------
 
-def add_embedding_job(entities: Optional[list] = None) -> Optional[str]:
-    """임베딩 job을 큐에 추가하고 job_id 반환. (워커가 처리할 때 사용)"""
-    r = get_redis()
-    if r is None:
-        return None
-    job_id = uuid.uuid4().hex
-    payload = {"job_id": job_id, "entities": entities or ["players", "teams", "schedules", "stadiums"]}
-    try:
-        import json as _json
-        r.rpush(EMBEDDING_QUEUE_KEY, _json.dumps(payload))
-        r.set(EMBEDDING_STATUS_KEY_PREFIX + job_id, _json.dumps({"status": "waiting", "job_id": job_id}), ex=EMBEDDING_STATUS_TTL)
-        return job_id
-    except Exception:
-        return None
-
-
 def create_embedding_job_inline(entities: Optional[list] = None) -> Optional[str]:
     """큐에 넣지 않고 job_id만 생성·상태를 processing으로 등록. API 백그라운드 태스크용."""
     r = get_redis()
@@ -97,21 +80,6 @@ def create_embedding_job_inline(entities: Optional[list] = None) -> Optional[str
             ex=EMBEDDING_STATUS_TTL,
         )
         return job_id
-    except Exception:
-        return None
-
-
-def pop_embedding_job() -> Optional[Dict[str, Any]]:
-    """큐에서 job 하나 꺼내서 반환. 워커 전용."""
-    r = get_redis()
-    if r is None:
-        return None
-    try:
-        import json as _json
-        raw = r.lpop(EMBEDDING_QUEUE_KEY)
-        if raw is None:
-            return None
-        return _json.loads(raw)
     except Exception:
         return None
 
