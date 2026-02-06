@@ -8,6 +8,7 @@ import {
   Brain,
   ShieldCheck,
   BarChart3,
+  Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const navItems: { href: string; label: string; icon: React.ComponentType<{ class
   { href: "/intelligence", label: "Intelligence", icon: Brain },
   { href: "/credential", label: "Credential", icon: ShieldCheck },
   { href: "/performance", label: "Performance", icon: BarChart3 },
+  { href: "/soccer", label: "Soccer", icon: Trophy },
 ];
 
 export function Sidebar() {

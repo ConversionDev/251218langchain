@@ -71,6 +71,21 @@ export function EmployeeFormModal({
     },
   });
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [disclosureStatus, setDisclosureStatus] = useState<{
+    ingested: boolean;
+    document_count: number;
+  } | null>(null);
+  const [disclosureStatusLoading, setDisclosureStatusLoading] = useState(false);
+  const [checkResult, setCheckResult] = useState<{
+    suitable: boolean;
+    message: string;
+    suggestions: string[];
+  } | null>(null);
+  const [checkLoading, setCheckLoading] = useState(false);
+
+  const apiBase = typeof window !== "undefined"
+    ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
+    : "http://localhost:8000";
 
   useEffect(() => {
     if (employee) {
@@ -101,7 +116,83 @@ export function EmployeeFormModal({
     }
   }, [employee, nextId, open]);
 
+  useEffect(() => {
+    if (!open || isEdit) return;
+    setDisclosureStatusLoading(true);
+    setDisclosureStatus(null);
+    fetch(`${apiBase}/api/disclosure/status`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("status failed"))))
+      .then((data: { ingested: boolean; document_count: number }) => setDisclosureStatus(data))
+      .catch(() => setDisclosureStatus({ ingested: false, document_count: 0 }))
+      .finally(() => setDisclosureStatusLoading(false));
+  }, [open, isEdit, apiBase]);
+
   const update = (patch: Partial<Employee>) => setForm((prev) => ({ ...prev, ...patch }));
+
+  const handleDisclosureCheck = useCallback(async () => {
+    setCheckLoading(true);
+    setCheckResult(null);
+    try {
+      const startRes = await fetch(`${apiBase}/api/disclosure/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          job_title: form.jobTitle,
+          department: form.department,
+          email: form.email ?? undefined,
+          gender: form.gender ?? undefined,
+          age_band: form.ageBand ?? undefined,
+          employment_type: form.employmentType ?? undefined,
+          training_hours: form.trainingHours ?? undefined,
+        }),
+      });
+      if (!startRes.ok) throw new Error(await startRes.text());
+      const { job_id } = await startRes.json() as { job_id: string };
+
+      const maxAttempts = 60;
+      const pollIntervalMs = 1500;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const res = await fetch(`${apiBase}/api/disclosure/check/result/${job_id}`);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json() as { status: string; result?: { suitable: boolean; message: string; suggestions: string[] }; error?: string };
+        if (data.status === "pending") {
+          await new Promise((r) => setTimeout(r, pollIntervalMs));
+          continue;
+        }
+        if (data.status === "failed") {
+          setCheckResult({
+            suitable: false,
+            message: data.error ?? "처리 실패",
+            suggestions: [],
+          });
+          toast.error("공시 기준 확인에 실패했습니다.");
+          return;
+        }
+        if (data.status === "completed" && data.result) {
+          setCheckResult({
+            suitable: data.result.suitable,
+            message: data.result.message,
+            suggestions: data.result.suggestions ?? [],
+          });
+          if (data.result.suitable) toast.success("공시 기준에 적합합니다.");
+          else toast.info("공시 기준 보완이 필요할 수 있습니다.");
+        }
+        return;
+      }
+      toast.error("공시 기준 확인 시간이 초과되었습니다.");
+      setCheckResult({ suitable: false, message: "응답 대기 시간 초과", suggestions: [] });
+    } catch (e) {
+      toast.error("공시 기준 확인에 실패했습니다.");
+      setCheckResult({
+        suitable: false,
+        message: e instanceof Error ? e.message : "요청 실패",
+        suggestions: [],
+      });
+    } finally {
+      setCheckLoading(false);
+    }
+  }, [apiBase, form.name, form.jobTitle, form.department, form.email, form.gender, form.ageBand, form.employmentType, form.trainingHours]);
 
   const handleResumeFile = useCallback(
     async (file: File) => {
@@ -158,6 +249,19 @@ export function EmployeeFormModal({
           {!isEdit && (
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold text-foreground">이력서 업로드</legend>
+              {disclosureStatusLoading ? (
+                <p className="text-xs text-muted-foreground">공시 기준 학습 여부 확인 중…</p>
+              ) : disclosureStatus ? (
+                disclosureStatus.ingested ? (
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    ISO 30414 공시 기준 학습 완료 (적재 문서 {disclosureStatus.document_count}건)
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    ISO 30414가 아직 학습되지 않았습니다. 채팅에서 문서를 먼저 적재해 주세요.
+                  </p>
+                )
+              ) : null}
               <div
                 onDrop={(e) => {
                   e.preventDefault();
@@ -313,6 +417,37 @@ export function EmployeeFormModal({
               </div>
             </div>
           </fieldset>
+
+          {!isEdit && disclosureStatus?.ingested && (
+            <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">공시 기준 적합 여부</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={checkLoading}
+                  onClick={handleDisclosureCheck}
+                  className="text-sm"
+                >
+                  {checkLoading ? "확인 중…" : "적합 여부 확인"}
+                </Button>
+              </div>
+              {checkResult && (
+                <div className="space-y-1.5 text-sm">
+                  <p className={checkResult.suitable ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}>
+                    {checkResult.message}
+                  </p>
+                  {checkResult.suggestions.length > 0 && (
+                    <ul className="list-inside list-disc text-muted-foreground">
+                      {checkResult.suggestions.map((s, i) => (
+                        <li key={i}>{s}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
