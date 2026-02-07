@@ -2,36 +2,14 @@
 Soccer 임베딩 동기화 (백그라운드 태스크용).
 
 버튼 클릭 시 BackgroundTasks에서 호출.
-run_embedding_sync_task(job_id, entities) → LangGraph 오케스트레이터 → *_embeddings 저장.
+run_embedding_sync_task(job_id, entities) → LangGraph 오케스트레이터 → 베이스 테이블(players 등)의 embedding 컬럼 채움.
+FlagEmbedding BGE-m3 사용 (domain.shared.embedding). 단일 테이블 가이드.
 """
 
 import logging
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
-
-def _get_embeddings_model():
-    """HuggingFaceEmbeddings 생성 (config 기반)."""
-    from core.config import get_settings  # type: ignore
-
-    settings = get_settings()
-    try:
-        try:
-            from langchain_huggingface import HuggingFaceEmbeddings
-        except ImportError:
-            from langchain_community.embeddings import HuggingFaceEmbeddings
-
-        device = getattr(settings, "embedding_device", None) or "cuda"
-        model = HuggingFaceEmbeddings(
-            model_name=settings.default_embedding_model,
-            model_kwargs={"device": device},
-        )
-        model.embed_query("test")
-        return model
-    except Exception as e:
-        logger.exception("임베딩 모델 로드 실패: %s", e)
-        raise
 
 
 def run_embedding_sync_task(job_id: str, entities: Optional[List[str]] = None) -> None:
@@ -47,7 +25,9 @@ def run_embedding_sync_task(job_id: str, entities: Optional[List[str]] = None) -
 
     db = SessionLocal()
     try:
-        embeddings_model = _get_embeddings_model()
+        from domain.shared.embedding import get_embedding_model  # type: ignore
+
+        embeddings_model = get_embedding_model(use_fp16=True)
         result = run_embedding_sync_orchestrate(db, embeddings_model, entities=entities)
         set_embedding_job_status(
             job_id,

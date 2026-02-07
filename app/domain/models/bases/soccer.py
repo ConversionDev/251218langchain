@@ -1,10 +1,17 @@
 """
-Soccer 도메인 ORM — players, teams, stadiums, schedules (통일: 이 모듈 하나만 사용)
+Soccer 도메인 ORM — players, teams, stadiums, schedules (통일: 이 모듈 하나만 사용).
+
+가이드: 베이스 테이블에 embedding, embedding_content 컬럼 포함 (단일 테이블).
 """
 
+import pgvector.sqlalchemy  # type: ignore[import-untyped]
 from sqlalchemy import BigInteger, Column, ForeignKey, Integer, String, Text
 
 from core.database import Base  # type: ignore
+
+from domain.shared.embedding import BGE_M3_DENSE_DIM  # type: ignore
+
+VECTOR_DIM = BGE_M3_DENSE_DIM
 
 
 class Player(Base):  # type: ignore[misc]
@@ -46,6 +53,8 @@ class Player(Base):  # type: ignore[misc]
     solar = Column(String(1), nullable=True, comment="양력/음력 구분 (1: 양력, 2: 음력)")
     height = Column(Integer, nullable=True, comment="키 (cm)")
     weight = Column(Integer, nullable=True, comment="몸무게 (kg)")
+    embedding_content = Column(Text, nullable=True, comment="임베딩용 텍스트")
+    embedding = Column(pgvector.sqlalchemy.Vector(VECTOR_DIM), nullable=True, comment="벡터 임베딩 (BGE-m3 1024)")  # type: ignore[var-annotated]
 
     def __repr__(self) -> str:
         """문자열 표현."""
@@ -82,6 +91,8 @@ class Stadium(Base):  # type: ignore[misc]
     address = Column(Text, nullable=True, comment="주소")
     ddd = Column(String(10), nullable=True, comment="지역번호")
     tel = Column(String(20), nullable=True, comment="전화번호")
+    embedding_content = Column(Text, nullable=True, comment="임베딩용 텍스트")
+    embedding = Column(pgvector.sqlalchemy.Vector(VECTOR_DIM), nullable=True, comment="벡터 임베딩 (BGE-m3 1024)")  # type: ignore[var-annotated]
 
 
 class Team(Base):  # type: ignore[misc]
@@ -102,6 +113,8 @@ class Team(Base):  # type: ignore[misc]
     fax = Column(String(20), nullable=True, comment="팩스번호")
     homepage = Column(Text, nullable=True, comment="홈페이지")
     owner = Column(String(100), nullable=True, comment="구단주")
+    embedding_content = Column(Text, nullable=True, comment="임베딩용 텍스트")
+    embedding = Column(pgvector.sqlalchemy.Vector(VECTOR_DIM), nullable=True, comment="벡터 임베딩 (BGE-m3 1024)")  # type: ignore[var-annotated]
 
 
 class Schedule(Base):  # type: ignore[misc]
@@ -118,3 +131,5 @@ class Schedule(Base):  # type: ignore[misc]
     awayteam_code = Column(String(10), nullable=False, comment="원정팀 코드")
     home_score = Column(Integer, nullable=True, comment="홈팀 점수")
     away_score = Column(Integer, nullable=True, comment="원정팀 점수")
+    embedding_content = Column(Text, nullable=True, comment="임베딩용 텍스트")
+    embedding = Column(pgvector.sqlalchemy.Vector(VECTOR_DIM), nullable=True, comment="벡터 임베딩 (BGE-m3 1024)")  # type: ignore[var-annotated]

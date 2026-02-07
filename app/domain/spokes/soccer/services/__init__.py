@@ -1,7 +1,7 @@
 """Soccer Spokes Services 모듈
 
 - Rule 기반 엔티티 처리: PlayerService, ScheduleService, StadiumService, TeamService.
-- 임베딩: embedding_service.run_embedding_sync_single_entity (LangGraph 노드에서 호출).
+- 임베딩: embedding_service.fill_embeddings_for_entity / run_embedding_sync_single_entity (단일 테이블 베이스 컬럼 채움).
 """
 
 from .embedding_service import run_embedding_sync_single_entity  # type: ignore

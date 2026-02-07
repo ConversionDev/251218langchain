@@ -18,7 +18,7 @@ LangGraph를 사용하여 Policy 기반과 Rule 기반을 자동 판단하여 �
 import json
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
 
@@ -897,6 +897,164 @@ class ScheduleOrchestrator:
 # =============================================================================
 
 EMBEDDING_SYNC_ENTITY_TYPES = ["players", "teams", "schedules", "stadiums"]
+
+
+# =============================================================================
+# 6) Soccer Upload Ingest — 단일 진입점 (Disclosure와 동일 패턴: API → 오케스트레이션)
+# =============================================================================
+
+SoccerUploadEntityTypes = ["players", "teams", "schedules", "stadiums"]
+
+
+class SoccerUploadIngestState(TypedDict, total=False):
+    """Soccer JSONL 업로드 진입용 그래프 상태 (Disclosure ingest와 동일 패턴)."""
+
+    data_type: str
+    all_data: List[Dict[str, Any]]
+    preview_data: List[Dict[str, Any]]
+    result: Dict[str, Any]
+    error: Optional[str]
+    processing_path: str
+
+
+def _soccer_upload_prepare_node(state: SoccerUploadIngestState) -> SoccerUploadIngestState:
+    """data_type·all_data 검증 (진입점 통일용)."""
+    data_type = (state.get("data_type") or "").strip()
+    all_data = state.get("all_data") or []
+    path = state.get("processing_path", "Start")
+    if data_type not in SoccerUploadEntityTypes:
+        return {
+            "error": f"지원하지 않는 data_type: {data_type}",
+            "result": {},
+            "processing_path": path + " -> Prepare(fail)",
+        }
+    if not isinstance(all_data, list):
+        return {
+            "error": "all_data는 리스트여야 합니다",
+            "result": {},
+            "processing_path": path + " -> Prepare(fail)",
+        }
+    return {"processing_path": path + " -> Prepare"}
+
+
+def _soccer_upload_store_node(state: SoccerUploadIngestState) -> SoccerUploadIngestState:
+    """data_type에 맞는 엔티티 오케스트레이터 호출 → DB 저장 + 임베딩 (기존 그래프 재사용)."""
+    from core.database import SessionLocal  # type: ignore
+
+    data_type = state.get("data_type") or ""
+    all_data = state.get("all_data") or []
+    preview_data = state.get("preview_data") or []
+    path = state.get("processing_path", "Start")
+
+    if state.get("error"):
+        return {"processing_path": path + " -> StoreAndEmbed(skip)"}
+
+    orchestrators = {
+        "players": PlayerOrchestrator,
+        "teams": TeamOrchestrator,
+        "stadiums": StadiumOrchestrator,
+        "schedules": ScheduleOrchestrator,
+    }
+    Klass: Any = orchestrators.get(data_type)
+    if not Klass:
+        return {
+            "error": f"알 수 없는 data_type: {data_type}",
+            "result": {},
+            "processing_path": path + " -> StoreAndEmbed(fail)",
+        }
+    session = SessionLocal()
+    try:
+        out = Klass().process(
+            data=all_data,
+            preview_data=preview_data if preview_data else all_data[:5],
+            db=session,
+            vector_store=None,
+        )
+        logger.info("[SoccerUploadIngest] StoreAndEmbed %s: %s", data_type, out.get("result"))
+        return {
+            "result": out,
+            "processing_path": path + " -> StoreAndEmbed",
+        }
+    except Exception as e:
+        session.rollback()
+        logger.exception("[SoccerUploadIngest] StoreAndEmbed 실패: %s", e)
+        return {
+            "error": str(e),
+            "result": {},
+            "processing_path": path + " -> StoreAndEmbed(fail)",
+        }
+    finally:
+        session.close()
+
+
+def build_soccer_upload_ingest_graph():
+    """Soccer 업로드 LangGraph: prepare → store_and_embed → END (Disclosure와 동일 2노드 패턴)."""
+    g = StateGraph(SoccerUploadIngestState)
+    g.add_node("prepare", _soccer_upload_prepare_node)
+    g.add_node("store_and_embed", _soccer_upload_store_node)
+    g.set_entry_point("prepare")
+    g.add_edge("prepare", "store_and_embed")
+    g.add_edge("store_and_embed", END)
+    return g.compile()
+
+
+_soccer_upload_ingest_graph: Any = None
+
+
+def get_soccer_upload_ingest_graph():
+    global _soccer_upload_ingest_graph
+    if _soccer_upload_ingest_graph is None:
+        _soccer_upload_ingest_graph = build_soccer_upload_ingest_graph()
+    return _soccer_upload_ingest_graph
+
+
+def run_soccer_upload_orchestrate(
+    data_type: str,
+    all_data: List[Dict[str, Any]],
+    preview_data: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Soccer JSONL 업로드를 LangGraph로 실행 (Disclosure run_*_orchestrate와 동일 패턴).
+
+    그래프: prepare → store_and_embed → END
+    Returns:
+        _inprocess_process와 동일 형식: success, result, decided_strategy, error 등
+    """
+    try:
+        initial_state: SoccerUploadIngestState = {
+            "data_type": data_type,
+            "all_data": all_data,
+            "preview_data": preview_data,
+            "result": {},
+            "error": None,
+            "processing_path": "Start",
+        }
+        config = {"configurable": {"thread_id": f"soccer_upload_{uuid.uuid4().hex[:8]}"}}
+        graph = get_soccer_upload_ingest_graph()
+        result_state = graph.invoke(initial_state, config=config)
+        raw = result_state.get("result") or {}
+        error = result_state.get("error")
+        if error:
+            return {
+                "success": False,
+                "result": raw.get("result", {}),
+                "decided_strategy": raw.get("decided_strategy", "rule"),
+                "error": error,
+            }
+        return {
+            "success": raw.get("success", True),
+            "result": raw.get("result", {}),
+            "decided_strategy": raw.get("decided_strategy", "rule"),
+            "processing_path": raw.get("processing_path", result_state.get("processing_path", "")),
+        }
+    except Exception as e:
+        logger.exception("[SoccerUploadIngest] 실패: %s", e)
+        return {
+            "success": False,
+            "result": {"processed": 0, "total": len(all_data), "db": 0, "vector": 0},
+            "decided_strategy": "rule",
+            "error": str(e),
+        }
 
 
 def _embedding_sync_validate_node(state: EmbeddingSyncState) -> EmbeddingSyncState:

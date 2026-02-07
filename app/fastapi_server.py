@@ -159,23 +159,7 @@ def init_db() -> None:
                 alembic_versions_path.mkdir(parents=True, exist_ok=True)
 
             if current_settings.auto_migrate:
-                # autogenerate 실행 (변경사항이 있으면 새 마이그레이션 파일 생성)
-                try:
-                    command.revision(
-                        alembic_cfg,
-                        autogenerate=True,
-                        message="Auto-generated migration"
-                    )
-                except Exception as autogen_error:
-                    # autogenerate 실패는 무시 (변경사항이 없을 수도 있음)
-                    error_msg = str(autogen_error)
-                    if "Target database is not up to date" in error_msg:
-                        logging.debug("기존 마이그레이션을 먼저 적용해야 합니다.")
-                    elif "Can't locate revision identified by" in error_msg:
-                        logging.debug("마이그레이션 체인 문제가 있을 수 있습니다.")
-                    # 기타 오류는 무시 (변경사항 없음으로 간주)
-
-                # Alembic 마이그레이션 실행 (기존 + 새로 생성된 마이그레이션 모두 적용)
+                # 기동 시에는 upgrade만 실행 (마이그레이션 생성은 수동: alembic revision --autogenerate -m "설명")
                 try:
                     command.upgrade(alembic_cfg, current_settings.migration_revision)
                     logging.info("✓ DB 마이그레이션 완료")

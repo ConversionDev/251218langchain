@@ -7,6 +7,7 @@
 - 팀 데이터 규칙 기반 서비스 (TeamService).
 
 명확한 규칙에 따라 검증된 데이터를 관계형 DB에 저장합니다. Hub의 Repository를 사용합니다.
+가이드: 업로드 직후 베이스 테이블의 embedding 컬럼을 채움 (단일 테이블).
 """
 
 from typing import Any, Dict, List
@@ -20,6 +21,17 @@ from domain.hub.repositories import (  # type: ignore
     StadiumRepository,
     TeamRepository,
 )
+
+
+def _fill_embeddings_after_save(db: Session, table_key: str) -> Dict[str, Any]:
+    """저장 직후 embedding이 null인 행만 채움."""
+    try:
+        from domain.shared.embedding import get_embedding_model  # type: ignore
+        from domain.spokes.soccer.services.embedding_service import fill_embeddings_for_entity  # type: ignore
+        model = get_embedding_model(use_fp16=True)
+        return fill_embeddings_for_entity(db, model, table_key)
+    except Exception as e:
+        return {"processed": 0, "failed": 0, "error": str(e)}
 
 
 class PlayerService:
@@ -44,6 +56,8 @@ class PlayerService:
         if auto_commit:
             try:
                 db.commit()
+                fill_result = _fill_embeddings_after_save(db, "players")
+                return {"db": saved, "vector": fill_result.get("processed", 0)}
             except Exception:
                 db.rollback()
                 return {"db": 0, "vector": 0}
@@ -72,6 +86,8 @@ class ScheduleService:
         if auto_commit:
             try:
                 db.commit()
+                fill_result = _fill_embeddings_after_save(db, "schedules")
+                return {"db": saved, "vector": fill_result.get("processed", 0)}
             except Exception:
                 db.rollback()
                 return {"db": 0, "vector": 0}
@@ -100,6 +116,8 @@ class StadiumService:
         if auto_commit:
             try:
                 db.commit()
+                fill_result = _fill_embeddings_after_save(db, "stadiums")
+                return {"db": saved, "vector": fill_result.get("processed", 0)}
             except Exception:
                 db.rollback()
                 return {"db": 0, "vector": 0}
@@ -128,6 +146,8 @@ class TeamService:
         if auto_commit:
             try:
                 db.commit()
+                fill_result = _fill_embeddings_after_save(db, "teams")
+                return {"db": saved, "vector": fill_result.get("processed", 0)}
             except Exception:
                 db.rollback()
                 return {"db": 0, "vector": 0}

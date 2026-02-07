@@ -3,7 +3,7 @@ Soccer 데이터 처리 LangGraph State 모델
 
 휴리스틱 처리만 수행하는 단순한 State 정의.
 채팅·스팸과 동일하게 messages는 add_messages 리듀서로 누적 관리.
-임베딩 State는 domain.models.bases.embedding_tables (PlayerEmbedding 등) 필드 구조를 참조.
+임베딩 State는 베이스 테이블(Player 등)의 embedding, embedding_content 필드 구조 참조.
 """
 
 from datetime import datetime
@@ -12,8 +12,9 @@ from typing import Annotated, Any, Dict, List, Optional, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
-# embedding_tables.VECTOR_DIM = 384
-EMBEDDING_VECTOR_DIM = 384
+from domain.shared.embedding import BGE_M3_DENSE_DIM  # type: ignore
+
+EMBEDDING_VECTOR_DIM = BGE_M3_DENSE_DIM
 
 
 class SoccerDataState(TypedDict, total=False):
@@ -55,8 +56,8 @@ class SoccerDataState(TypedDict, total=False):
 
 
 # ---------------------------------------------------------------------------
-# 임베딩 State (embedding_tables.py PlayerEmbedding 등 필드 구조 참조)
-# LangGraph에서 베이스 → 임베딩 플로우 또는 임베딩 단계 상태용.
+# 임베딩 State (베이스 테이블 embedding 컬럼 대응)
+# LangGraph 임베딩 동기화 그래프 상태용.
 # ---------------------------------------------------------------------------
 
 
@@ -66,7 +67,7 @@ class PlayerEmbeddingState(TypedDict, total=False):
     id: Optional[int]
     player_id: int
     content: str
-    embedding: Optional[List[float]]  # EMBEDDING_VECTOR_DIM(384)차원
+    embedding: Optional[List[float]]  # EMBEDDING_VECTOR_DIM(1024)차원
     created_at: Optional[datetime]
 
 

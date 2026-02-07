@@ -8,16 +8,13 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from domain.hub.mcp.utils import get_soccer_mcp_url, result_to_str  # type: ignore
+from domain.hub.orchestrators.soccer_orchestrator import (  # type: ignore
+    SoccerUploadEntityTypes,
+    run_soccer_upload_orchestrate,
+)
 from domain.models.enums import SpamPolicy  # type: ignore
 
 logger = logging.getLogger(__name__)
-
-_UPLOAD_MAP: Dict[str, tuple] = {
-    "players": ("player", "process_player"),
-    "teams": ("team", "process_team"),
-    "schedules": ("schedule", "process_schedule"),
-    "stadiums": ("stadium", "process_stadium"),
-}
 
 
 def _inprocess_process(
@@ -25,23 +22,12 @@ def _inprocess_process(
     all_data: List[Dict[str, Any]],
     preview_data: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """같은 프로세스에서 오케스트레이터 직접 호출."""
-    from domain.spokes.soccer.mcp.soccer_server import (  # type: ignore
-        _process_player_impl,
-        _process_schedule_impl,
-        _process_stadium_impl,
-        _process_team_impl,
+    """LangGraph 오케스트레이션 진입 (Disclosure와 동일 패턴)."""
+    return run_soccer_upload_orchestrate(
+        data_type=data_type,
+        all_data=all_data,
+        preview_data=preview_data,
     )
-    impl_map: Dict[str, Any] = {
-        "players": _process_player_impl,
-        "teams": _process_team_impl,
-        "schedules": _process_schedule_impl,
-        "stadiums": _process_stadium_impl,
-    }
-    impl = impl_map.get(data_type)
-    if not impl:
-        raise ValueError(f"지원하지 않는 data_type: {data_type}")
-    return impl(data=all_data, preview_data=preview_data, db=None, vector_store=None)
 
 # 공개 API: /api/soccer/* (register_router에서 prefix="/api" 적용)
 router = APIRouter(tags=["soccer"])
@@ -78,7 +64,7 @@ async def _process_jsonl_upload(
             if i <= 5:
                 preview_data.append({"row": i, "error": f"JSON 파싱 오류: {str(e)}", "raw": line[:100]})
 
-    if data_type not in _UPLOAD_MAP:
+    if data_type not in SoccerUploadEntityTypes:
         raise HTTPException(status_code=400, detail=f"지원하지 않는 data_type: {data_type}")
 
     try:

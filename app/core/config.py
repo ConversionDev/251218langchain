@@ -119,8 +119,8 @@ class Settings(BaseSettings):
     )
 
     default_embedding_model: str = Field(
-        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        description="기본 임베딩 모델",
+        default="BAAI/bge-m3",
+        description="RAG·임베딩 공용 모델 (Soccer·Disclosure, FlagEmbedding BGE-m3)",
     )
 
     # ===================

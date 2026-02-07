@@ -1,59 +1,51 @@
-# V10 Alembic 마이그레이션 가이드
+# Alembic 마이그레이션 (통합 관리)
 
-V10 도메인의 데이터베이스 스키마 변경을 관리하는 Alembic 마이그레이션 시스템입니다.
+Soccer 도메인 + 임베딩 테이블을 **단일 스쿼시 마이그레이션**으로 관리합니다.
 
-## 초기 설정 (최초 1회)
+## 현재 구조
 
-### 1. Alembic 설치
-```bash
-pip install alembic
-```
+- **`versions/001_initial_squashed.py`**: 통합 초기 마이그레이션 (revision: `001_initial`)
+  - pgvector 확장, stadiums, teams, players, schedules, player/team/schedule/stadium_embeddings (vector 1024)
 
-### 2. 초기 마이그레이션 생성
-```bash
-cd app
-alembic revision --autogenerate -m "Initial migration for V10 domain"
-```
+## 사용법
 
-## 일상적인 사용
+### 새 환경 / 테이블 전부 제거한 DB
 
-### 모델 변경 후 마이그레이션 생성
-```bash
-cd app
-alembic revision --autogenerate -m "설명 메시지"
-```
-
-예시:
-```bash
-alembic revision --autogenerate -m "Add email column to players table"
-```
-
-### 마이그레이션 적용
 ```bash
 cd app
 alembic upgrade head
 ```
 
-### 현재 마이그레이션 버전 확인
+한 번에 전체 스키마가 적용됩니다.
+
+### 이미 테이블이 있는 DB (수동으로 스키마 맞춘 경우)
+
 ```bash
-cd app
-alembic current
+alembic stamp 001_initial
 ```
 
-## 서버 시작 시 자동 마이그레이션
+적용 없이 현재 리비전만 `001_initial`로 표시합니다.
 
-`python main.py` 실행 시 자동으로 최신 마이그레이션이 적용됩니다.
+### 스키마 변경 시 (앞으로 추가 마이그레이션)
+
+```bash
+cd app
+alembic revision --autogenerate -m "설명 메시지"
+alembic upgrade head
+```
+
+- 서버 기동 시에는 **upgrade만** 실행되며, 새 마이그레이션 파일은 생성하지 않습니다.
+- 변경이 있을 때만 위처럼 수동으로 `revision --autogenerate` 후 적용하세요.
 
 ## 주요 명령어
 
-- `alembic revision --autogenerate -m "메시지"`: 모델 변경사항 자동 감지하여 마이그레이션 생성
-- `alembic upgrade head`: 모든 마이그레이션을 최신 버전으로 적용
-- `alembic downgrade -1`: 마지막 마이그레이션 1개 롤백
-- `alembic history`: 마이그레이션 히스토리 확인
-- `alembic current`: 현재 적용된 마이그레이션 버전 확인
+- `alembic upgrade head`: 최신까지 적용
+- `alembic current`: 현재 적용된 리비전 확인
+- `alembic history`: 마이그레이션 목록
+- `alembic revision --autogenerate -m "메시지"`: 모델 차이로 새 마이그레이션 생성
+- `alembic downgrade -1`: 마지막 1개 롤백
 
-## 주의사항
+## 참고
 
-1. **프로덕션 환경**: 마이그레이션 파일을 항상 검토한 후 적용하세요.
-2. **데이터 백업**: 중요한 변경 전에는 데이터를 백업하세요.
-3. **FK 관계**: FK가 있는 테이블의 경우 순서에 주의하세요 (Alembic이 자동 처리).
+- **기존 DB**에서 `alembic_version`에 이전 리비전이 남아 있으면, 통합 전환 시 `alembic stamp 001_initial`로 맞춘 뒤 필요 시 스키마를 수동 정리하세요.
+- 프로덕션 적용 전에는 마이그레이션 파일을 검토하고, 필요 시 백업 후 적용하세요.

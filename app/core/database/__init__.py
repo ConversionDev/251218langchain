@@ -30,9 +30,6 @@ from core.database.connection import (  # type: ignore
     check_collection_exists,
 )
 
-# 벡터 스토어
-from core.database.vector_store import get_vector_store  # type: ignore
-
 __all__ = [
     # Base
     "Base",
@@ -49,6 +46,4 @@ __all__ = [
     "wait_for_postgres",
     "get_vector_count",
     "check_collection_exists",
-    # Vector Store
-    "get_vector_store",
 ]

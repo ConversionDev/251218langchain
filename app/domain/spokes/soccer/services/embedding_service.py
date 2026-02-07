@@ -1,8 +1,8 @@
 """
-Soccer 임베딩 서비스 (동기화).
+Soccer 임베딩 서비스 (단일 테이블 가이드).
 
-관계형 테이블 → content(ExaOne 또는 규칙 기반) → Sentence Transformer 임베딩 → *_embeddings 저장.
-LangGraph 노드에서 run_embedding_sync_single_entity 사용.
+베이스 테이블(players, teams, schedules, stadiums)의 embedding, embedding_content 컬럼에
+BGE-m3 임베딩을 채움. 업로드 직후 또는 수동 동기화 시 호출.
 """
 
 import json
@@ -13,27 +13,21 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from domain.models.bases.soccer import Player, Schedule, Stadium, Team  # type: ignore
-from domain.models.bases.embedding_tables import (  # type: ignore
-    PlayerEmbedding,
-    ScheduleEmbedding,
-    StadiumEmbedding,
-    TeamEmbedding,
-)
 
 logger = logging.getLogger(__name__)
 
 SYNC_ENTITY_TYPES = ["players", "teams", "schedules", "stadiums"]
 
+# (BaseModel, entity_type for to_embedding_text)
 _ENTITY_MAP = {
-    "players": (Player, "player_id", PlayerEmbedding, "player"),
-    "teams": (Team, "team_id", TeamEmbedding, "team"),
-    "schedules": (Schedule, "schedule_id", ScheduleEmbedding, "schedule"),
-    "stadiums": (Stadium, "stadium_id", StadiumEmbedding, "stadium"),
+    "players": (Player, "player"),
+    "teams": (Team, "team"),
+    "schedules": (Schedule, "schedule"),
+    "stadiums": (Stadium, "stadium"),
 }
 
 _ENTITY_LABELS = {"player": "선수", "team": "팀", "schedule": "경기 일정", "stadium": "경기장"}
 
-# ExaOne content 생성 병렬 수 (행마다 1회 호출 → 풀 크기만큼 동시 호출)
 EXAONE_CONTENT_MAX_WORKERS = 8
 
 
@@ -65,7 +59,6 @@ def _get_to_embedding_text():
 
 
 def _to_embedding_text_exaone(record: Dict[str, Any], entity_type: str) -> Optional[str]:
-    """ExaOne으로 RAG/검색용 한 줄 한국어 문장 생성. 실패 시 None 반환(규칙 기반 폴백용)."""
     label = _ENTITY_LABELS.get(entity_type, entity_type)
     prompt = (
         f"다음 {label} 데이터를 RAG와 벡터 검색에 쓸 한 줄 한국어 문장으로 요약해줘. "
@@ -74,60 +67,63 @@ def _to_embedding_text_exaone(record: Dict[str, Any], entity_type: str) -> Optio
     )
     try:
         from domain.hub.llm import generate_text  # type: ignore
-
         out = generate_text(prompt, max_tokens=256, temperature=0.3)
         out = (out or "").strip()
         if not out or out.startswith("[ExaOne"):
             return None
         return out
     except Exception as e:
-        logger.warning("[embedding_sync] ExaOne content 생성 실패: %s", e)
+        logger.warning("[embedding] ExaOne content 생성 실패: %s", e)
         return None
 
 
-def run_embedding_sync_single_entity(
+def fill_embeddings_for_entity(
     db: Session,
     embeddings_model: Any,
     table_key: str,
     batch_size: int = 32,
 ) -> Dict[str, Any]:
-    """단일 엔티티(테이블)에 대해 관계형 → content(ExaOne 우선, 폴백 규칙) → 임베딩 → *_embeddings 저장."""
+    """
+    베이스 테이블에서 embedding이 null인 행만 읽어서
+    content 생성 → 임베딩 계산 → 같은 행의 embedding, embedding_content 업데이트.
+    """
     if table_key not in _ENTITY_MAP:
         return {"processed": 0, "failed": 0, "error": f"알 수 없는 엔티티: {table_key}"}
     to_embedding_text = _get_to_embedding_text()
-    TableModel, fk_col, EmbeddingModel, entity_type = _ENTITY_MAP[table_key]
+    BaseModel, entity_type = _ENTITY_MAP[table_key]
     try:
-        rows = db.query(TableModel).all()
+        # embedding 이 null 인 행만
+        rows = db.query(BaseModel).filter(BaseModel.embedding.is_(None)).all()
         if not rows:
             return {"processed": 0, "failed": 0}
-        row_data = [(_record_to_dict(row), entity_type) for row in rows]
+        row_data = [(_record_to_dict(row), entity_type, row) for row in rows]
 
         def _content_for_row(rec: Dict[str, Any], entity_type: str) -> tuple:
-            pk = rec.get("id")
             content = _to_embedding_text_exaone(rec, entity_type)
             if not content:
                 content = to_embedding_text(rec, entity_type)
-            return (pk, content)
+            return (content,)
 
         texts = []
         row_refs = []
         with ThreadPoolExecutor(max_workers=EXAONE_CONTENT_MAX_WORKERS) as executor:
             future_to_idx = {}
-            for i, (rec, et) in enumerate(row_data):
-                future_to_idx[executor.submit(_content_for_row, rec, et)] = i
+            for i, (rec, et, row) in enumerate(row_data):
+                future_to_idx[executor.submit(_content_for_row, rec, et)] = (i, row)
             results: List[Optional[tuple]] = [None] * len(row_data)
             for future in as_completed(future_to_idx):
-                idx = future_to_idx[future]
+                idx, row = future_to_idx[future]
                 try:
                     results[idx] = future.result()
                 except Exception as e:
-                    rec, et = row_data[idx]
-                    logger.warning("[embedding_sync] ExaOne/폴백 실패 idx=%s: %s", idx, e)
-                    results[idx] = (rec.get("id"), to_embedding_text(rec, et))
-            for r in results:
+                    rec, et, _ = row_data[idx]
+                    logger.warning("[embedding] ExaOne/폴백 실패 idx=%s: %s", idx, e)
+                    results[idx] = (to_embedding_text(rec, et),)
+            for i, r in enumerate(results):
                 if r:
-                    pk, content = r
-                    row_refs.append((pk, content))
+                    content = r[0]
+                    row = row_data[i][2]
+                    row_refs.append((row, content))
                     texts.append(content)
         processed = 0
         failed = 0
@@ -138,7 +134,7 @@ def run_embedding_sync_single_entity(
             try:
                 vectors = embeddings_model.embed_documents(batch_texts)
             except Exception as e:
-                logger.warning("[embedding_sync] embed_documents 실패: %s", e)
+                logger.warning("[embedding] embed_documents 실패: %s", e)
                 if hasattr(embeddings_model, "embed_query"):
                     vectors = [embeddings_model.embed_query(t) for t in batch_texts]
                 else:
@@ -147,27 +143,19 @@ def run_embedding_sync_single_entity(
             n = min(len(batch_refs), len(vectors))
             if n < len(batch_refs):
                 failed += len(batch_refs) - n
-            for (pk, content), vec in zip(batch_refs[:n], vectors[:n]):
+            for (row, content), vec in zip(batch_refs[:n], vectors[:n]):
                 if vec is None:
                     failed += 1
                     continue
                 try:
-                    existing = (
-                        db.query(EmbeddingModel)
-                        .filter(getattr(EmbeddingModel, fk_col) == pk)
-                        .first()
-                    )
-                    if existing:
-                        existing.content = content
-                        existing.embedding = vec
-                        db.merge(existing)
-                    else:
-                        db.add(EmbeddingModel(**{fk_col: pk, "content": content, "embedding": vec}))
+                    row.embedding_content = content
+                    row.embedding = vec
+                    db.merge(row)
                     processed += 1
                 except Exception as e:
                     if first_row_error is None:
                         first_row_error = str(e)
-                    logger.warning("[embedding_sync] row 저장 실패 pk=%s: %s", pk, e)
+                    logger.warning("[embedding] row 저장 실패 id=%s: %s", getattr(row, "id", None), e)
                     failed += 1
         db.commit()
         out: Dict[str, Any] = {"processed": processed, "failed": failed}
@@ -176,5 +164,18 @@ def run_embedding_sync_single_entity(
         return out
     except Exception as e:
         db.rollback()
-        logger.exception("[embedding_sync] %s 처리 중 오류: %s", table_key, e)
+        logger.exception("[embedding] %s 처리 중 오류: %s", table_key, e)
         return {"processed": 0, "failed": 0, "error": str(e)}
+
+
+def run_embedding_sync_single_entity(
+    db: Session,
+    embeddings_model: Any,
+    table_key: str,
+    batch_size: int = 32,
+) -> Dict[str, Any]:
+    """
+    단일 엔티티에 대해 베이스 테이블의 embedding null 행을 채움.
+    (기존 run_embedding_sync_single_entity와 동일 시그니처, 내부만 단일 테이블로 변경.)
+    """
+    return fill_embeddings_for_entity(db, embeddings_model, table_key, batch_size=batch_size)

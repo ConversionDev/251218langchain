@@ -25,9 +25,10 @@ current_dir = Path(__file__).parent.parent
 if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
 
-# 모델 import (Alembic이 메타데이터를 수집)
-# 임베딩 테이블은 별도 Base(embedding_tables)에 있어 제외; 마이그레이션 add_exaone_embedding_tables로 생성됨.
+# 모델 import (autogenerate용 메타데이터)
+# *_embeddings 테이블은 통합 마이그레이션 001_initial_squashed에서 생성하므로 include_object로 autogenerate에서 제외.
 from core.database import Base  # type: ignore
+from domain.models.bases.disclosure import Disclosure  # noqa: F401
 from domain.models.bases.soccer import (  # noqa: F401
     Player,
     Schedule,
@@ -67,7 +68,7 @@ def include_object(object, name, type_, reflected, compare_to):
     Alembic autogenerate에서 특정 객체를 제외합니다.
 
     - langchain_pg_*: LangChain PGVector에서 자동 생성.
-    - *_embeddings: 마이그레이션 add_exaone_embedding_tables로 생성. autogenerate 제외(별도 Base).
+    - *_embeddings: 레거시(단일 테이블 가이드로 전환). autogenerate 제외.
     """
     if type_ == "table":
         if name.startswith("langchain_pg_"):
