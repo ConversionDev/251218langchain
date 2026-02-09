@@ -5,7 +5,7 @@ Soccer·Disclosure 등에서 공통 사용. 설정은 core.config에서 읽음.
 LangChain Embeddings 인터페이스(embed_documents, embed_query) 제공.
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # BGE-m3 Dense 출력 차원 (1024)
 BGE_M3_DENSE_DIM = 1024
@@ -50,16 +50,23 @@ class FlagEmbeddingWrapper:
         return list(dense[0]) if dense else []
 
 
+# (model_name, use_fp16) → 인스턴스 캐시 (재로딩 방지)
+_embedding_model_cache: Dict[Tuple[str, bool], "FlagEmbeddingWrapper"] = {}
+
+
 def get_embedding_model(
     model_name: Optional[str] = None,
     use_fp16: bool = True,
-):
+) -> FlagEmbeddingWrapper:
     """
     Soccer·Disclosure 공통 임베딩 모델 (FlagEmbedding BGE-m3).
-    설정은 core.config의 default_embedding_model 사용.
+    동일 인자로 호출 시 캐시된 인스턴스 반환(재로딩 없음).
     """
     if model_name is None:
         from core.config import get_settings  # type: ignore
 
         model_name = get_settings().default_embedding_model
-    return FlagEmbeddingWrapper(model_name=model_name, use_fp16=use_fp16)
+    key = (model_name, use_fp16)
+    if key not in _embedding_model_cache:
+        _embedding_model_cache[key] = FlagEmbeddingWrapper(model_name=model_name, use_fp16=use_fp16)
+    return _embedding_model_cache[key]

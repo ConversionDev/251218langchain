@@ -65,3 +65,24 @@ app/artifacts/
 # Unsloth compiled cache (기존 위치 및 새 위치 모두)
 app/unsloth_compiled_cache/
 app/core/resource_manager/unsloth_compiled_cache/
+
+# Disclosure: PDF 원본·추출 텍스트 (용량 큼, 로컬에서 pdf_extract로 생성)
+app/data/disclosure/*.pdf
+app/data/disclosure/*_alter.txt
+
+# Python 가상환경·캐시
+.venv/
+venv/
+*.egg-info/
+.eggs/
+
+# 임베딩/모델 캐시 (선택)
+# app/cache/
+# **/BAAI/
+# Flutter
+flutter/.dart_tool/
+flutter/.idea/
+flutter/.packages
+flutter/pub.dartlang.org/
+
+.vscode/

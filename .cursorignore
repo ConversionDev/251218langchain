@@ -23,3 +23,10 @@ build/
 app/artifacts/
 app/unsloth_compiled_cache/
 app/core/resource_manager/unsloth_compiled_cache/
+
+# Flutter 빌드/캐시 (인덱싱 제외 시 서버·IDE 부하 감소)
+flutter/build/
+flutter/.dart_tool/
+flutter/android/build/
+flutter/ios/build/
+flutter/.idea/

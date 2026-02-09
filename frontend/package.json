@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "dev": "next dev -p 3000 --turbo",
+    "dev": "cross-env TMP=C:\\Temp TEMP=C:\\Temp next dev -p 3000 --turbo",
     "build": "next build && node scripts/generate-sw.js",
     "start": "next start",
     "lint": "next lint"
@@ -29,6 +29,7 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

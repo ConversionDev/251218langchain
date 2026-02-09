@@ -166,7 +166,7 @@ export function EmployeeFormModal({
             message: data.error ?? "처리 실패",
             suggestions: [],
           });
-          toast.error("공시 기준 확인에 실패했습니다.");
+          toast.error("공시 기여도 예측에 실패했습니다.");
           return;
         }
         if (data.status === "completed" && data.result) {
@@ -175,12 +175,12 @@ export function EmployeeFormModal({
             message: data.result.message,
             suggestions: data.result.suggestions ?? [],
           });
-          if (data.result.suitable) toast.success("공시 기준에 적합합니다.");
-          else toast.info("공시 기준 보완이 필요할 수 있습니다.");
+          if (data.result.suitable) toast.success("공시 기여 잠재력이 있습니다.");
+          else toast.info("면접·확인 가이드를 참고해 주세요.");
         }
         return;
       }
-      toast.error("공시 기준 확인 시간이 초과되었습니다.");
+      toast.error("공시 기여도 예측 시간이 초과되었습니다.");
       setCheckResult({ suitable: false, message: "응답 대기 시간 초과", suggestions: [] });
     } catch (e) {
       toast.error("공시 기준 확인에 실패했습니다.");
@@ -421,7 +421,7 @@ export function EmployeeFormModal({
           {!isEdit && disclosureStatus?.ingested && (
             <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">공시 기준 적합 여부</span>
+                <span className="text-sm font-medium text-foreground">공시 기여도 예측</span>
                 <Button
                   type="button"
                   variant="outline"
@@ -429,7 +429,7 @@ export function EmployeeFormModal({
                   onClick={handleDisclosureCheck}
                   className="text-sm"
                 >
-                  {checkLoading ? "확인 중…" : "적합 여부 확인"}
+                  {checkLoading ? "예측 중…" : "기여도 예측"}
                 </Button>
               </div>
               {checkResult && (
@@ -438,11 +438,14 @@ export function EmployeeFormModal({
                     {checkResult.message}
                   </p>
                   {checkResult.suggestions.length > 0 && (
-                    <ul className="list-inside list-disc text-muted-foreground">
-                      {checkResult.suggestions.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
+                    <>
+                      <p className="text-xs font-medium text-muted-foreground">면접·확인 시 질문/가이드</p>
+                      <ul className="list-inside list-disc text-muted-foreground">
+                        {checkResult.suggestions.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    </>
                   )}
                 </div>
               )}

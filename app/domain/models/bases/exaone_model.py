@@ -68,7 +68,7 @@ def _format_tool_description(tool: BaseTool) -> str:
     """도구를 설명 문자열로 변환."""
     args_desc = ""
     if hasattr(tool, "args_schema") and tool.args_schema:
-        schema = tool.args_schema.schema()
+        schema = tool.args_schema.model_json_schema()
         properties = schema.get("properties", {})
         required = schema.get("required", [])
         args_parts = []
@@ -399,7 +399,7 @@ class ExaoneLLM(BaseLLM):
                 max_length = min(max_length, adaptive_max)
 
             # 생성 (메모리 효율적인 옵션 적용)
-            with torch.no_grad(), torch.cuda.amp.autocast():
+            with torch.no_grad(), torch.amp.autocast("cuda"):
                 outputs = self.model.generate(
                     input_ids,
                     max_new_tokens=max_new_tokens,
@@ -555,7 +555,7 @@ class ExaoneLangChainWrapper(BaseChatModel):
             max_length = min(max_length, adaptive_max)
 
         # 생성 (메모리 효율적인 옵션 적용)
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with torch.no_grad(), torch.amp.autocast("cuda"):
             outputs = self._model.generate(
                 input_ids,
                 max_new_tokens=max_new_tokens,
@@ -712,7 +712,7 @@ class ExaoneLangChainWrapper(BaseChatModel):
 
         # 별도 스레드에서 생성 실행
         def generate_in_thread():
-            with torch.no_grad(), torch.cuda.amp.autocast():
+            with torch.no_grad(), torch.amp.autocast("cuda"):
                 self._model.generate(**generation_kwargs)
 
         thread = threading.Thread(target=generate_in_thread)

@@ -9,11 +9,13 @@ import {
   ShieldCheck,
   BarChart3,
   Trophy,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { href: "/", label: "대시보드", icon: LayoutDashboard },
+  { href: "/chat", label: "채팅", icon: MessageCircle },
   { href: "/core", label: "Core", icon: Users },
   { href: "/intelligence", label: "Intelligence", icon: Brain },
   { href: "/credential", label: "Credential", icon: ShieldCheck },

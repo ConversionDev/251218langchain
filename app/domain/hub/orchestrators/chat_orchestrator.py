@@ -5,7 +5,7 @@ run_agent, run_agent_stream, get_thread_history, clear_thread_history
 """
 
 import logging
-from typing import AsyncGenerator, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 from core.config import settings  # type: ignore
 from domain.models import ChatState
@@ -36,7 +36,7 @@ def run_agent(
     chat_history: Optional[List[BaseMessage]] = None,
     thread_id: Optional[str] = None,
     semantic_action: Optional[str] = None,
-) -> str:
+) -> Tuple[str, str]:
     """에이전트를 실행하고 응답을 반환합니다. RAG는 항상 사용.
 
     Args:
@@ -48,35 +48,37 @@ def run_agent(
         semantic_action: 시멘틱 분류 결과 (RULE_BASED/POLICY_BASED) → 답변과 UI 태그 일치용
 
     Returns:
-        에이전트 응답 문자열
+        (에이전트 응답 문자열, RAG에서 사용한 컨텍스트)
     """
     use_checkpointer = bool(thread_id)
     graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
 
-    messages: List[BaseMessage] = []
+    messages_list: List[BaseMessage] = []
     base_prompt = system_prompt or "당신은 도움이 되는 AI 어시스턴트입니다."
     if semantic_action and semantic_action in _SEMANTIC_LABELS:
         label = _SEMANTIC_LABELS[semantic_action]
         base_prompt = base_prompt + "\n\n" + _SEMANTIC_PROMPT.format(label=label)
-    messages.append(SystemMessage(content=base_prompt))
+    messages_list.append(SystemMessage(content=base_prompt))
 
     if chat_history:
-        messages.extend(chat_history)
-    messages.append(HumanMessage(content=user_text))
+        messages_list.extend(chat_history)
+    messages_list.append(HumanMessage(content=user_text))
 
     initial_state: ChatState = {
-        "messages": messages,
+        "messages": messages_list,
         "context": "",
         "model_provider": provider or "",
     }
     config = get_thread_config(thread_id)
     result: ChatState = graph.invoke(initial_state, config=config)
 
+    context_used = result.get("context") or ""
+
     response_messages = result.get("messages", [])
     for msg in reversed(response_messages):
         if isinstance(msg, AIMessage):
-            return str(msg.content)
-    return ""
+            return (str(msg.content), context_used)
+    return ("", context_used)
 
 
 async def run_agent_stream(
@@ -86,19 +88,12 @@ async def run_agent_stream(
     chat_history: Optional[List[BaseMessage]] = None,
     thread_id: Optional[str] = None,
     semantic_action: Optional[str] = None,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
     """에이전트를 스트리밍 모드로 실행합니다. RAG는 항상 사용.
 
-    Args:
-        user_text: 사용자 메시지
-        provider: LLM 제공자
-        system_prompt: 시스템 프롬프트
-        chat_history: 이전 대화 기록
-        thread_id: 대화 스레드 ID
-        semantic_action: 시멘틱 분류 결과 (RULE_BASED/POLICY_BASED) → 답변과 UI 태그 일치용
-
     Yields:
-        응답 청크
+        str: 응답 텍스트 청크
+        dict: 스트림 종료 시 {"context_preview": "..."} (RAG 참고 문서 미리보기)
     """
     use_checkpointer = bool(thread_id)
     graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
@@ -125,6 +120,7 @@ async def run_agent_stream(
     last_yielded_content = ""
     has_streamed = False
     final_response = ""
+    context_used = ""
 
     try:
         async for event in graph.astream_events(
@@ -193,6 +189,8 @@ async def run_agent_stream(
 
             elif kind == "on_chain_end":
                 output = data.get("output", {})
+                if event_name in ("rag", "rag_node") and isinstance(output, dict):
+                    context_used = (output.get("context") or "") or context_used
                 if isinstance(output, dict):
                     messages_output = output.get("messages", [])
                     if messages_output:
@@ -221,7 +219,7 @@ async def run_agent_stream(
         if len(final_response) > len(last_yielded_content):
             yield final_response[len(last_yielded_content) :]
     elif not has_streamed and not last_yielded_content:
-        response = run_agent(
+        response, ctx = run_agent(
             user_text=user_text,
             provider=provider,
             system_prompt=system_prompt,
@@ -231,6 +229,12 @@ async def run_agent_stream(
         )
         if response:
             yield response
+        context_used = ctx or context_used
+
+    # RAG로 실제 검색된 문서가 있을 때만 전송 (없으면 보내지 않아 일반 답변으로 보이게)
+    if context_used and context_used.strip():
+        preview = (context_used[:600] + "…") if len(context_used) > 600 else context_used
+        yield {"context_preview": preview}
 
 
 def get_thread_history(thread_id: str) -> List[BaseMessage]:

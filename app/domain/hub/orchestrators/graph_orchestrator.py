@@ -222,8 +222,52 @@ def tool_node(state: ChatState) -> ChatState:
     return {"messages": results}
 
 
+# 질문과 무관한 문서 제외: 거리(score)가 이 값 이하인 문서만 참고 (코사인 거리, 작을수록 유사)
+RAG_DISTANCE_THRESHOLD = 0.65
+
+
+def _retrieve_with_threshold(store: Any, query: str, k: int = 5) -> List[Any]:
+    """유사도(거리) 임계값 이하인 문서만 반환. store에 따라 score 의미가 다를 수 있음."""
+    try:
+        # (Document, score) 반환. pgvector 코사인 거리: 작을수록 유사
+        pairs = store.similarity_search_with_score(query, k=k)
+    except Exception:
+        return store.similarity_search(query, k=k)
+    result = []
+    for doc, score in pairs:
+        if score <= RAG_DISTANCE_THRESHOLD:
+            result.append(doc)
+    return result
+
+
+def _build_context_with_sources(docs: List[Any]) -> str:
+    """각 문서 앞에 [출처: id=..., source=..., page=...] 를 붙여 DB에서 찾을 수 있게 함."""
+    parts = []
+    for doc in docs:
+        meta = getattr(doc, "metadata", None) or {}
+        id_val = meta.get("id") or meta.get("doc_id")
+        source = meta.get("source", "")
+        page = meta.get("page", "")
+        standard_type = meta.get("standard_type", "")
+        unique_id = meta.get("unique_id", "")
+        tokens = []
+        if id_val is not None:
+            tokens.append(f"id={id_val}")
+        if source:
+            tokens.append(f"source={source}")
+        if page != "":
+            tokens.append(f"page={page}")
+        if standard_type:
+            tokens.append(f"standard_type={standard_type}")
+        if unique_id:
+            tokens.append(f"unique_id={unique_id}")
+        cite = "[출처: " + ", ".join(tokens) + "]" if tokens else "[출처: (메타데이터 없음)]"
+        parts.append(f"{cite}\n{doc.page_content}")
+    return "\n\n".join(parts)
+
+
 def rag_node(state: ChatState) -> ChatState:
-    """RAG 노드. PGVector similarity_search로 컨텍스트 검색."""
+    """RAG 노드. PGVector 유사도 검색 후, 거리 임계값 이하인 문서만 컨텍스트로 사용."""
     messages = state.get("messages", [])
 
     user_query: Optional[str] = None
@@ -240,11 +284,21 @@ def rag_node(state: ChatState) -> ChatState:
             import fastapi_server  # type: ignore
 
             fastapi_server.ensure_rag_initialized()
+            all_docs: list = []
             if fastapi_server.vector_store:
-                docs = fastapi_server.vector_store.similarity_search(user_query, k=3)
-                if docs:
-                    context = "\n\n".join([doc.page_content for doc in docs])
-                    return {"context": context}
+                main_docs = _retrieve_with_threshold(fastapi_server.vector_store, user_query, k=5)
+                all_docs.extend(main_docs)
+            disclosure_store = fastapi_server.get_disclosure_vector_store()
+            if disclosure_store:
+                try:
+                    disclosure_docs = _retrieve_with_threshold(disclosure_store, user_query, k=5)
+                    if disclosure_docs:
+                        all_docs.extend(disclosure_docs)
+                except Exception as e:
+                    logger.debug("disclosure 검색 생략: %s", e)
+            if all_docs:
+                context = _build_context_with_sources(all_docs)
+                return {"context": context}
         return {"context": ""}
     except Exception as e:
         logger.warning("RAG 검색 실패: %s", e)

@@ -36,6 +36,7 @@ class AgentResponse(BaseModel):
     used_rag: bool = Field(..., description="RAG 사용 여부")
     thread_id: Optional[str] = Field(None, description="사용된 대화 스레드 ID")
     semantic_action: Optional[str] = Field(None, description="시멘틱 분류 결과")
+    context_preview: Optional[str] = Field(None, description="RAG에서 참고한 문서(검색된 컨텍스트) 미리보기")
 
 
 class ProviderInfo(BaseModel):
@@ -82,6 +83,7 @@ async def agent_chat(request: AgentRequest):
                         used_rag=request.use_rag,
                         thread_id=request.thread_id,
                         semantic_action=semantic_action,
+                        context_preview=None,
                     )
         except Exception:
             pass
@@ -103,7 +105,7 @@ async def agent_chat(request: AgentRequest):
                 elif msg.role == "system":
                     chat_history.append(SystemMessage(content=msg.content))
 
-        response = run_agent(
+        response_text, context_used = run_agent(
             user_text=request.message,
             provider=provider,
             system_prompt=request.system_prompt,
@@ -112,12 +114,15 @@ async def agent_chat(request: AgentRequest):
             semantic_action=semantic_action,
         )
 
+        context_preview = (context_used[:600] + "…") if context_used and len(context_used) > 600 else (context_used or None)
+
         return AgentResponse(
-            response=response,
+            response=response_text,
             provider=provider,
             used_rag=request.use_rag,
             thread_id=request.thread_id,
             semantic_action=semantic_action,
+            context_preview=context_preview,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"에이전트 실행 오류: {str(e)}")
@@ -150,7 +155,7 @@ async def agent_chat_stream(request: AgentRequest):
                 if action == "BLOCK":
                     async def block_stream():
                         yield f"data: {json.dumps({'semantic_action': action})}\n\n"
-                        yield f"data: {_BLOCK_MESSAGE}\n\n"
+                        yield f"data: {json.dumps({'content': _BLOCK_MESSAGE})}\n\n"
                         yield "data: [DONE]\n\n"
                     return StreamingResponse(
                         block_stream(),
@@ -180,7 +185,6 @@ async def agent_chat_stream(request: AgentRequest):
 
         async def generate():
             try:
-                # 분류 결과를 항상 첫 이벤트로 전송 (없으면 null → 프론트에서 '미분류' 표시)
                 yield f"data: {json.dumps({'semantic_action': stream_semantic_action})}\n\n"
                 async for chunk in run_agent_stream(
                     user_text=request.message,
@@ -190,14 +194,16 @@ async def agent_chat_stream(request: AgentRequest):
                     thread_id=request.thread_id,
                     semantic_action=stream_semantic_action,
                 ):
-                    if chunk:
-                        yield f"data: {chunk}\n\n"
+                    if isinstance(chunk, dict):
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    elif chunk:
+                        yield f"data: {json.dumps({'content': chunk})}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as e:
                 error_msg = f"스트리밍 오류: {str(e)}"
                 logger.error("%s", error_msg, exc_info=True)
-                yield f"data: [ERROR] {error_msg}\n\n"
-            yield "data: [DONE]\n\n"
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+                yield "data: [DONE]\n\n"
 
         return StreamingResponse(
             generate(),

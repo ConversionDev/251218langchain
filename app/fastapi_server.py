@@ -114,10 +114,12 @@ add_cors_middleware(app)
 
 # 전역 변수 (에이전트 RAG 노드·벡터스토어용)
 vector_store: Optional[PGVector] = None
+disclosure_vector_store: Optional[PGVector] = None
 local_embeddings = None
 local_llm = None
 _rag_init_lock = threading.Lock()
 _rag_initialized = False
+_disclosure_store_lock = threading.Lock()
 
 
 def init_db() -> None:
@@ -213,13 +215,9 @@ def init_v1() -> None:
     print("\n1. Neon PostgreSQL 연결 확인 중...")
     wait_for_postgres()
 
-    # EXAONE 베이스 모델 서버 기동 시 미리 로드 (첫 요청 전에 로드 완료)
+    # EXAONE: 첫 채팅 시 로드 (Lazy Loading)
     if llm_provider == "exaone":
-        print("\n2. EXAONE 베이스 모델 미리 로드 중...")
-        from domain.hub.llm.exaone_provider import get_llm  # type: ignore
-
-        get_llm(provider="exaone", temperature=0.3, max_tokens=2048)
-        print("[OK] EXAONE 베이스 모델 미리 로드 완료!")
+        print("\n2. EXAONE: Lazy Loading (첫 채팅 요청 시 로드)")
 
     # Embedding·PGVector 서버 기동 시점 초기화 (단일 진입: ensure_rag_initialized 사용)
     print("\n3. Embedding·PGVector 서버 기동 시 초기화 중...")
@@ -394,6 +392,28 @@ def initialize_vector_store():
         error_msg = str(e)
         print(f"[ERROR] PGVector 스토어 초기화 실패: {error_msg[:200]}...")
         raise
+
+
+def get_disclosure_vector_store() -> Optional[PGVector]:
+    """공시(disclosure) 전용 벡터 스토어 반환. 없으면 한 번만 생성 시도."""
+    global disclosure_vector_store
+    if disclosure_vector_store is not None:
+        return disclosure_vector_store
+    with _disclosure_store_lock:
+        if disclosure_vector_store is not None:
+            return disclosure_vector_store
+        if local_embeddings is None or vector_store is None:
+            return None
+        try:
+            disclosure_vector_store = PGVector(
+                embedding_function=local_embeddings,
+                collection_name=settings.disclosure_collection_name,
+                connection_string=CONNECTION_STRING,
+            )
+            return disclosure_vector_store
+        except Exception as e:
+            logging.debug("disclosure 벡터 스토어 로드 생략: %s", e)
+            return None
 
 
 def ensure_rag_initialized() -> None:
