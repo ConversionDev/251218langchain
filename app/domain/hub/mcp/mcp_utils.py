@@ -29,7 +29,7 @@ def get_chat_mcp_url() -> str:
         from core.config import get_settings  # type: ignore
         return get_settings().chat_mcp_url
     except Exception:
-        return os.getenv("CHAT_MCP_URL", "http://127.0.0.1:9011/server")
+        return os.getenv("CHAT_MCP_URL", "http://127.0.0.1:8000/internal/mcp/chat/server")
 
 
 def get_spam_mcp_url() -> str:
@@ -53,7 +53,7 @@ def get_chat_spoke_mcp_url() -> str:
         from core.config import get_settings  # type: ignore
         return get_settings().chat_spoke_mcp_url
     except Exception:
-        return os.getenv("CHAT_SPOKE_MCP_URL", "http://127.0.0.1:9012/server")
+        return os.getenv("CHAT_SPOKE_MCP_URL", "http://127.0.0.1:8000/internal/mcp/chat-spoke/server")
 
 
 def get_spam_spoke_mcp_url() -> str:

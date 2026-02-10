@@ -54,7 +54,10 @@ def run_agent(
     graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
 
     messages_list: List[BaseMessage] = []
-    base_prompt = system_prompt or "당신은 도움이 되는 AI 어시스턴트입니다."
+    base_prompt = system_prompt or (
+        "당신은 도움이 되는 AI 어시스턴트입니다. "
+        "답변은 일반 텍스트(문단)로만 작성하고, ```json 또는 불필요한 코드 블록을 사용하지 마세요."
+    )
     if semantic_action and semantic_action in _SEMANTIC_LABELS:
         label = _SEMANTIC_LABELS[semantic_action]
         base_prompt = base_prompt + "\n\n" + _SEMANTIC_PROMPT.format(label=label)
@@ -99,7 +102,10 @@ async def run_agent_stream(
     graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
 
     messages: List[BaseMessage] = []
-    base_prompt = system_prompt or "당신은 도움이 되는 AI 어시스턴트입니다."
+    base_prompt = system_prompt or (
+        "당신은 도움이 되는 AI 어시스턴트입니다. "
+        "답변은 일반 텍스트(문단)로만 작성하고, ```json 또는 불필요한 코드 블록을 사용하지 마세요."
+    )
     if semantic_action and semantic_action in _SEMANTIC_LABELS:
         label = _SEMANTIC_LABELS[semantic_action]
         base_prompt = base_prompt + "\n\n" + _SEMANTIC_PROMPT.format(label=label)
@@ -231,10 +237,11 @@ async def run_agent_stream(
             yield response
         context_used = ctx or context_used
 
-    # RAG로 실제 검색된 문서가 있을 때만 전송 (없으면 보내지 않아 일반 답변으로 보이게)
+    # RAG 결과 항상 전송: 있으면 미리보기, 없으면 빈 문자열 → 프론트에서 "DB 검색 0건" 등으로 구분 가능
+    preview = ""
     if context_used and context_used.strip():
         preview = (context_used[:600] + "…") if len(context_used) > 600 else context_used
-        yield {"context_preview": preview}
+    yield {"context_preview": preview}
 
 
 def get_thread_history(thread_id: str) -> List[BaseMessage]:

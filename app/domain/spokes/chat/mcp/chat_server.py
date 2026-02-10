@@ -127,6 +127,15 @@ async def calculate(expression: str) -> str:
         return result_to_str(result)
 
 
+@mcp_proxy.tool
+async def define(term: str) -> str:
+    """용어 정의/설명 검색. Chat Spoke call_tool."""
+    from fastmcp.client import Client  # type: ignore
+    async with Client(get_chat_spoke_mcp_url()) as client:
+        result = await client.call_tool("define", {"term": term})
+        return result_to_str(result)
+
+
 # ---------------------------------------------------------------------------
 # Spoke MCP 앱 (Chat MCP가 call_tool로 호출)
 # ---------------------------------------------------------------------------
@@ -161,4 +170,73 @@ def get_chat_spoke_mcp() -> FastMCP:
     def calculate(expression: str) -> str:
         return _calculate_impl(expression)
 
+    @mcp_spoke.tool
+    def define(term: str) -> str:
+        """용어 정의/설명을 문서에서 검색해 반환."""
+        return _search_documents_impl(term)
+
     return mcp_spoke
+
+
+# ---------------------------------------------------------------------------
+# in-process 호출 (main.py에 Chat MCP 마운트되어 있으므로 HTTP 없이 직접 호출)
+# ---------------------------------------------------------------------------
+
+
+def _invoke_chat_spoke_tool(name: str, args: dict) -> str:
+    """Spoke 도구를 HTTP 없이 직접 실행."""
+    a = args or {}
+    if name == "search_documents":
+        return _search_documents_impl(str(a.get("query", "")))
+    if name == "get_current_time":
+        return _get_current_time_impl()
+    if name == "calculate":
+        return _calculate_impl(str(a.get("expression", "")))
+    if name == "define":
+        return _search_documents_impl(str(a.get("term", "")))
+    if name == "classify":
+        return llama_classify(str(a.get("text", "")))
+    if name == "generate":
+        return exaone_generate(str(a.get("prompt", "")), max_tokens=int(a.get("max_tokens", 512)))
+    return f"알 수 없는 도구: {name}"
+
+
+async def _invoke_chat_mcp_tool(name: str, args: dict) -> str:
+    """Chat MCP 도구를 HTTP 없이 직접 실행 (graph 도구: search_documents, get_current_time, calculate, define 등)."""
+    return _invoke_chat_spoke_tool(name, args)
+
+
+# ---------------------------------------------------------------------------
+# 동일 프로세스 마운트용 ASGI 앱 (Hub 8000에 /internal/mcp/chat, /internal/mcp/chat-spoke)
+# ---------------------------------------------------------------------------
+
+
+def get_chat_mcp_http_app():
+    """Chat MCP FastAPI 앱. mount('/internal/mcp/chat', app) 시 MCP 엔드포인트: .../internal/mcp/chat/server"""
+    from fastapi import FastAPI  # type: ignore
+
+    app = FastAPI(title="Chat MCP", tags=["Chat MCP"])
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok", "service": "Chat MCP"}
+
+    mcp_asgi = mcp_proxy.http_app(path="/server")
+    app.mount("/server", mcp_asgi)
+    return app
+
+
+def get_chat_spoke_http_app():
+    """Chat Spoke FastAPI 앱. mount('/internal/mcp/chat-spoke', app) 시 MCP 엔드포인트: .../internal/mcp/chat-spoke/server"""
+    from fastapi import FastAPI  # type: ignore
+
+    app = FastAPI(title="Chat Spoke MCP", tags=["Chat Spoke MCP"])
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok", "service": "Chat Spoke MCP"}
+
+    spoke = get_chat_spoke_mcp()
+    mcp_asgi = spoke.http_app(path="/server")
+    app.mount("/server", mcp_asgi)
+    return app

@@ -16,6 +16,7 @@ export interface StreamEvent {
 /**
  * 스트리밍 채팅: POST /api/agent/chat/stream, SSE로 청크 수신.
  * onChunk(content), onContextPreview(preview), onDone() 콜백으로 전달.
+ * signal 전달 시 취소 가능.
  */
 export async function sendChatMessageStream(
   payload: AgentRequest,
@@ -24,14 +25,26 @@ export async function sendChatMessageStream(
     onContextPreview?: (preview: string | null) => void;
     onDone?: () => void;
     onError?: (message: string) => void;
-  }
+  },
+  options?: { signal?: AbortSignal }
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/agent/chat/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/agent/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: options?.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      callbacks.onDone?.();
+      return;
+    }
+    throw e;
+  }
   if (!res.ok) {
+    if (options?.signal?.aborted) return;
     const text = await res.text();
     callbacks.onError?.(`채팅 요청 실패 (${res.status}): ${text}`);
     return;
@@ -45,6 +58,11 @@ export async function sendChatMessageStream(
   let buffer = "";
   try {
     while (true) {
+      if (options?.signal?.aborted) {
+        await reader.cancel();
+        callbacks.onDone?.();
+        return;
+      }
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -60,7 +78,7 @@ export async function sendChatMessageStream(
           try {
             const event = JSON.parse(raw) as StreamEvent;
             if (event.content != null) callbacks.onChunk(event.content);
-            if (event.context_preview != null && event.context_preview !== "") callbacks.onContextPreview?.(event.context_preview);
+            if (event.context_preview !== undefined) callbacks.onContextPreview?.(event.context_preview);
             if (event.error) callbacks.onError?.(event.error);
           } catch {
             // ignore non-JSON lines
@@ -74,7 +92,7 @@ export async function sendChatMessageStream(
         try {
           const event = JSON.parse(raw) as StreamEvent;
           if (event.content != null) callbacks.onChunk(event.content);
-          if (event.context_preview != null && event.context_preview !== "") callbacks.onContextPreview?.(event.context_preview);
+          if (event.context_preview !== undefined) callbacks.onContextPreview?.(event.context_preview);
           if (event.error) callbacks.onError?.(event.error);
         } catch {
           // ignore
@@ -82,7 +100,17 @@ export async function sendChatMessageStream(
       }
     }
     callbacks.onDone?.();
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      callbacks.onDone?.();
+      return;
+    }
+    throw e;
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch {
+      // ignore if already released or cancelled
+    }
   }
 }

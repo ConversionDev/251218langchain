@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendChatMessageStream } from "../services";
@@ -10,16 +10,59 @@ import type { MessageItem } from "../types";
 /** 메시지 + 참고 문서(선택) */
 type DisplayMessage = MessageItem & { contextPreview?: string };
 
+/** 모델이 잘못 붙인 ```json / ``` 코드 블록만 제거 (앞쪽 빈 블록) */
+function stripLeadingJsonCodeBlock(text: string): string {
+  if (!text?.trim()) return text;
+  let s = text.trim();
+  if (s.startsWith("```json")) {
+    s = s.slice(7).trimStart();
+    if (s.startsWith("```")) s = s.slice(3).trimStart();
+  } else if (s.startsWith("```")) {
+    s = s.slice(3).trimStart();
+    if (s.startsWith("```")) s = s.slice(3).trimStart();
+  }
+  return s.trim();
+}
+
+/** 모델이 텍스트로 출력한 도구 호출 JSON 줄 제거 (define 등) */
+function stripToolCallJsonLines(text: string): string {
+  if (!text?.trim()) return text;
+  return text
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (!t.startsWith("{")) return true;
+      try {
+        const o = JSON.parse(t) as { name?: string };
+        return o?.name !== "define";
+      } catch {
+        return true;
+      }
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function ChatPanel() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +75,9 @@ export function ChatPanel() {
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const chatHistory: MessageItem[] = [...messages, userMessage].map((m) => ({
       role: m.role,
       content: m.content,
@@ -42,47 +88,54 @@ export function ChatPanel() {
       { role: "assistant", content: "", contextPreview: undefined },
     ]);
 
-    await sendChatMessageStream(
-      {
-        message: text,
-        use_rag: true,
-        chat_history: chatHistory.slice(0, -1),
-      },
-      {
-        onChunk(content) {
-          setMessages((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant")
-              next[next.length - 1] = { ...last, content: last.content + content };
-            return next;
-          });
+    try {
+      await sendChatMessageStream(
+        {
+          message: text,
+          use_rag: true,
+          chat_history: chatHistory.slice(0, -1),
         },
-        onContextPreview(preview) {
-          setMessages((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant")
-              next[next.length - 1] = { ...last, contextPreview: preview ?? undefined };
-            return next;
-          });
+        {
+          onChunk(content) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant")
+                next[next.length - 1] = { ...last, content: last.content + content };
+              return next;
+            });
+          },
+          onContextPreview(preview) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant")
+                next[next.length - 1] = { ...last, contextPreview: preview ?? undefined };
+              return next;
+            });
+          },
+          onDone() {
+            abortControllerRef.current = null;
+            setLoading(false);
+          },
+          onError(msg) {
+            setError(msg);
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant")
+                next[next.length - 1] = { ...last, content: last.content || `오류: ${msg}` };
+              return next;
+            });
+            setLoading(false);
+          },
         },
-        onDone() {
-          setLoading(false);
-        },
-        onError(msg) {
-          setError(msg);
-          setMessages((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant")
-              next[next.length - 1] = { ...last, content: last.content || `오류: ${msg}` };
-            return next;
-          });
-          setLoading(false);
-        },
-      }
-    );
+        { signal: controller.signal }
+      );
+    } catch {
+      abortControllerRef.current = null;
+      setLoading(false);
+    }
   };
 
   return (
@@ -113,13 +166,20 @@ export function ChatPanel() {
               }`}
             >
               <div className="whitespace-pre-wrap break-words">
-                {msg.content || (loading && i === messages.length - 1 && msg.role === "assistant" ? "\u00a0" : "")}
+                {msg.role === "assistant"
+                  ? stripToolCallJsonLines(stripLeadingJsonCodeBlock(msg.content ?? "")) ||
+                    (loading && i === messages.length - 1 ? "\u00a0" : "")
+                  : msg.content || ""}
               </div>
             </div>
-            {msg.role === "assistant" && msg.contextPreview && (
-              <details className="max-w-[85%] rounded border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            {msg.role === "assistant" && msg.contextPreview !== undefined && (
+              <details className="max-w-[85%] rounded border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground" open={!!msg.contextPreview}>
                 <summary className="cursor-pointer font-medium">참고한 문서 (RAG 검색 결과)</summary>
-                <pre className="mt-2 whitespace-pre-wrap break-words font-sans">{msg.contextPreview}</pre>
+                {msg.contextPreview ? (
+                  <pre className="mt-2 whitespace-pre-wrap break-words font-sans">{msg.contextPreview}</pre>
+                ) : (
+                  <p className="mt-2 text-muted-foreground">검색된 문서가 없습니다. (이 답변은 DB 검색 결과를 사용하지 않았습니다.)</p>
+                )}
               </details>
             )}
           </div>
@@ -142,17 +202,25 @@ export function ChatPanel() {
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="메시지 입력..."
+          placeholder="무엇이든 물어보세요"
           disabled={loading}
           className="flex-1"
         />
-        <Button type="submit" disabled={loading || !input.trim()}>
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
+        {loading ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleStop}
+            className="h-10 w-10 rounded-full border-border bg-background p-0 hover:bg-muted"
+            aria-label="답변 생성 중지"
+          >
+            <Square className="h-4 w-4 fill-foreground" />
+          </Button>
+        ) : (
+          <Button type="submit" disabled={!input.trim()} className="h-10 w-10 rounded-full p-0">
             <Send className="h-4 w-4" />
-          )}
-        </Button>
+          </Button>
+        )}
       </form>
       {error && (
         <div className="px-4 pb-2 text-sm text-destructive">{error}</div>

@@ -23,6 +23,14 @@ def register_routes(
     # Fast MCP 통일: /mcp/health + /mcp/server 한 앱으로 마운트
     app.mount("/mcp", mcp_app)
 
+    # Chat MCP / Chat Spoke 동일 프로세스 마운트 (기본 설정으로 9011/9012 없이 동작)
+    from domain.spokes.chat.mcp.chat_server import (  # type: ignore
+        get_chat_mcp_http_app,
+        get_chat_spoke_http_app,
+    )
+    app.mount("/internal/mcp/chat", get_chat_mcp_http_app())
+    app.mount("/internal/mcp/chat-spoke", get_chat_spoke_http_app())
+
     # 통합 API: prefix /api 로 일원화
     app.include_router(chat_router, prefix="/api")  # /api/agent/...
     app.include_router(disclosure_router, prefix="/api")  # /api/disclosure/...

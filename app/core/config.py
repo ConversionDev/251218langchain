@@ -185,13 +185,14 @@ class Settings(BaseSettings):
 
     # ===================
     # 도메인 MCP URL (Central → MCP → Spoke, call_tool)
+    # 기본값: 동일 프로세스(8000) 마운트. 별도 프로세스는 CHAT_MCP_URL=.../9011/server 등으로 지정.
     # ===================
     chat_mcp_url: str = Field(
-        default="http://127.0.0.1:9011/server",
-        description="Chat MCP 서버 URL (Central이 call_tool로 호출)",
+        default="http://127.0.0.1:8000/internal/mcp/chat/server",
+        description="Chat MCP 서버 URL (Hub가 call_tool로 호출)",
     )
     chat_spoke_mcp_url: str = Field(
-        default="http://127.0.0.1:9012/server",
+        default="http://127.0.0.1:8000/internal/mcp/chat-spoke/server",
         description="Chat Spoke MCP URL (Chat MCP가 call_tool로 호출)",
     )
     spam_mcp_url: str = Field(

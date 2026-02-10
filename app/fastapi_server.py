@@ -428,6 +428,15 @@ def ensure_rag_initialized() -> None:
             initialize_embeddings()
         if local_embeddings and vector_store is None:
             initialize_vector_store()
+        # disclosure 테이블 쿼리용 BGE-m3 한 번만 사전 로드 (fp16, GPU 통일)
+        try:
+            from domain.shared.embedding import preload_disclosure_embedding_model  # type: ignore
+            if preload_disclosure_embedding_model():
+                print("[OK] Disclosure 쿼리 임베딩(BGE-m3) 사전 로드 완료")
+            else:
+                print("[WARNING] Disclosure 쿼리 임베딩(BGE-m3) 사전 로드 실패")
+        except Exception as e:
+            print(f"[WARNING] Disclosure BGE preload 예외: {e}")
         _rag_initialized = True
 
 

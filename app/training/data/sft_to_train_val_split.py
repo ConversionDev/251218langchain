@@ -110,9 +110,9 @@ class TokenizerManager:
 
             prompt = f"{instruction}\n제목: {subject}\n첨부파일: {', '.join(attachments) if attachments else '없음'}\n수신일시: {received_at}"
 
-            # 토크나이징
-            tokens = self.tokenizer.encode(prompt, add_special_tokens=True)
-            token_length = len(tokens)
+            # 토크나이징 (fast tokenizer 권장: __call__ 사용, encode+pad 대신)
+            enc = self.tokenizer(prompt, add_special_tokens=True)
+            token_length = len(enc["input_ids"])
 
             return token_length, token_length <= max_length
         except Exception as e:

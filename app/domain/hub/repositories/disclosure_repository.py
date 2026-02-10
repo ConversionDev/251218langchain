@@ -5,9 +5,10 @@
 - embedding_content = [Standard] [Section]: Content 형태로 저장.
 """
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from langchain_core.documents import Document
+from sqlalchemy import text as sql_text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from domain.models.bases.disclosure import Disclosure  # type: ignore
@@ -100,8 +101,6 @@ def get_disclosure_doc_count(db: Session) -> int:
 
 def search_disclosures(db: Session, query_embedding: List[float], k: int = 5) -> List[str]:
     """벡터 유사도로 공시 청크 검색. content 문자열 리스트 반환."""
-    from sqlalchemy import text as sql_text  # type: ignore[import-untyped]
-    # pgvector: 파라미터는 리스트로 전달 (드라이버가 vector로 변환)
     vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
     r = db.execute(
         sql_text(
@@ -111,3 +110,52 @@ def search_disclosures(db: Session, query_embedding: List[float], k: int = 5) ->
         {"vec": vec_str, "k": k},
     )
     return [row[0] for row in r]
+
+
+def search_disclosures_with_filter(
+    db: Session,
+    query_embedding: List[float],
+    k: int = 5,
+    standard_types: Optional[List[str]] = None,
+) -> List[Tuple[Document, float]]:
+    """
+    disclosures 테이블에서 벡터 유사도 검색. id, content, source, page, standard_type, section_title, unique_id 반환.
+    standard_types가 있으면 해당 표준만 검색(예: ['IFRS_S1','IFRS_S2'], ['OECD'], ['ISO30414']).
+    반환: (Document, distance) 리스트. 코사인 거리(작을수록 유사).
+    """
+    vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    if standard_types:
+        sql = (
+            "SELECT id, content, source, page, standard_type, section_title, unique_id, "
+            "(embedding <-> CAST(:vec AS vector)) AS distance "
+            "FROM disclosures "
+            "WHERE embedding IS NOT NULL AND standard_type = ANY(:standard_types) "
+            "ORDER BY embedding <-> CAST(:vec AS vector) LIMIT :k"
+        )
+        params: Any = {"vec": vec_str, "k": k, "standard_types": standard_types}
+    else:
+        sql = (
+            "SELECT id, content, source, page, standard_type, section_title, unique_id, "
+            "(embedding <-> CAST(:vec AS vector)) AS distance "
+            "FROM disclosures "
+            "WHERE embedding IS NOT NULL "
+            "ORDER BY embedding <-> CAST(:vec AS vector) LIMIT :k"
+        )
+        params = {"vec": vec_str, "k": k}
+    r = db.execute(sql_text(sql), params)
+    result: List[Tuple[Document, float]] = []
+    for row in r:
+        doc_id, content, source, page, standard_type, section_title, unique_id, distance = row
+        doc = Document(
+            page_content=content or "",
+            metadata={
+                "id": doc_id,
+                "source": source or "",
+                "page": page,
+                "standard_type": standard_type or "",
+                "section_title": section_title or "",
+                "unique_id": unique_id or "",
+            },
+        )
+        result.append((doc, float(distance)))
+    return result

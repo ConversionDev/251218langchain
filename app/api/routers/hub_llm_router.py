@@ -6,12 +6,14 @@ spokes가 HTTP로 호출. domain.hub.llm으로 실제 처리.
 표준 흐름: /internal/chat/call, /internal/spam/call → Hub가 도메인 MCP에 call_tool 위임.
 """
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter(tags=["Hub LLM (Llama + ExaOne)"])
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -139,11 +141,7 @@ async def exaone_health():
 # Chat / Spam call (오케스트레이터 → HTTP → Hub → call_tool → 도메인 MCP → Spoke)
 # ---------------------------------------------------------------------------
 
-from domain.hub.mcp.mcp_utils import (  # type: ignore
-    get_chat_mcp_url,
-    get_spam_mcp_url,
-    result_to_str,
-)
+from domain.hub.mcp.mcp_utils import get_spam_mcp_url, result_to_str  # type: ignore
 
 
 class CallRequest(BaseModel):
@@ -156,16 +154,13 @@ _chat = APIRouter(prefix="/internal/chat", tags=["Hub Chat Proxy"])
 
 @_chat.post("/call")
 async def chat_call_endpoint(request: CallRequest) -> Dict[str, Any]:
-    """Hub → Chat MCP call_tool 위임. 오케스트레이터가 HTTP로 호출."""
+    """Hub → Chat MCP call_tool. main.py에 Chat MCP 마운트되어 있으므로 in-process 직접 호출."""
     try:
-        from fastmcp.client import Client  # type: ignore
-        url = get_chat_mcp_url()
-        async with Client(url) as client:
-            result = await client.call_tool(request.tool, request.arguments or {})
-            if hasattr(result, "data") and result.data is not None:
-                return {"result": result.data}
-            return {"result": result_to_str(result)}
+        from domain.spokes.chat.mcp.chat_server import _invoke_chat_mcp_tool  # type: ignore
+        result = await _invoke_chat_mcp_tool(request.tool, request.arguments or {})
+        return {"result": result}
     except Exception as e:
+        logger.exception("/internal/chat/call 실패: tool=%s", request.tool)
         raise HTTPException(status_code=500, detail=str(e))
 
 

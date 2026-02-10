@@ -74,12 +74,19 @@ if (-not $emulatorRunning) {
 
 # ShaderCompilerException 회피: impellerc가 쓸 shaders 폴더를 미리 생성
 $shadersDir = Join-Path $projectRoot "build\app\intermediates\flutter\debug\flutter_assets\shaders"
+$shadersParent = Split-Path $shadersDir -Parent
 if (-not (Test-Path $shadersDir)) {
     New-Item -ItemType Directory -Path $shadersDir -Force | Out-Null
     Write-Host "shaders 출력 폴더 생성: $shadersDir" -ForegroundColor Gray
 }
 
-flutter run --no-enable-impeller
+# 에뮬레이터 지정: emulator-5554 등 실행 중인 기기로 실행 (터미널 298-336 오류는 이 스크립트로 회피)
+$deviceId = $null
+$devicesOut = flutter devices 2>&1 | Out-String
+if ($devicesOut -match "emulator-(\d+)") { $deviceId = "emulator-$($matches[1])" }
+$runArgs = @("run", "--no-enable-impeller")
+if ($deviceId) { $runArgs += "-d", $deviceId }
+& flutter $runArgs
 $exitCode = $LASTEXITCODE
 if ($projectRoot -match "^[A-Z]:\\$") { subst $substDrive /D 2>$null }
 exit $exitCode

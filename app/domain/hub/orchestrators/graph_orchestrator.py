@@ -96,11 +96,21 @@ def calculate(expression: str) -> str:
     return _hub_result_to_str(result)
 
 
+@tool
+def define(term: str) -> str:
+    """용어(term)의 정의나 설명을 문서에서 검색해 반환합니다. 예: IFRS, OECD 등."""
+    from domain.hub.mcp.http_client import chat_call  # type: ignore
+
+    result = chat_call("search_documents", {"query": term})
+    return _hub_result_to_str(result)
+
+
 TOOLS = [
     analyze_with_exaone,
     search_documents,
     get_current_time,
     calculate,
+    define,
 ]
 TOOL_MAP: Dict[str, Any] = {t.name: t for t in TOOLS}
 
@@ -144,7 +154,10 @@ def model_node(state: ChatState) -> ChatState:
             if isinstance(msg, SystemMessage):
                 system_msg_idx = i
                 break
-        context_addition = f"\n\n참고 컨텍스트:\n{context}"
+        context_addition = (
+            f"\n\n참고 컨텍스트 (아래 문서를 우선 참고하여 답변하고, 인용 시 [출처: ...]를 밝혀 주세요):\n{context}"
+            "\n\n답변은 일반 텍스트로만 작성하고, ```json 또는 빈 코드 블록을 사용하지 마세요."
+        )
         if system_msg_idx is not None:
             old_content = str(messages[system_msg_idx].content)
             messages[system_msg_idx] = SystemMessage(
@@ -223,16 +236,59 @@ def tool_node(state: ChatState) -> ChatState:
 
 
 # 질문과 무관한 문서 제외: 거리(score)가 이 값 이하인 문서만 참고 (코사인 거리, 작을수록 유사)
-RAG_DISTANCE_THRESHOLD = 0.65
+RAG_DISTANCE_THRESHOLD = 0.8
+# 표준 키워드 없을 때: 최소거리가 이 값보다 크면 "공시 무관 질문"으로 보고 disclosure 결과 전부 제외
+RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE = 0.75
+
+def _infer_disclosure_standard_filter(query: str) -> Optional[Dict[str, Any]]:
+    """
+    질문 텍스트에서 참조할 disclosure 표준을 추론해 메타데이터 필터 dict 반환.
+    (PGVector 등 메타데이터 필터용)
+    """
+    types = _infer_disclosure_standard_types(query)
+    if not types:
+        return None
+    if len(types) == 1:
+        return {"standard_type": types[0]}
+    return {"standard_type": {"$in": types}}
 
 
-def _retrieve_with_threshold(store: Any, query: str, k: int = 5) -> List[Any]:
-    """유사도(거리) 임계값 이하인 문서만 반환. store에 따라 score 의미가 다를 수 있음."""
+def _infer_disclosure_standard_types(query: str) -> Optional[List[str]]:
+    """
+    질문 텍스트에서 참조할 disclosure 표준을 추론해 standard_type 리스트 반환.
+    - IFRS/S1/S2/국제 재무 → ['IFRS_S1', 'IFRS_S2']
+    - OECD/경제협력 → ['OECD']
+    - ISO/30414 → ['ISO30414']
+    - green stock/stocktake → ['GLOBAL_GREEN_STOCKTAKE']
+    표준이 불명확하면 None(필터 없음). disclosures 테이블 검색 시 사용.
+    """
+    if not query or not query.strip():
+        return None
+    q = query.strip().lower()
+    if "ifrs" in q or "s1" in q or "s2" in q or "국제 재무" in q or "국제재무" in q:
+        return ["IFRS_S1", "IFRS_S2"]
+    if "oecd" in q or "경제협력" in q or "경제 협력" in q:
+        return ["OECD"]
+    if "iso" in q or "30414" in q or "인적자본" in q:
+        return ["ISO30414"]
+    if "green stock" in q or "stocktake" in q or "global green" in q or "그린스탁" in q:
+        return ["GLOBAL_GREEN_STOCKTAKE"]
+    return None
+
+
+def _retrieve_with_threshold(
+    store: Any, query: str, k: int = 5, filter_dict: Optional[Dict[str, Any]] = None
+) -> List[Any]:
+    """유사도(거리) 임계값 이하인 문서만 반환. filter_dict 있으면 메타데이터 필터 적용(disclosure 표준별)."""
+    kwargs: Dict[str, Any] = {"query": query, "k": k}
+    if filter_dict:
+        kwargs["filter"] = filter_dict
     try:
         # (Document, score) 반환. pgvector 코사인 거리: 작을수록 유사
-        pairs = store.similarity_search_with_score(query, k=k)
+        pairs = store.similarity_search_with_score(**kwargs)
     except Exception:
-        return store.similarity_search(query, k=k)
+        kwargs.pop("filter", None)
+        return store.similarity_search(**kwargs)
     result = []
     for doc, score in pairs:
         if score <= RAG_DISTANCE_THRESHOLD:
@@ -279,26 +335,130 @@ def rag_node(state: ChatState) -> ChatState:
     if not user_query:
         return {"context": ""}
 
+    # 로그 레벨과 관계없이 RAG 진입을 확인할 수 있도록 WARNING 사용
+    _q = (user_query[:80] + "…") if len(user_query) > 80 else user_query
+    logger.warning("[RAG] 질의 처리 중: %s", _q)
     try:
         if "fastapi_server" in sys.modules:
             import fastapi_server  # type: ignore
 
             fastapi_server.ensure_rag_initialized()
             all_docs: list = []
+            main_count = 0
             if fastapi_server.vector_store:
                 main_docs = _retrieve_with_threshold(fastapi_server.vector_store, user_query, k=5)
+                main_count = len(main_docs)
                 all_docs.extend(main_docs)
-            disclosure_store = fastapi_server.get_disclosure_vector_store()
-            if disclosure_store:
+            # disclosures 테이블 검색 (id, content, embedding, source, page, standard_type, section_title, metadata, unique_id)
+            # 표준 판별 시 해당 standard_type만 검색
+            disclosure_count_before_threshold = 0
+            try:
+                from core.database import SessionLocal  # type: ignore
+                from domain.hub.repositories.disclosure_repository import (  # type: ignore
+                    search_disclosures_with_filter,
+                )
+
+                # disclosure 테이블은 FlagEmbedding(BGE-m3)으로 적재됨 → 쿼리도 동일 모델(fp16)로 같은 벡터 공간
+                query_vec = None
                 try:
-                    disclosure_docs = _retrieve_with_threshold(disclosure_store, user_query, k=5)
-                    if disclosure_docs:
-                        all_docs.extend(disclosure_docs)
-                except Exception as e:
-                    logger.debug("disclosure 검색 생략: %s", e)
+                    from domain.shared.embedding import get_disclosure_embedding_model  # type: ignore
+                    bge = get_disclosure_embedding_model()
+                    if bge is not None and hasattr(bge, "embed_query"):
+                        for attempt in range(2):
+                            try:
+                                query_vec = bge.embed_query(user_query)
+                                break
+                            except Exception as _e1:
+                                if attempt == 0:
+                                    logger.warning("[RAG] disclosure embed_query 1회 실패, 재시도: %s", _e1)
+                                else:
+                                    raise
+                except Exception as _e:
+                    logger.warning("[RAG] disclosure 쿼리 임베딩 실패: %s", _e)
+                if query_vec is None:
+                    emb = getattr(fastapi_server, "local_embeddings", None)
+                    if emb is not None and hasattr(emb, "embed_query"):
+                        query_vec = emb.embed_query(user_query)
+                if query_vec is not None:
+                    db = SessionLocal()
+                    try:
+                        standard_types = _infer_disclosure_standard_types(user_query)
+                        pairs = search_disclosures_with_filter(
+                            db, query_vec, k=10, standard_types=standard_types
+                        )
+                        disclosure_count_before_threshold = len(pairs)
+                        disclosure_passed = 0
+                        min_distance = None
+                        closest_doc = None
+                        passed_docs: List[Any] = []
+                        for doc, distance in pairs:
+                            if min_distance is None or distance < min_distance:
+                                min_distance = distance
+                                closest_doc = doc
+                            if distance <= RAG_DISTANCE_THRESHOLD:
+                                passed_docs.append(doc)
+                                disclosure_passed += 1
+                        # 표준 키워드 없을 때: 최소거리가 크면 무관한 질문으로 보고 disclosure 결과 사용 안 함
+                        if (
+                            standard_types is None
+                            and min_distance is not None
+                            and min_distance > RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE
+                        ):
+                            passed_docs = []
+                            disclosure_passed = 0
+                            logger.info(
+                                "[RAG] disclosure: 키워드 없음, 최소거리=%.4f > %.2f → 무관한 질문으로 판단, disclosure 제외",
+                                min_distance,
+                                RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE,
+                            )
+                        else:
+                            for doc in passed_docs:
+                                all_docs.append(doc)
+                            # 후보는 있는데 임계값 통과 0건이면 최소 1건이라도 포함 (거리 임계값 완화 fallback)
+                            if (
+                                disclosure_count_before_threshold > 0
+                                and disclosure_passed == 0
+                                and closest_doc is not None
+                            ):
+                                all_docs.append(closest_doc)
+                                disclosure_passed = 1
+                                logger.warning(
+                                    "[RAG] disclosure 임계값 통과 0건 → 최소 1건 포함 (최소거리=%.4f, threshold=%.2f)",
+                                    min_distance or 0,
+                                    RAG_DISTANCE_THRESHOLD,
+                                )
+                        extra = ""
+                        if disclosure_count_before_threshold > 0 and disclosure_passed == 0 and min_distance is not None and closest_doc is None:
+                            extra = f", 최소거리={min_distance:.4f}"
+                        level = logger.warning if disclosure_count_before_threshold > 0 and disclosure_passed == 0 else logger.info
+                        level(
+                            "[RAG] disclosure: standard_types=%s, 후보=%s, 임계값 통과=%s (threshold=%.2f)%s",
+                            standard_types,
+                            disclosure_count_before_threshold,
+                            disclosure_passed,
+                            RAG_DISTANCE_THRESHOLD,
+                            extra,
+                        )
+                    finally:
+                        db.close()
+                else:
+                    logger.warning("RAG disclosure: embed_query 사용 가능한 모델 없음, disclosure 검색 생략")
+            except Exception as e:
+                logger.warning("RAG disclosure(테이블) 검색 실패: %s", e, exc_info=True)
             if all_docs:
                 context = _build_context_with_sources(all_docs)
+                logger.info(
+                    "[RAG] context 사용: main=%s, disclosure 포함 총 %s건",
+                    main_count,
+                    len(all_docs),
+                )
                 return {"context": context}
+            logger.info(
+                "[RAG] 검색 결과 없음 (main=%s, disclosure 후보=%s, threshold=%.2f)",
+                main_count,
+                disclosure_count_before_threshold,
+                RAG_DISTANCE_THRESHOLD,
+            )
         return {"context": ""}
     except Exception as e:
         logger.warning("RAG 검색 실패: %s", e)
