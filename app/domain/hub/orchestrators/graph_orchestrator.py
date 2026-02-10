@@ -271,7 +271,20 @@ def _infer_disclosure_standard_types(query: str) -> Optional[List[str]]:
         return ["OECD"]
     if "iso" in q or "30414" in q or "인적자본" in q:
         return ["ISO30414"]
-    if "green stock" in q or "stocktake" in q or "global green" in q or "그린스탁" in q:
+    # green stock / 글로벌 그린 스톡테이크 (한글: 공백 무시 매칭 포함)
+    q_no_space = q.replace(" ", "")
+    if (
+        "green stock" in q
+        or "stocktake" in q
+        or "global green" in q
+        or "그린스탁" in q
+        or "그린 스탁" in q
+        or "그린 스톡" in q
+        or "그린스톡" in q
+        or "그린스톡" in q_no_space
+        or "그린스탁" in q_no_space
+        or "스톡테이크" in q
+    ):
         return ["GLOBAL_GREEN_STOCKTAKE"]
     return None
 
