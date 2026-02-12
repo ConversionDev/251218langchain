@@ -5,12 +5,14 @@
 상태(ChatState, SpamState)는 domain.models.states 에서 관리.
 """
 
+from .competency_anchor import CompetencyAnchor
 from .spam_model import EmailMetadata, LLaMAResult, SpamResult
 from .email_model import EmailRequest, EmailResponse
 from .vector_model import VectorSearchQuery, VectorSearchResult
 from .exaone_result_model import ExaoneResult, ExaoneConfig
 
 __all__ = [
+    "CompetencyAnchor",
     "EmailMetadata",
     "LLaMAResult",
     "SpamResult",

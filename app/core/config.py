@@ -161,6 +161,34 @@ class Settings(BaseSettings):
         default=None,
         description="OpenAI API 키",
     )
+    gemini_api_key: Optional[str] = Field(
+        default=None,
+        description="Gemini API 키 (멀티모달 채팅용)",
+    )
+    gemini_model: str = Field(
+        default="gemini-2.5-flash",
+        description="Gemini 모델 ID (예: gemini-2.5-flash, gemini-2.0-flash). 404 시 공식 문서 모델명 확인.",
+    )
+
+    # ===================
+    # 채팅 첨부 업로드 (BP: /api/agent/upload)
+    # ===================
+    upload_dir: Optional[str] = Field(
+        default=None,
+        description="업로드 파일 임시 저장 디렉터리 (비어 있으면 시스템 temp/rag_upload)",
+    )
+    upload_max_files: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="업로드 최대 파일 개수",
+    )
+    upload_max_file_size_mb: float = Field(
+        default=5.0,
+        ge=0.5,
+        le=20.0,
+        description="파일당 최대 크기(MB)",
+    )
 
     # ===================
     # Upstash Redis (임베딩 job 큐)

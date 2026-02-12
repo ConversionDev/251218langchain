@@ -16,25 +16,57 @@ for _cat in (UserWarning, FutureWarning):
     warnings.filterwarnings("ignore", message=".*fast tokenizer.*__call__.*", category=_cat)
 
 
+def _default_device() -> Optional[str]:
+    """CUDA 사용 가능 시 cuda:0, 아니면 None(라이브러리 기본)."""
+    try:
+        import torch  # type: ignore[import-untyped]
+        if torch.cuda.is_available():
+            return "cuda:0"
+    except Exception:
+        pass
+    return None
+
+
 class FlagEmbeddingWrapper:
     """FlagEmbedding BGEM3FlagModel → LangChain Embeddings 인터페이스 래퍼."""
 
-    def __init__(self, model_name: str = "BAAI/bge-m3", use_fp16: bool = True):
+    def __init__(
+        self,
+        model_name: str = "BAAI/bge-m3",
+        use_fp16: bool = True,
+        devices: Optional[str] = None,
+        batch_size: int = 512,
+    ):
         from FlagEmbedding import BGEM3FlagModel  # type: ignore[import-untyped]
 
+        if devices is None:
+            devices = _default_device()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             warnings.simplefilter("ignore", FutureWarning)
-            self._model = BGEM3FlagModel(model_name, use_fp16=use_fp16)
+            kwargs: Dict[str, Any] = {"use_fp16": use_fp16}
+            if devices is not None:
+                kwargs["devices"] = devices
+            try:
+                self._model = BGEM3FlagModel(model_name, **kwargs)
+            except TypeError:
+                kwargs.pop("devices", None)
+                self._model = BGEM3FlagModel(model_name, **kwargs)
+        self._batch_size = batch_size
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        """문서 리스트를 Dense 1024차원 벡터로 임베딩."""
+        """문서 리스트를 Dense 1024차원 벡터로 임베딩. 내부 배치로 처리."""
         if not texts:
             return []
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             warnings.simplefilter("ignore", FutureWarning)
-            result = self._model.encode_corpus(texts, return_dense=True, return_sparse=False)
+            result = self._model.encode_corpus(
+                texts,
+                return_dense=True,
+                return_sparse=False,
+                batch_size=getattr(self, "_batch_size", 512),
+            )
         dense = result.get("dense_vecs")
         if dense is None:
             return []
@@ -74,18 +106,27 @@ _disclosure_bge_model: Optional["FlagEmbeddingWrapper"] = None
 def get_embedding_model(
     model_name: Optional[str] = None,
     use_fp16: bool = True,
+    devices: Optional[str] = None,
+    batch_size: int = 512,
 ) -> FlagEmbeddingWrapper:
     """
     Soccer·Disclosure 공통 임베딩 모델 (FlagEmbedding BGE-m3).
     동일 인자로 호출 시 캐시된 인스턴스 반환(재로딩 없음).
+    devices: None이면 CUDA 사용 가능 시 cuda:0, 아니면 라이브러리 기본.
+    batch_size: encode_corpus 내부 배치 크기(기본 512, GPU 메모리 부족 시 줄이기).
     """
     if model_name is None:
         from core.config import get_settings  # type: ignore
 
         model_name = get_settings().default_embedding_model
-    key = (model_name, use_fp16)
+    key = (model_name, use_fp16, devices)
     if key not in _embedding_model_cache:
-        _embedding_model_cache[key] = FlagEmbeddingWrapper(model_name=model_name, use_fp16=use_fp16)
+        _embedding_model_cache[key] = FlagEmbeddingWrapper(
+            model_name=model_name,
+            use_fp16=use_fp16,
+            devices=devices,
+            batch_size=batch_size,
+        )
     return _embedding_model_cache[key]
 
 

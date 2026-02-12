@@ -36,6 +36,7 @@ def run_agent(
     chat_history: Optional[List[BaseMessage]] = None,
     thread_id: Optional[str] = None,
     semantic_action: Optional[str] = None,
+    images: Optional[List[str]] = None,
 ) -> Tuple[str, str]:
     """에이전트를 실행하고 응답을 반환합니다. RAG는 항상 사용.
 
@@ -52,6 +53,15 @@ def run_agent(
     """
     use_checkpointer = bool(thread_id)
     graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
+
+    # 이미지만 첨부한 경우: 이미지에서 검색용 문장 추출 → RAG 쿼리로 사용
+    if images and (not (user_text or "").strip() or (user_text or "").strip() == "[이미지 첨부]"):
+        from domain.hub.llm.gemini_adapter import get_image_caption_for_rag  # type: ignore
+
+        caption = get_image_caption_for_rag(images)
+        if caption:
+            user_text = caption
+            logger.info("[이미지→RAG] 캡션 추출 후 쿼리 사용: %s", (caption[:80] + "…") if len(caption) > 80 else caption)
 
     messages_list: List[BaseMessage] = []
     base_prompt = system_prompt or (
@@ -71,6 +81,7 @@ def run_agent(
         "messages": messages_list,
         "context": "",
         "model_provider": provider or "",
+        "images": images or [],
     }
     config = get_thread_config(thread_id)
     result: ChatState = graph.invoke(initial_state, config=config)
@@ -91,6 +102,7 @@ async def run_agent_stream(
     chat_history: Optional[List[BaseMessage]] = None,
     thread_id: Optional[str] = None,
     semantic_action: Optional[str] = None,
+    images: Optional[List[str]] = None,
 ) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
     """에이전트를 스트리밍 모드로 실행합니다. RAG는 항상 사용.
 
@@ -100,6 +112,15 @@ async def run_agent_stream(
     """
     use_checkpointer = bool(thread_id)
     graph = get_default_graph() if use_checkpointer else build_agent_graph(use_checkpointer=False)
+
+    # 이미지만 첨부한 경우: 이미지에서 검색용 문장 추출 → RAG 쿼리로 사용
+    if images and (not (user_text or "").strip() or (user_text or "").strip() == "[이미지 첨부]"):
+        from domain.hub.llm.gemini_adapter import get_image_caption_for_rag  # type: ignore
+
+        caption = get_image_caption_for_rag(images)
+        if caption:
+            user_text = caption
+            logger.info("[이미지→RAG] 캡션 추출 후 쿼리 사용: %s", (caption[:80] + "…") if len(caption) > 80 else caption)
 
     messages: List[BaseMessage] = []
     base_prompt = system_prompt or (
@@ -119,6 +140,7 @@ async def run_agent_stream(
         "messages": messages,
         "context": "",
         "model_provider": provider or "",
+        "images": images or [],
     }
     config = get_thread_config(thread_id)
     debug_mode = settings.debug_streaming
@@ -232,6 +254,7 @@ async def run_agent_stream(
             chat_history=chat_history,
             thread_id=thread_id,
             semantic_action=semantic_action,
+            images=images,
         )
         if response:
             yield response

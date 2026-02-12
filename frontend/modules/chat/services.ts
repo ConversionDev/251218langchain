@@ -1,3 +1,8 @@
+/**
+ * 채팅 API 클라이언트 (업로드 → file_ids, 채팅 스트림 JSON)
+ * 백엔드: POST /api/agent/upload, POST /api/agent/chat/stream
+ */
+
 import type { AgentRequest } from "./types";
 
 const API_BASE =
@@ -5,19 +10,36 @@ const API_BASE =
     ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
     : "http://localhost:8000";
 
-/** 스트림 이벤트: content 청크 또는 context_preview / semantic_action / error */
 export interface StreamEvent {
   content?: string;
-  context_preview?: string;
+  context_preview?: string | null;
   semantic_action?: string | null;
   error?: string;
 }
 
-/**
- * 스트리밍 채팅: POST /api/agent/chat/stream, SSE로 청크 수신.
- * onChunk(content), onContextPreview(preview), onDone() 콜백으로 전달.
- * signal 전달 시 취소 가능.
- */
+/** 채팅 첨부용 파일 업로드. POST /api/agent/upload → file_ids */
+export async function uploadChatFiles(
+  files: Blob[],
+  options?: { signal?: AbortSignal }
+): Promise<{ file_ids: string[] }> {
+  const form = new FormData();
+  files.forEach((blob, i) => {
+    const ext = blob.type?.startsWith("image/png") ? "png" : "jpg";
+    form.append("files", blob, `image_${i}.${ext}`);
+  });
+  const res = await fetch(`${API_BASE}/api/agent/upload`, {
+    method: "POST",
+    body: form,
+    signal: options?.signal,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `업로드 실패 (${res.status})`);
+  }
+  return res.json();
+}
+
+/** 스트리밍 채팅. POST /api/agent/chat/stream (JSON만) */
 export async function sendChatMessageStream(
   payload: AgentRequest,
   callbacks: {
@@ -76,12 +98,13 @@ export async function sendChatMessageStream(
             return;
           }
           try {
-            const event = JSON.parse(raw) as StreamEvent;
-            if (event.content != null) callbacks.onChunk(event.content);
-            if (event.context_preview !== undefined) callbacks.onContextPreview?.(event.context_preview);
-            if (event.error) callbacks.onError?.(event.error);
+            const event = raw ? (JSON.parse(raw) as StreamEvent) : null;
+            if (event?.content != null) callbacks.onChunk(event.content);
+            if (event?.context_preview !== undefined)
+              callbacks.onContextPreview?.(event.context_preview ?? null);
+            if (event?.error) callbacks.onError?.(event.error);
           } catch {
-            // ignore non-JSON lines
+            // ignore non-JSON
           }
         }
       }
@@ -90,10 +113,11 @@ export async function sendChatMessageStream(
       const raw = buffer.slice(6).trim();
       if (raw !== "[DONE]") {
         try {
-          const event = JSON.parse(raw) as StreamEvent;
-          if (event.content != null) callbacks.onChunk(event.content);
-          if (event.context_preview !== undefined) callbacks.onContextPreview?.(event.context_preview);
-          if (event.error) callbacks.onError?.(event.error);
+          const event = raw ? (JSON.parse(raw) as StreamEvent) : null;
+          if (event?.content != null) callbacks.onChunk(event.content);
+          if (event?.context_preview !== undefined)
+            callbacks.onContextPreview?.(event.context_preview ?? null);
+          if (event?.error) callbacks.onError?.(event.error);
         } catch {
           // ignore
         }
@@ -110,7 +134,7 @@ export async function sendChatMessageStream(
     try {
       reader.releaseLock();
     } catch {
-      // ignore if already released or cancelled
+      // ignore
     }
   }
 }

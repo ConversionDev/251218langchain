@@ -140,7 +140,22 @@ def _get_llm_provider():
 
 
 def model_node(state: ChatState) -> ChatState:
-    """모델 노드. LLM 호출·Tool Calling, 스트리밍 지원."""
+    """모델 노드. LLM 호출·Tool Calling, 스트리밍 지원. 이미지 있으면 Gemini 멀티모달 사용."""
+    images: Optional[List[str]] = state.get("images") or []
+    if images:
+        # 멀티모달: RAG 컨텍스트 + 사용자 메시지 + 이미지를 Gemini에 전달
+        messages = list(state.get("messages", []))
+        context = state.get("context") or ""
+        user_text = ""
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                user_text = str(msg.content)
+                break
+        from domain.hub.llm.gemini_adapter import generate_multimodal  # type: ignore
+
+        full_response = generate_multimodal(user_text=user_text, images=images, context=context or None)
+        return {"messages": [AIMessage(content=full_response)], "model_provider": "gemini"}
+
     LLMProvider = _get_llm_provider()
     provider = state.get("model_provider") or LLMProvider.get_provider_name()
     llm = _get_llm(provider=provider)
@@ -235,10 +250,13 @@ def tool_node(state: ChatState) -> ChatState:
     return {"messages": results}
 
 
-# 질문과 무관한 문서 제외: 거리(score)가 이 값 이하인 문서만 참고 (코사인 거리, 작을수록 유사)
+# 질문과 무관한 문서 제외: 거리(score)가 이 값 이하인 문서만 참고 (코사인 거리, 작을수록 유사).
+# 임계값 통과 0건이면 컨텍스트 없이 모델 자체 지식으로만 답하고 출처 미표시.
 RAG_DISTANCE_THRESHOLD = 0.8
 # 표준 키워드 없을 때: 최소거리가 이 값보다 크면 "공시 무관 질문"으로 보고 disclosure 결과 전부 제외
 RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE = 0.75
+# competency_anchors fallback: 최소거리 1건 넣을 때의 상한. 이보다 크면 무관한 질문으로 보고 fallback 안 함
+RAG_ANCHOR_FALLBACK_MAX_DISTANCE = 0.9
 
 def _infer_disclosure_standard_filter(query: str) -> Optional[Dict[str, Any]]:
     """
@@ -330,6 +348,10 @@ def _build_context_with_sources(docs: List[Any]) -> str:
             tokens.append(f"standard_type={standard_type}")
         if unique_id:
             tokens.append(f"unique_id={unique_id}")
+        if meta.get("category"):
+            tokens.append(f"category={meta.get('category')}")
+        if meta.get("section_title"):
+            tokens.append(f"section_title={meta.get('section_title')}")
         cite = "[출처: " + ", ".join(tokens) + "]" if tokens else "[출처: (메타데이터 없음)]"
         parts.append(f"{cite}\n{doc.page_content}")
     return "\n\n".join(parts)
@@ -369,6 +391,9 @@ def rag_node(state: ChatState) -> ChatState:
                 from core.database import SessionLocal  # type: ignore
                 from domain.hub.repositories.disclosure_repository import (  # type: ignore
                     search_disclosures_with_filter,
+                )
+                from domain.hub.repositories.competency_anchor_repository import (  # type: ignore
+                    search_competency_anchors_with_filter,
                 )
 
                 # disclosure 테이블은 FlagEmbedding(BGE-m3)으로 적재됨 → 쿼리도 동일 모델(fp16)로 같은 벡터 공간
@@ -427,7 +452,7 @@ def rag_node(state: ChatState) -> ChatState:
                         else:
                             for doc in passed_docs:
                                 all_docs.append(doc)
-                            # 후보는 있는데 임계값 통과 0건이면 최소 1건이라도 포함 (거리 임계값 완화 fallback)
+                            # 후보가 있으나 임계값 통과 0건이면 최소거리 문서 1건 포함 (DB 관련 내용 있으므로 출처 표시)
                             if (
                                 disclosure_count_before_threshold > 0
                                 and disclosure_passed == 0
@@ -435,10 +460,9 @@ def rag_node(state: ChatState) -> ChatState:
                             ):
                                 all_docs.append(closest_doc)
                                 disclosure_passed = 1
-                                logger.warning(
-                                    "[RAG] disclosure 임계값 통과 0건 → 최소 1건 포함 (최소거리=%.4f, threshold=%.2f)",
+                                logger.info(
+                                    "[RAG] disclosure: 임계값 미통과 → 최소거리 1건 포함 (출처 표시), 거리=%.4f",
                                     min_distance or 0,
-                                    RAG_DISTANCE_THRESHOLD,
                                 )
                         extra = ""
                         if disclosure_count_before_threshold > 0 and disclosure_passed == 0 and min_distance is not None and closest_doc is None:
@@ -452,6 +476,45 @@ def rag_node(state: ChatState) -> ChatState:
                             RAG_DISTANCE_THRESHOLD,
                             extra,
                         )
+                        # competency_anchors 테이블 검색 (동일 BGE-m3 벡터 공간, category/level 필터 없이 k건)
+                        anchor_pairs = search_competency_anchors_with_filter(db, query_vec, k=5)
+                        anchor_passed = 0
+                        min_anchor_distance = None
+                        closest_anchor_doc = None
+                        for doc, distance in anchor_pairs:
+                            if min_anchor_distance is None or distance < min_anchor_distance:
+                                min_anchor_distance = distance
+                                closest_anchor_doc = doc
+                            if distance <= RAG_DISTANCE_THRESHOLD:
+                                all_docs.append(doc)
+                                anchor_passed += 1
+                        # 후보가 있으나 임계값 통과 0건이면, 최소거리가 상한 이하일 때만 최소거리 1건 포함 (무관한 질문 시 능력/직무 출처 방지)
+                        if (
+                            anchor_pairs
+                            and anchor_passed == 0
+                            and closest_anchor_doc is not None
+                            and (min_anchor_distance is not None and min_anchor_distance <= RAG_ANCHOR_FALLBACK_MAX_DISTANCE)
+                        ):
+                            all_docs.append(closest_anchor_doc)
+                            anchor_passed = 1
+                            logger.info(
+                                "[RAG] competency_anchors: 임계값 미통과 → 최소거리 1건 포함 (거리=%.4f <= %.2f)",
+                                min_anchor_distance or 0,
+                                RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
+                            )
+                        elif anchor_pairs and anchor_passed == 0 and min_anchor_distance is not None and min_anchor_distance > RAG_ANCHOR_FALLBACK_MAX_DISTANCE:
+                            logger.info(
+                                "[RAG] competency_anchors: 최소거리=%.4f > %.2f → 무관한 질문으로 판단, fallback 제외",
+                                min_anchor_distance,
+                                RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
+                            )
+                        if anchor_pairs:
+                            logger.info(
+                                "[RAG] competency_anchors: 후보=%s, 임계값 통과=%s (threshold=%.2f)",
+                                len(anchor_pairs),
+                                anchor_passed,
+                                RAG_DISTANCE_THRESHOLD,
+                            )
                     finally:
                         db.close()
                 else:
@@ -461,7 +524,7 @@ def rag_node(state: ChatState) -> ChatState:
             if all_docs:
                 context = _build_context_with_sources(all_docs)
                 logger.info(
-                    "[RAG] context 사용: main=%s, disclosure 포함 총 %s건",
+                    "[RAG] context 사용: main=%s, disclosure+anchor 포함 총 %s건",
                     main_count,
                     len(all_docs),
                 )

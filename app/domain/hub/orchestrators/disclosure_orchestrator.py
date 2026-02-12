@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 from langchain_core.documents import Document
+from tqdm import tqdm
 from langgraph.graph import END, StateGraph
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ def _load_chunks_node(state: DisclosureIngestState) -> DisclosureIngestState:
     txt_path = state.get("txt_path")
 
     if documents_config:
-        for path, standard_type, source in documents_config:
+        for path, standard_type, source in tqdm(documents_config, desc="Load chunks (disclosure)", unit="file"):
             p = Path(path)
             if not p.exists():
                 logger.warning("[DisclosureIngest] 파일 없음, 건너뜀: %s", p)

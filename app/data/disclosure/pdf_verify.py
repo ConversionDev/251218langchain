@@ -63,28 +63,27 @@ def verify_chunking_integrity(
 def verify_one(pdf_path: Path, txt_path: Path) -> Tuple[List[int], int]:
     """
     PDF 한 파일과 대응 TXT를 비교. (불일치한 페이지 번호 1-based 리스트, PDF 페이지 수) 반환.
-    빈 리스트면 모두 일치.
+    빈 리스트면 모두 일치. 추출은 StrategyFactory로 선택된 전략 사용(동일 전략으로 생성된 TXT와 비교).
     """
-    import fitz  # type: ignore
+    from domain.shared.strategies import StrategyFactory  # type: ignore
 
-    doc = fitz.open(pdf_path)
-    pdf_page_count = len(doc)
+    pdf_full = StrategyFactory.get_strategy(pdf_path).extract(pdf_path)
+    blocks = pdf_full.split(PAGE_SEP)
+    pdf_page_count = len(blocks)
 
     raw = txt_path.read_text(encoding="utf-8")
-    blocks = raw.split(PAGE_SEP)
-    txt_page_count = len(blocks)
+    txt_blocks = raw.split(PAGE_SEP)
+    txt_page_count = len(txt_blocks)
 
     if pdf_page_count != txt_page_count:
-        doc.close()
         raise ValueError(f"페이지 수 불일치: PDF={pdf_page_count}, TXT={txt_page_count}")
 
     mismatches = []
     for i in range(pdf_page_count):
-        pdf_text = doc[i].get_text()
-        txt_block = (blocks[i] if i < len(blocks) else "").strip()
-        if normalize(pdf_text) != normalize(txt_block):
+        pdf_block = (blocks[i] if i < len(blocks) else "").strip()
+        txt_block = (txt_blocks[i] if i < len(txt_blocks) else "").strip()
+        if normalize(pdf_block) != normalize(txt_block):
             mismatches.append(i + 1)
-    doc.close()
     return (mismatches, pdf_page_count)
 
 

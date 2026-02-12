@@ -25,8 +25,9 @@ class SpamState(TypedDict, total=False):
 
 
 class ChatState(TypedDict, total=False):
-    """채팅 플로우 상태 (메시지·RAG 컨텍스트·프로바이더)."""
+    """채팅 플로우 상태 (메시지·RAG 컨텍스트·프로바이더·이미지)."""
 
     messages: Annotated[List[BaseMessage], add_messages]
     context: Optional[str]
     model_provider: Optional[str]
+    images: Optional[List[str]]  # base64 이미지 배열 (멀티모달 시 Gemini 사용)

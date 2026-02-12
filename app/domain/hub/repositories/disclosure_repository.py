@@ -8,10 +8,14 @@
 from typing import Any, List, Optional, Tuple
 
 from langchain_core.documents import Document
+from tqdm import tqdm
 from sqlalchemy import text as sql_text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from domain.models.bases.disclosure import Disclosure  # type: ignore
+
+# 임베딩 채울 때: inference 128, commit 1024건마다 (4060 Ti 16GB 최종 세팅)
+COMMIT_EVERY_EMBEDDING_ROWS = 1024
 
 
 def _build_embedding_content(doc: Document) -> str:
@@ -45,7 +49,7 @@ def save_batch(
     if sources_to_replace:
         delete_by_sources(db, sources_to_replace)
         db.flush()
-    for doc in documents:
+    for doc in tqdm(documents, desc="Insert (disclosures)", unit="doc"):
         meta = doc.metadata or {}
         embedding_text = _build_embedding_content(doc)
         metadata_json = {
@@ -70,13 +74,20 @@ def save_batch(
     return filled
 
 
-def fill_embeddings_for_disclosures(db: Session, embeddings_model: Any, batch_size: int = 32) -> int:
-    """embedding이 null인 행만 읽어 임베딩 계산 후 업데이트."""
+def fill_embeddings_for_disclosures(
+    db: Session,
+    embeddings_model: Any,
+    batch_size: int = 128,
+    commit_every: int = COMMIT_EVERY_EMBEDDING_ROWS,
+) -> int:
+    """embedding이 null인 행만 읽어 임베딩 계산 후 업데이트.
+    연산 batch_size(128), commit commit_every(1024)건마다."""
     rows = db.query(Disclosure).filter(Disclosure.embedding.is_(None)).all()
     if not rows:
         return 0
     texts = [r.embedding_content or r.content for r in rows]
     processed = 0
+    pbar = tqdm(total=len(texts), desc="Embedding (disclosures)", unit="doc", unit_scale=False)
     for i in range(0, len(texts), batch_size):
         batch_texts = texts[i : i + batch_size]
         batch_rows = rows[i : i + batch_size]
@@ -91,6 +102,12 @@ def fill_embeddings_for_disclosures(db: Session, embeddings_model: Any, batch_si
             if vec is not None:
                 row.embedding = vec
                 processed += 1
+        if processed % commit_every == 0:
+            db.commit()
+        pbar.update(len(batch_texts))
+    pbar.close()
+    if processed and processed % commit_every != 0:
+        db.commit()
     return processed
 
 
