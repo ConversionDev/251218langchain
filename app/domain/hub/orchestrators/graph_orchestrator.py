@@ -261,7 +261,7 @@ RAG_ANCHOR_FALLBACK_MAX_DISTANCE = 0.9
 def _infer_disclosure_standard_filter(query: str) -> Optional[Dict[str, Any]]:
     """
     질문 텍스트에서 참조할 disclosure 표준을 추론해 메타데이터 필터 dict 반환.
-    (PGVector 등 메타데이터 필터용)
+    (메타데이터 필터용)
     """
     types = _infer_disclosure_standard_types(query)
     if not types:
@@ -274,57 +274,54 @@ def _infer_disclosure_standard_filter(query: str) -> Optional[Dict[str, Any]]:
 def _infer_disclosure_standard_types(query: str) -> Optional[List[str]]:
     """
     질문 텍스트에서 참조할 disclosure 표준을 추론해 standard_type 리스트 반환.
-    - IFRS/S1/S2/국제 재무 → ['IFRS_S1', 'IFRS_S2']
+    한글 검색도 적용 (공시, 기후, 탄소, 인적자본, OECD 등).
+    - IFRS/S1/S2/국제 재무/기후 공시/탄소 → ['IFRS_S1', 'IFRS_S2']
     - OECD/경제협력 → ['OECD']
-    - ISO/30414 → ['ISO30414']
-    - green stock/stocktake → ['GLOBAL_GREEN_STOCKTAKE']
-    표준이 불명확하면 None(필터 없음). disclosures 테이블 검색 시 사용.
+    - ISO/30414/인적자본 공시 → ['ISO30414']
+    - green stock/stocktake/그린스톡 → ['GLOBAL_GREEN_STOCKTAKE']
     """
     if not query or not query.strip():
         return None
     q = query.strip().lower()
-    if "ifrs" in q or "s1" in q or "s2" in q or "국제 재무" in q or "국제재무" in q:
-        return ["IFRS_S1", "IFRS_S2"]
-    if "oecd" in q or "경제협력" in q or "경제 협력" in q:
-        return ["OECD"]
-    if "iso" in q or "30414" in q or "인적자본" in q:
-        return ["ISO30414"]
-    # green stock / 글로벌 그린 스톡테이크 (한글: 공백 무시 매칭 포함)
     q_no_space = q.replace(" ", "")
+    # IFRS S1/S2: 국제 재무, 기후 공시, 탄소 공시, 지속가능성 공시 등
     if (
-        "green stock" in q
-        or "stocktake" in q
-        or "global green" in q
-        or "그린스탁" in q
-        or "그린 스탁" in q
-        or "그린 스톡" in q
-        or "그린스톡" in q
-        or "그린스톡" in q_no_space
-        or "그린스탁" in q_no_space
-        or "스톡테이크" in q
+        "ifrs" in q or "s1" in q or "s2" in q
+        or "국제 재무" in q or "국제재무" in q
+        or "기후" in q or "탄소" in q or "지속가능" in q or "esg" in q
+        or ("공시" in q_no_space and ("기후" in q or "탄소" in q or "재무" in q))
+    ):
+        return ["IFRS_S1", "IFRS_S2"]
+    if "oecd" in q or "경제협력" in q or "경제 협력" in q or "경제협력기구" in q:
+        return ["OECD"]
+    if "iso" in q or "30414" in q or "인적자본" in q or "인적 자본" in q or "인사 공시" in q:
+        return ["ISO30414"]
+    # 글로벌 그린 스톡테이크
+    if (
+        "green stock" in q or "stocktake" in q or "global green" in q
+        or "그린스탁" in q or "그린 스탁" in q or "그린 스톡" in q or "그린스톡" in q
+        or "그린스톡" in q_no_space or "그린스탁" in q_no_space
+        or "스톡테이크" in q or "스톡 테이크" in q
     ):
         return ["GLOBAL_GREEN_STOCKTAKE"]
     return None
 
 
-def _retrieve_with_threshold(
-    store: Any, query: str, k: int = 5, filter_dict: Optional[Dict[str, Any]] = None
-) -> List[Any]:
-    """유사도(거리) 임계값 이하인 문서만 반환. filter_dict 있으면 메타데이터 필터 적용(disclosure 표준별)."""
-    kwargs: Dict[str, Any] = {"query": query, "k": k}
-    if filter_dict:
-        kwargs["filter"] = filter_dict
-    try:
-        # (Document, score) 반환. pgvector 코사인 거리: 작을수록 유사
-        pairs = store.similarity_search_with_score(**kwargs)
-    except Exception:
-        kwargs.pop("filter", None)
-        return store.similarity_search(**kwargs)
-    result = []
-    for doc, score in pairs:
-        if score <= RAG_DISTANCE_THRESHOLD:
-            result.append(doc)
-    return result
+def _build_rag_sources(docs: List[Any]) -> List[Dict[str, Any]]:
+    """프론트 출처 표시용: table, id, source, page, standard_type, section_title 목록."""
+    out: List[Dict[str, Any]] = []
+    for doc in docs:
+        meta = getattr(doc, "metadata", None) or {}
+        out.append({
+            "table": meta.get("table", "disclosures"),
+            "id": meta.get("id") or meta.get("doc_id"),
+            "source": meta.get("source", ""),
+            "page": meta.get("page"),
+            "standard_type": meta.get("standard_type", ""),
+            "section_title": meta.get("section_title", ""),
+            "unique_id": meta.get("unique_id", ""),
+        })
+    return out
 
 
 def _build_context_with_sources(docs: List[Any]) -> str:
@@ -358,7 +355,7 @@ def _build_context_with_sources(docs: List[Any]) -> str:
 
 
 def rag_node(state: ChatState) -> ChatState:
-    """RAG 노드. PGVector 유사도 검색 후, 거리 임계값 이하인 문서만 컨텍스트로 사용."""
+    """RAG 노드. disclosures·competency_anchors 테이블 검색 후, 거리 임계값 이하인 문서만 컨텍스트로 사용."""
     messages = state.get("messages", [])
 
     user_query: Optional[str] = None
@@ -368,7 +365,7 @@ def rag_node(state: ChatState) -> ChatState:
             break
 
     if not user_query:
-        return {"context": ""}
+        return {"context": "", "rag_sources": []}
 
     # 로그 레벨과 관계없이 RAG 진입을 확인할 수 있도록 WARNING 사용
     _q = (user_query[:80] + "…") if len(user_query) > 80 else user_query
@@ -379,11 +376,7 @@ def rag_node(state: ChatState) -> ChatState:
 
             fastapi_server.ensure_rag_initialized()
             all_docs: list = []
-            main_count = 0
-            if fastapi_server.vector_store:
-                main_docs = _retrieve_with_threshold(fastapi_server.vector_store, user_query, k=5)
-                main_count = len(main_docs)
-                all_docs.extend(main_docs)
+            main_count = 0  # LangChain PGVector 미사용 (disclosures·competency 테이블만 사용)
             # disclosures 테이블 검색 (id, content, embedding, source, page, standard_type, section_title, metadata, unique_id)
             # 표준 판별 시 해당 standard_type만 검색
             disclosure_count_before_threshold = 0
@@ -451,6 +444,8 @@ def rag_node(state: ChatState) -> ChatState:
                             )
                         else:
                             for doc in passed_docs:
+                                if getattr(doc, "metadata", None) is not None:
+                                    doc.metadata["table"] = "disclosures"
                                 all_docs.append(doc)
                             # 후보가 있으나 임계값 통과 0건이면 최소거리 문서 1건 포함 (DB 관련 내용 있으므로 출처 표시)
                             if (
@@ -458,6 +453,8 @@ def rag_node(state: ChatState) -> ChatState:
                                 and disclosure_passed == 0
                                 and closest_doc is not None
                             ):
+                                if getattr(closest_doc, "metadata", None) is not None:
+                                    closest_doc.metadata["table"] = "disclosures"
                                 all_docs.append(closest_doc)
                                 disclosure_passed = 1
                                 logger.info(
@@ -486,6 +483,8 @@ def rag_node(state: ChatState) -> ChatState:
                                 min_anchor_distance = distance
                                 closest_anchor_doc = doc
                             if distance <= RAG_DISTANCE_THRESHOLD:
+                                if getattr(doc, "metadata", None) is not None:
+                                    doc.metadata["table"] = "competency_anchors"
                                 all_docs.append(doc)
                                 anchor_passed += 1
                         # 후보가 있으나 임계값 통과 0건이면, 최소거리가 상한 이하일 때만 최소거리 1건 포함 (무관한 질문 시 능력/직무 출처 방지)
@@ -495,6 +494,8 @@ def rag_node(state: ChatState) -> ChatState:
                             and closest_anchor_doc is not None
                             and (min_anchor_distance is not None and min_anchor_distance <= RAG_ANCHOR_FALLBACK_MAX_DISTANCE)
                         ):
+                            if getattr(closest_anchor_doc, "metadata", None) is not None:
+                                closest_anchor_doc.metadata["table"] = "competency_anchors"
                             all_docs.append(closest_anchor_doc)
                             anchor_passed = 1
                             logger.info(
@@ -523,22 +524,23 @@ def rag_node(state: ChatState) -> ChatState:
                 logger.warning("RAG disclosure(테이블) 검색 실패: %s", e, exc_info=True)
             if all_docs:
                 context = _build_context_with_sources(all_docs)
+                rag_sources = _build_rag_sources(all_docs)
                 logger.info(
                     "[RAG] context 사용: main=%s, disclosure+anchor 포함 총 %s건",
                     main_count,
                     len(all_docs),
                 )
-                return {"context": context}
+                return {"context": context, "rag_sources": rag_sources}
             logger.info(
                 "[RAG] 검색 결과 없음 (main=%s, disclosure 후보=%s, threshold=%.2f)",
                 main_count,
                 disclosure_count_before_threshold,
                 RAG_DISTANCE_THRESHOLD,
             )
-        return {"context": ""}
+        return {"context": "", "rag_sources": []}
     except Exception as e:
         logger.warning("RAG 검색 실패: %s", e)
-        return {"context": ""}
+        return {"context": "", "rag_sources": []}
 
 
 # --- 3. 체크포인터 ---

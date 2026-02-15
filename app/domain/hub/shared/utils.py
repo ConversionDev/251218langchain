@@ -15,57 +15,7 @@ os.environ.setdefault("TRANSFORMERS_TRUST_REMOTE_CODE", "true")
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 
-def get_app_root() -> Path:
-    """App 루트 디렉토리 경로 반환."""
-    from core.paths import get_app_root as _get  # type: ignore
-
-    return _get()
-
-
-def get_api_root() -> Path:
-    """API 루트 디렉토리 경로 반환 (get_app_root 별칭)."""
-    return get_app_root()
-
-
-def get_artifacts_dir() -> Path:
-    """Artifacts 디렉토리 경로 반환."""
-    from core.paths import get_artifacts_dir as _get  # type: ignore
-
-    return _get()
-
-
-def get_base_models_dir() -> Path:
-    """Base 모델 디렉토리 경로 반환."""
-    from core.paths import get_base_models_dir as _get  # type: ignore
-
-    return _get()
-
-
-def get_fine_tuned_dir() -> Path:
-    """Fine-tuning된 모델 디렉토리 경로 반환."""
-    from core.paths import get_fine_tuned_dir as _get  # type: ignore
-
-    return _get()
-
-
-def get_model_dir() -> Path:
-    """모델 디렉토리 경로 반환 (하위 호환성)."""
-    return get_base_models_dir()
-
-
-def get_data_dir() -> Path:
-    """데이터 디렉토리 경로 반환."""
-    from core.paths import get_data_dir as _get  # type: ignore
-
-    return _get()
-
-
-def get_output_dir() -> Path:
-    """출력 디렉토리 경로 반환 (하위 호환성)."""
-    from core.paths import get_output_dir as _get  # type: ignore
-
-    return _get()
-
+# 경로는 core.paths에서 직접 import (이중 경유 제거)
 
 def load_jsonl(file_path: Path) -> List[Dict[str, Any]]:
     """JSONL 파일 로드."""

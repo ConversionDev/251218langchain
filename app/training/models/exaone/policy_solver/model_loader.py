@@ -68,8 +68,6 @@ class TrainingDataLoader:
     """학습 데이터 및 모델 로더."""
 
     # 클래스 변수: 로컬 경로 존재 여부 캐싱 (파일 시스템 체크 최적화)
-    _local_exaone_path_cache: Optional[str] = None
-    _local_exaone_path_checked: bool = False
 
     # 클래스 변수: GPU 정보 캐싱 (GPU 확인 최적화)
     _gpu_name_cache: Optional[str] = None
@@ -143,62 +141,15 @@ class TrainingDataLoader:
         self.val_dataset: Optional[Dataset] = None
 
     def _find_exaone_model(self) -> str:
-        """EXAONE 모델 경로 또는 HuggingFace 모델 ID 자동 탐지.
-
-        우선순위:
-        1. 환경 변수 EXAONE_MODEL_DIR
-        2. app/artifacts/base_models/exaone (로컬 경로, 캐싱됨)
-        3. HuggingFace 모델 ID (캐시에서 자동 로드)
-
-        Returns:
-            모델 경로 또는 HuggingFace 모델 ID
-        """
-        # 1. 환경 변수 확인 (최우선, 빠른 체크)
-        env_path = os.environ.get("EXAONE_MODEL_DIR")
-        if env_path:
-            env_path_obj = Path(env_path)
-            # 환경 변수 경로는 매번 체크 (사용자가 변경할 수 있음)
-            if env_path_obj.exists() and (env_path_obj / "config.json").exists():
-                print(f"[INFO] 환경 변수에서 EXAONE 모델 경로 사용: {env_path}")
-                return str(env_path_obj)
-
-        # 2. 로컬 경로 확인 (캐싱으로 최적화)
-        # 클래스 변수로 한 번만 체크하고 결과 재사용
-        if not TrainingDataLoader._local_exaone_path_checked:
-            app_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-            exaone_dir = app_dir / "artifacts" / "base_models" / "exaone"
-
-            # 파일 시스템 체크는 한 번만 수행
-            if exaone_dir.exists() and (exaone_dir / "config.json").exists():
-                TrainingDataLoader._local_exaone_path_cache = str(exaone_dir)
-            else:
-                TrainingDataLoader._local_exaone_path_cache = None
-
-            TrainingDataLoader._local_exaone_path_checked = True
-
-        # 캐시된 결과 사용
-        if TrainingDataLoader._local_exaone_path_cache:
-            print(f"[INFO] 로컬 경로에서 EXAONE 모델 사용: {TrainingDataLoader._local_exaone_path_cache}")
-            return TrainingDataLoader._local_exaone_path_cache
-
-        # 3. HuggingFace 모델 ID 반환 (캐시에서 자동 로드)
-        # 로컬 경로가 없으면 바로 반환 (추가 파일 시스템 체크 없음)
+        """EXAONE 모델은 HuggingFace 모델 ID로 캐시에서 로드."""
         default_model_id = "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct"
-
-        # HuggingFace 캐시 사전 확인 (한 번만 확인하고 캐싱)
         if default_model_id not in TrainingDataLoader._hf_cache_checked:
             cache_exists = self._check_hf_cache(default_model_id)
             TrainingDataLoader._hf_cache_checked[default_model_id] = cache_exists
-
-        cache_status = TrainingDataLoader._hf_cache_checked[default_model_id]
-        if cache_status:
-            print(f"[INFO] 로컬 경로가 없어 HuggingFace 모델 ID 사용: {default_model_id}")
-            print("[INFO] HuggingFace 캐시에서 모델을 로드합니다.")
+        if TrainingDataLoader._hf_cache_checked[default_model_id]:
+            print(f"[INFO] EXAONE: HuggingFace 캐시 사용 ({default_model_id})")
         else:
-            print(f"[INFO] 로컬 경로가 없어 HuggingFace 모델 ID 사용: {default_model_id}")
-            print("[WARNING] HuggingFace 캐시에 모델이 없습니다. 다운로드가 시작됩니다.")
-            print("[INFO] 첫 다운로드는 시간이 걸릴 수 있습니다.")
-
+            print(f"[INFO] EXAONE: {default_model_id} (캐시 없음, 다운로드 가능)")
         return default_model_id
 
     def load_datasets(
@@ -300,11 +251,7 @@ class TrainingDataLoader:
         # model_path는 이제 항상 반환됨 (HuggingFace 모델 ID 포함)
         if not self.model_path:
             raise ValueError(
-                "EXAONE 모델을 찾을 수 없습니다. "
-                "다음 중 하나를 확인하세요:\n"
-                "1. app/artifacts/base_models/exaone 디렉토리에 모델 파일이 있는지\n"
-                "2. EXAONE_MODEL_DIR 환경 변수가 설정되어 있는지\n"
-                "3. HuggingFace 캐시에 모델이 다운로드되어 있는지"
+                "EXAONE 모델을 찾을 수 없습니다. HuggingFace 캐시(~/.cache/huggingface/hub)를 확인하세요."
             )
 
         print(f"[INFO] 모델 로딩 중: {self.model_path}")
@@ -332,16 +279,6 @@ class TrainingDataLoader:
         # QLoRA는 device_map이 딕셔너리 형태이거나 "auto"를 권장하지만,
         # GPU만 사용하려면 "cuda:0" 형식 사용
         device_map_value = self.device_map if self.device_map != "cuda" else "cuda:0"
-
-        # HuggingFace 모델 ID인 경우 캐시 확인 (이미 _find_exaone_model에서 확인됨)
-        if "/" in str(self.model_path) and not Path(self.model_path).exists():
-            model_id = str(self.model_path)
-            if model_id in TrainingDataLoader._hf_cache_checked:
-                cache_exists = TrainingDataLoader._hf_cache_checked[model_id]
-                if cache_exists:
-                    print("[INFO] HuggingFace 모델 ID 감지: 캐시에서 로드 중...")
-                else:
-                    print("[INFO] HuggingFace 모델 ID 감지: 다운로드 중... (캐시에 없음)")
 
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
@@ -523,9 +460,8 @@ class TrainingDataLoader:
 
 def main():
     """메인 실행 함수."""
-    # 경로 설정
-    current_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-    data_dir = current_dir / "data" / "sft_dataset" / "processed"
+    from core.paths import get_data_dir  # type: ignore
+    data_dir = get_data_dir() / "email" / "sft" / "processed"
 
     # 입력 파일
     train_path = data_dir / "train.jsonl"

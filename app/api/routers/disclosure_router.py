@@ -27,7 +27,7 @@ _check_jobs: Dict[str, Dict[str, Any]] = {}
 
 
 class DisclosureStatusResponse(BaseModel):
-    """ISO 30414 disclosure 컬렉션 적재 상태."""
+    """disclosures 테이블 적재 상태."""
 
     ingested: bool = Field(..., description="학습(적재) 완료 여부")
     document_count: int = Field(..., description="벡터로 저장된 문서(청크) 개수")

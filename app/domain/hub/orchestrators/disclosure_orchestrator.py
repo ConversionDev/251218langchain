@@ -7,7 +7,7 @@ Disclosure RAG 적재 LangGraph 오케스트레이터.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 from langchain_core.documents import Document
 from tqdm import tqdm
@@ -27,8 +27,6 @@ class DisclosureIngestState(TypedDict, total=False):
     documents: List[Document]
     sources_to_replace: List[str]
     embeddings_model: Any
-    collection_name: str
-    connection_string: str
     doc_count: int
     error: Optional[str]
     processing_path: str
@@ -52,7 +50,7 @@ def _load_chunks_node(state: DisclosureIngestState) -> DisclosureIngestState:
                 logger.warning("[DisclosureIngest] 파일 없음, 건너뜀: %s", p)
                 continue
             try:
-                from data.disclosure.pdf_ingest import load_txt_and_chunk  # type: ignore
+                from training.shared.disclosure_chunking import load_txt_and_chunk  # type: ignore
                 docs = load_txt_and_chunk(p, source=source, standard_type=standard_type)
                 all_docs.extend(docs)
                 sources_to_replace.append(source)
@@ -61,7 +59,7 @@ def _load_chunks_node(state: DisclosureIngestState) -> DisclosureIngestState:
     elif txt_path and Path(txt_path).exists():
         # 단일 파일: source/standard_type 기본값
         try:
-            from data.disclosure.pdf_ingest import load_txt_and_chunk  # type: ignore
+            from training.shared.disclosure_chunking import load_txt_and_chunk  # type: ignore
             source = "ISO-30414-2018"
             standard_type = "ISO30414"
             docs = load_txt_and_chunk(Path(txt_path), source=source, standard_type=standard_type)
@@ -154,19 +152,65 @@ def get_disclosure_ingest_graph():
     return _disclosure_ingest_graph
 
 
+def get_disclosure_prepared_dir() -> Path:
+    """Disclosure prepared 텍스트 파일 기본 경로. core.paths 기준."""
+    from core.paths import get_data_dir  # type: ignore
+    return get_data_dir() / "disclosure" / "prepared"
+
+
+def _infer_standard_type_from_stem(stem: str) -> str:
+    """
+    파일 stem에서 standard_type 추론. RAG 검색 쪽 값과 동일하게 맞춤.
+    IFRS_S1, IFRS_S2, OECD, ISO30414, GLOBAL_GREEN_STOCKTAKE.
+    """
+    s = stem.lower()
+    if "oecd" in s:
+        return "OECD"
+    if "iso" in s or "30414" in s:
+        return "ISO30414"
+    if "green" in s or "stocktake" in s:
+        return "GLOBAL_GREEN_STOCKTAKE"
+    if "ifrs" in s and "s1" in s:
+        return "IFRS_S1"
+    if "ifrs" in s and "s2" in s:
+        return "IFRS_S2"
+    if "ifrs" in s:
+        return "IFRS_S1"
+    return "IFRS_S1"
+
+
+def build_documents_config_from_prepared_dir(
+    prepared_dir: Optional[Path] = None,
+) -> List[DocumentsConfigItem]:
+    """
+    prepared 디렉터리 내 *.txt 파일로 documents_config 생성.
+    (path, standard_type, source) — standard_type은 RAG 검색과 동일 값(IFRS_S1, IFRS_S2, OECD, ISO30414, GLOBAL_GREEN_STOCKTAKE).
+    """
+    from core.paths import get_data_dir  # type: ignore
+    base = prepared_dir or get_data_dir() / "disclosure" / "prepared"
+    if not base.exists():
+        return []
+    config: List[DocumentsConfigItem] = []
+    for p in sorted(base.glob("*.txt")):
+        stem = p.stem
+        standard_type = _infer_standard_type_from_stem(stem)
+        config.append((p, standard_type, stem))
+    return config
+
+
 def run_disclosure_ingest_orchestrate(
     embeddings_model: Any,
-    collection_name: str,
-    connection_string: str,
     txt_path: Optional[Path] = None,
     documents_config: Optional[List[DocumentsConfigItem]] = None,
 ) -> Dict[str, Any]:
     """
-    Disclosure 적재 실행. disclosures 단일 테이블에 저장.
+    Disclosure 적재 실행. disclosures 테이블에 저장.
 
     Args:
+        embeddings_model: BGE-m3 등 임베딩 모델.
         txt_path: 단일 파일 사용 시 (기존 방식).
         documents_config: 다중 파일 사용 시 [(Path, standard_type, source), ...].
+            기본 경로 사용 시 build_documents_config_from_prepared_dir() 활용.
 
     Returns:
         {"success": bool, "doc_count": int, "error": str | None}
@@ -177,8 +221,6 @@ def run_disclosure_ingest_orchestrate(
             "documents": [],
             "sources_to_replace": [],
             "embeddings_model": embeddings_model,
-            "collection_name": collection_name,
-            "connection_string": connection_string,
             "doc_count": 0,
             "error": None,
             "processing_path": "Start",
@@ -189,8 +231,6 @@ def run_disclosure_ingest_orchestrate(
             "documents": [],
             "sources_to_replace": [],
             "embeddings_model": embeddings_model,
-            "collection_name": collection_name,
-            "connection_string": connection_string,
             "doc_count": 0,
             "error": None,
             "processing_path": "Start",

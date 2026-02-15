@@ -23,7 +23,6 @@ def get_app_root() -> Path:
     Returns:
         app/ 디렉토리 경로
     """
-    # common/paths.py -> common/ -> app/
     return Path(__file__).parent.parent
 
 
@@ -36,17 +35,10 @@ def get_artifacts_dir() -> Path:
     return get_app_root() / "artifacts"
 
 
-def get_base_models_dir() -> Path:
-    """Base 모델 디렉토리 경로 반환.
-
-    Returns:
-        app/artifacts/base_models/ 디렉토리 경로
-    """
-    return get_artifacts_dir() / "base_models"
-
-
 def get_fine_tuned_dir() -> Path:
     """Fine-tuning된 모델 디렉토리 경로 반환.
+
+    학습된 모델은 이 경로 아래에서 관리합니다.
 
     Returns:
         app/artifacts/fine_tuned/ 디렉토리 경로

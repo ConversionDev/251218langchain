@@ -17,16 +17,16 @@ from typing import Any, Dict, List, Optional
 # ============================================================================
 
 # app/ 디렉토리를 Python 경로에 추가 (작업 디렉토리 변경 전에)
-app_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-if str(app_dir) not in sys.path:
-    sys.path.insert(0, str(app_dir))
+_app_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+if str(_app_root) not in sys.path:
+    sys.path.insert(0, str(_app_root))
 
 # Unsloth 캐시 설정 (작업 디렉토리 변경 전에 실행)
 from core.resource_manager import setup_unsloth_cache  # type: ignore
 setup_unsloth_cache()  # 절대 경로로 환경 변수 설정
 
 # 작업 디렉토리를 리소스 매니저로 변경
-from core.paths import get_resource_manager_dir  # type: ignore
+from core.paths import get_data_dir, get_output_dir, get_resource_manager_dir  # type: ignore
 resource_manager_dir = get_resource_manager_dir()
 os.chdir(resource_manager_dir)
 
@@ -110,7 +110,7 @@ class SemanticClassifierTrainer:
 
         # 출력 디렉토리 설정
         if output_dir is None:
-            output_dir = app_dir / "artifacts" / "semantic_classifier" / "adapters"
+            output_dir = get_output_dir() / "llama" / "semantic_classifier"
         else:
             output_dir = Path(output_dir)
 
@@ -439,8 +439,7 @@ class SemanticClassifierTrainer:
 
 def main():
     """메인 실행 함수."""
-    # 데이터셋 경로
-    dataset_path = app_dir / "data" / "soccer" / "llama_training_dataset.jsonl"
+    dataset_path = get_data_dir() / "soccer" / "sft" / "llama_training_dataset.jsonl"
 
     # 파일 존재 확인
     if not dataset_path.exists():

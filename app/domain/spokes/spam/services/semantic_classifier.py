@@ -11,7 +11,10 @@ from typing import Any, Dict, List, Optional
 
 import torch
 from domain.hub.shared.utils import format_email_text  # type: ignore
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoTokenizer
+
+# 로컬 경로 없을 때 사용하는 HF 베이스 모델 (4-bit로 로드)
+_DEFAULT_LLAMA_MODEL_ID = "unsloth/Llama-3.2-3B-Instruct"
 
 
 class LLaMAClassifier:
@@ -26,52 +29,18 @@ class LLaMAClassifier:
         """초기화.
 
         Args:
-            model_path: LLaMA 모델 경로 (None이면 app/artifacts 경로에서 탐색)
-            device: 사용할 디바이스 (기본값: "cuda", GPU 필수)
-            use_finetuned: Fine-tuning된 모델 우선 사용 여부
+            model_path: HuggingFace 모델 ID (None이면 unsloth/Llama-3.2-3B-Instruct, 캐시에서 4-bit 로드)
+            device: 사용할 디바이스 (기본값: "cuda")
+            use_finetuned: 미사용 (HF 캐시만 사용)
         """
-        # 모델 경로 탐색 (app/artifacts 경로 사용)
         if model_path is None:
-            # Fine-tuning된 모델 우선 확인
-            if use_finetuned:
-                from domain.hub.shared.utils import (
-                    get_fine_tuned_dir,  # type: ignore
-                )
-
-                finetuned_dir = (
-                    get_fine_tuned_dir() / "llama" / "adapters" / "final_model"
-                )
-                if finetuned_dir.exists() and (finetuned_dir / "config.json").exists():
-                    model_path = str(finetuned_dir)
-                    print(f"[INFO] Fine-tuning된 모델 사용: {model_path}")
-                else:
-                    print(
-                        "[WARNING] Fine-tuning된 모델을 찾을 수 없습니다. Base 모델을 사용합니다."
-                    )
-                    print("[INFO] Fine-tuning: python -m training.models.llama.spam_classifier.finetune")
-
-            # Fine-tuning된 모델이 없으면 base 모델 사용
-            if model_path is None:
-                from domain.hub.shared.utils import (
-                    get_base_models_dir,  # type: ignore
-                )
-
-                base_models_dir = get_base_models_dir()
-                llama_dir = base_models_dir / "llama"
-                if llama_dir.exists() and (llama_dir / "config.json").exists():
-                    model_path = str(llama_dir)
-                else:
-                    raise ValueError(
-                        "LLaMA 모델 경로를 찾을 수 없습니다. "
-                        "app/artifacts/base_models/llama 디렉토리를 확인하세요."
-                    )
-
+            model_path = _DEFAULT_LLAMA_MODEL_ID
         self.model_path = model_path
         self.device = device or "cuda"
 
         # 모델 및 토크나이저
         self.tokenizer: Optional[AutoTokenizer] = None
-        self.model: Optional[AutoModelForSequenceClassification] = None
+        self.model: Optional[Any] = None
 
     def load_model(self) -> None:
         """모델 및 토크나이저 로드."""
@@ -91,45 +60,27 @@ class LLaMAClassifier:
             print("[OK] 토크나이저 로딩 완료")
             print()
 
-            # 모델 로드
+            # 모델 로드 (HF 캐시 + 4-bit)
             print("[Step 2] 모델 로딩 중...")
-            try:
-                # 먼저 SequenceClassification으로 시도
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    self.model_path,
-                    num_labels=2,  # 이진 분류 (ham, spam)
-                    trust_remote_code=True,
-                )
-                print("[OK] AutoModelForSequenceClassification로 로드됨")
-            except Exception as e1:
-                print(f"[WARNING] SequenceClassification 로드 실패: {e1}")
-                print("[INFO] AutoModel로 시도 중...")
-                try:
-                    from transformers import AutoModel
+            from torch import nn
+            from transformers import AutoModel, BitsAndBytesConfig
 
-                    base_model = AutoModel.from_pretrained(
-                        self.model_path,
-                        trust_remote_code=True,
-                    )
-                    # 분류 헤드 추가
-                    from torch import nn
-
-                    num_labels = 2  # 이진 분류
-                    hidden_size = base_model.config.hidden_size
-                    classifier = nn.Linear(hidden_size, num_labels)
-                    # 모델에 분류 헤드 추가
-                    base_model.classifier = classifier
-                    self.model = base_model
-                    print("[OK] AutoModel + 분류 헤드 추가로 로드됨")
-                    print(
-                        "[WARNING] 이 모델은 fine-tuning되지 않았습니다. 성능이 제한적일 수 있습니다."
-                    )
-                    print("[INFO] Fine-tuning: python -m training.models.llama.spam_classifier.finetune")
-                except Exception as e2:
-                    print(f"[ERROR] 모델 로드 실패: {e2}")
-                    raise
-
-            self.model.to(self.device)
+            bnb = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            )
+            base_model = AutoModel.from_pretrained(
+                self.model_path,
+                quantization_config=bnb,
+                device_map="cuda:0" if self.device == "cuda" else self.device,
+                trust_remote_code=True,
+            )
+            hidden_size = base_model.config.hidden_size
+            base_model.classifier = nn.Linear(hidden_size, 2)
+            self.model = base_model
+            print("[OK] HuggingFace 캐시 + 4-bit + 분류 헤드 로드됨")
             self.model.eval()
 
             # 모델 정보 출력

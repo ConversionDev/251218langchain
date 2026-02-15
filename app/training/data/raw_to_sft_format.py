@@ -269,8 +269,9 @@ if __name__ == "__main__":
     parser.add_argument("--dedup_mode", type=str, default="subject+attachments")
     args = parser.parse_args()
 
-    app_dir = Path(__file__).resolve().parent.parent.parent
-    data_dir = app_dir / "data"
+    from core.paths import get_data_dir  # type: ignore
+    data_dir = get_data_dir()
+    email_raw = data_dir / "email" / "raw"
     if not data_dir.exists():
         print(f"오류: data 디렉토리를 찾을 수 없습니다: {data_dir}")
         sys.exit(1)
@@ -285,19 +286,24 @@ if __name__ == "__main__":
             "민원(콜센터) 질의응답_K쇼핑_통합_Training.jsonl",
         ]
         for filename in possible_files:
-            candidate = data_dir / filename
-            if candidate.exists():
-                raw_jsonl_file = candidate
+            for base in (email_raw, data_dir):
+                candidate = base / filename
+                if candidate.exists():
+                    raw_jsonl_file = candidate
+                    break
+            if raw_jsonl_file is not None:
                 break
         if raw_jsonl_file is None:
             print("[ERROR] 입력 JSONL 파일을 찾을 수 없습니다.")
+            print(f"[INFO] 다음 위치를 확인하세요: {email_raw}, {data_dir}")
             sys.exit(1)
 
     if not raw_jsonl_file.exists():
         print(f"[ERROR] 입력 파일을 찾을 수 없습니다: {raw_jsonl_file}")
         sys.exit(1)
 
-    sft_file = Path(args.output) if args.output else data_dir / "sft_dataset" / "sft_train.jsonl"
+    sft_file = Path(args.output) if args.output else data_dir / "email" / "sft" / "sft_train.jsonl"
+    sft_file.parent.mkdir(parents=True, exist_ok=True)
     try:
         sft_count, _, _ = convert_jsonl_to_sft(
             input_jsonl_path=raw_jsonl_file,

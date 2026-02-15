@@ -41,27 +41,20 @@ def _get_adapter_dir() -> Optional[Path]:
     return None
 
 
+_BASE_LLAMA_ID = "unsloth/Llama-3.2-3B-Instruct"
+
+
 def _load_model_once():
-    """학습된 어댑터 로드 (lazy, 싱글톤)."""
+    """HF 캐시 베이스 + (있으면) 로컬 어댑터 로드 (lazy, 싱글톤)."""
     if _load_model_once._model is not None:
         return _load_model_once._model, _load_model_once._tokenizer
 
-    adapter_dir = _get_adapter_dir()
-    if adapter_dir is None:
-        return None, None
-
     try:
         import torch
-        from peft import PeftModel
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-        base_id = "unsloth/Llama-3.2-3B-Instruct"
         device_map = "cuda:0" if torch.cuda.is_available() else "auto"
-
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir), trust_remote_code=True)
-        except Exception:
-            tokenizer = AutoTokenizer.from_pretrained(base_id, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(_BASE_LLAMA_ID, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
             tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -73,17 +66,21 @@ def _load_model_once():
             bnb_4bit_use_double_quant=True,
         )
         base = AutoModelForCausalLM.from_pretrained(
-            base_id,
+            _BASE_LLAMA_ID,
             quantization_config=bnb,
             device_map=device_map,
             trust_remote_code=True,
         )
-        model = PeftModel.from_pretrained(base, str(adapter_dir))
-        model.eval()
 
-        _load_model_once._model = model
+        adapter_dir = _get_adapter_dir()
+        if adapter_dir is not None:
+            from peft import PeftModel
+            base = PeftModel.from_pretrained(base, str(adapter_dir))
+        base.eval()
+
+        _load_model_once._model = base
         _load_model_once._tokenizer = tokenizer
-        return model, tokenizer
+        return base, tokenizer
     except Exception:
         _load_model_once._model = None
         _load_model_once._tokenizer = None

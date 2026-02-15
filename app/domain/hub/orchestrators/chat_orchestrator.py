@@ -87,12 +87,13 @@ def run_agent(
     result: ChatState = graph.invoke(initial_state, config=config)
 
     context_used = result.get("context") or ""
+    rag_sources = result.get("rag_sources") or []
 
     response_messages = result.get("messages", [])
     for msg in reversed(response_messages):
         if isinstance(msg, AIMessage):
-            return (str(msg.content), context_used)
-    return ("", context_used)
+            return (str(msg.content), context_used, rag_sources)
+    return ("", context_used, rag_sources)
 
 
 async def run_agent_stream(
@@ -149,6 +150,7 @@ async def run_agent_stream(
     has_streamed = False
     final_response = ""
     context_used = ""
+    rag_sources: List[Dict[str, Any]] = []
 
     try:
         async for event in graph.astream_events(
@@ -219,6 +221,7 @@ async def run_agent_stream(
                 output = data.get("output", {})
                 if event_name in ("rag", "rag_node") and isinstance(output, dict):
                     context_used = (output.get("context") or "") or context_used
+                    rag_sources = output.get("rag_sources") or rag_sources
                 if isinstance(output, dict):
                     messages_output = output.get("messages", [])
                     if messages_output:
@@ -247,7 +250,7 @@ async def run_agent_stream(
         if len(final_response) > len(last_yielded_content):
             yield final_response[len(last_yielded_content) :]
     elif not has_streamed and not last_yielded_content:
-        response, ctx = run_agent(
+        response, ctx, sources_from_agent = run_agent(
             user_text=user_text,
             provider=provider,
             system_prompt=system_prompt,
@@ -259,12 +262,13 @@ async def run_agent_stream(
         if response:
             yield response
         context_used = ctx or context_used
+        rag_sources = sources_from_agent or rag_sources
 
-    # RAG 결과 항상 전송: 있으면 미리보기, 없으면 빈 문자열 → 프론트에서 "DB 검색 0건" 등으로 구분 가능
+    # RAG 결과 항상 전송: 있으면 미리보기, 없으면 빈 문자열 → 프론트에서 "DB 검색 0건" 등으로 구분 가능. sources로 출처 목록 전달.
     preview = ""
     if context_used and context_used.strip():
         preview = (context_used[:600] + "…") if len(context_used) > 600 else context_used
-    yield {"context_preview": preview}
+    yield {"context_preview": preview, "sources": rag_sources}
 
 
 def get_thread_history(thread_id: str) -> List[BaseMessage]:

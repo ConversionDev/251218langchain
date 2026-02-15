@@ -24,11 +24,7 @@ from core.database.mixin import (  # type: ignore
 )
 
 # 유틸리티
-from core.database.connection import (  # type: ignore
-    wait_for_postgres,
-    get_vector_count,
-    check_collection_exists,
-)
+from core.database.connection import wait_for_postgres  # type: ignore
 
 __all__ = [
     # Base
@@ -44,6 +40,4 @@ __all__ = [
     "StatusMixin",
     # Utils
     "wait_for_postgres",
-    "get_vector_count",
-    "check_collection_exists",
 ]

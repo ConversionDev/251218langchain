@@ -76,11 +76,10 @@ from unsloth import FastLanguageModel  # noqa: E402
 from typing import Any, Dict, List, Optional
 
 from datasets import Dataset  # noqa: E402
+from core.paths import get_data_dir, get_output_dir  # type: ignore
 from domain.hub.shared.utils import (  # type: ignore
     extract_email_metadata,
     format_email_text,
-    get_data_dir,
-    get_output_dir,
     load_jsonl,
 )
 from transformers import DataCollatorForSeq2Seq, TrainingArguments  # noqa: E402
@@ -538,7 +537,7 @@ def main():
 
     # 경로 자동 탐지
     if args.train_path is None:
-        data_dir = get_data_dir() / "sft_dataset" / "processed"
+        data_dir = get_data_dir() / "email" / "sft" / "processed"
         args.train_path = str(data_dir / "train.jsonl")
 
     if args.val_path:

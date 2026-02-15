@@ -17,12 +17,12 @@ import random
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # app/ 디렉토리를 Python 경로에 추가
-app_dir = Path(__file__).resolve().parent.parent.parent
-if str(app_dir) not in sys.path:
-    sys.path.insert(0, str(app_dir))
+_app_root = Path(__file__).resolve().parent.parent.parent
+if str(_app_root) not in sys.path:
+    sys.path.insert(0, str(_app_root))
 
 try:
     from transformers import AutoTokenizer
@@ -48,17 +48,9 @@ class TokenizerManager:
         self.tokenizer = None
         self.model_path = model_path or self._find_exaone_model()
 
-    def _find_exaone_model(self) -> Optional[Path]:
-        """EXAONE 모델 경로 자동 탐지."""
-        current_dir = Path(
-            __file__
-        ).parent.parent.parent  # spam_agent -> service -> api
-        exaone_dir = current_dir / "model" / "exaone"
-
-        if exaone_dir.exists() and (exaone_dir / "tokenizer.json").exists():
-            return exaone_dir
-
-        return None
+    def _find_exaone_model(self) -> Optional[Union[Path, str]]:
+        """EXAONE 토크나이저는 HuggingFace 모델 ID로 캐시에서 로드."""
+        return "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct"
 
     def load_tokenizer(self) -> bool:
         """토크나이저 로드.
@@ -339,9 +331,9 @@ def process_sft_dataset(
 
 def main():
     """메인 실행 함수."""
-    # 경로 설정 (training/data -> app/data/sft_dataset)
-    app_dir = Path(__file__).resolve().parent.parent.parent
-    data_dir = app_dir / "data" / "sft_dataset"
+    from core.paths import get_data_dir  # noqa: E402
+
+    data_dir = get_data_dir() / "email" / "sft"
 
     # 입력 파일 찾기 (우선순위: cleaned > train)
     # raw_to_sft_format.py가 생성한 sft_train.jsonl 파일 사용
@@ -359,8 +351,7 @@ def main():
         )
         return
 
-    # 출력 디렉토리
-    output_dir = data_dir / "processed"
+    output_dir = data_dir / "processed"  # email/sft/processed
 
     print(f"[INFO] 입력 파일: {input_file}")
     print(f"[INFO] 출력 디렉토리: {output_dir}")

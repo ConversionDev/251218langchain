@@ -4,14 +4,13 @@ FastAPI 백엔드 서버.
 역할:
 - FastAPI 서버 제공 (REST API)
 - LangGraph 에이전트 채팅 (단일 진입)
-- PGVector 벡터 스토어 초기화 (에이전트 RAG 노드용)
+- RAG: disclosures·competency_anchors 테이블 검색 (LangChain PGVector 테이블 미사용)
 - 스팸 감지 등 기타 API
 """
 
 import asyncio
 import logging
 import threading
-import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator, Optional
@@ -20,36 +19,9 @@ from typing import AsyncGenerator, Optional
 from core.config import get_settings  # type: ignore
 from core.database import wait_for_postgres  # type: ignore
 
-# LangChain 관련 import (warnings 필터링 전에 import)
 from fastapi import FastAPI
 
-from langchain_community.vectorstores import PGVector
-
-# PGVector의 JSONB deprecation 경고 무시 (import 후 경고 필터링)
-try:
-    from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
-
-    warnings.filterwarnings(
-        "ignore",
-        category=LangChainPendingDeprecationWarning,
-        module="langchain_community.vectorstores.pgvector",
-    )
-except ImportError:
-    warnings.filterwarnings(
-        "ignore",
-        category=DeprecationWarning,
-        module="langchain_community.vectorstores.pgvector",
-    )
-
-warnings.filterwarnings(
-    "ignore",
-    category=DeprecationWarning,
-    module="langchain_community.vectorstores.pgvector",
-)
-
 settings = get_settings()
-CONNECTION_STRING = settings.connection_string
-COLLECTION_NAME = settings.collection_name
 
 # Llama + ExaOne Fast MCP 통일 (health + MCP 프로토콜 한 앱)
 from domain.hub.mcp.central_control_server import get_http_app  # type: ignore  # noqa: E402
@@ -102,7 +74,7 @@ async def _app_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="LangChain Chatbot API",
-    description="PGVector와 연동된 LangChain 챗봇 API",
+    description="LangGraph 에이전트 채팅·RAG(disclosures·competency 테이블 검색)",
     version="1.0.0",
     lifespan=_app_lifespan,
 )
@@ -112,14 +84,11 @@ from gateway import add_cors_middleware  # type: ignore
 
 add_cors_middleware(app)
 
-# 전역 변수 (에이전트 RAG 노드·벡터스토어용)
-vector_store: Optional[PGVector] = None
-disclosure_vector_store: Optional[PGVector] = None
+# 전역 변수 (에이전트 RAG: disclosures·competency 검색용 임베딩)
 local_embeddings = None
 local_llm = None
 _rag_init_lock = threading.Lock()
 _rag_initialized = False
-_disclosure_store_lock = threading.Lock()
 
 
 def init_db() -> None:
@@ -199,34 +168,26 @@ def init_db() -> None:
 
 
 def init_v1() -> None:
-    """에이전트·RAG 초기화: LangGraph, ExaOne, PGVector·Embedding 사전 로드."""
-    global local_embeddings, local_llm, vector_store
+    """에이전트·RAG 초기화: LangGraph, ExaOne, Embedding(disclosures·competency 검색용)."""
+    global local_embeddings, local_llm
 
     print("=" * 50)
-    print("에이전트·RAG 초기화 (LangGraph, ExaOne, PGVector)...")
+    print("에이전트·RAG 초기화 (LangGraph, ExaOne, Embedding)...")
     print("=" * 50)
 
     llm_provider = settings.llm_provider
-    exaone_model_dir = settings.exaone_model_dir or "기본값 사용"
     print(f"\n[INFO] LLM_PROVIDER: {llm_provider}")
-    print(f"[INFO] EXAONE_MODEL_DIR: {exaone_model_dir}")
+    print("[INFO] EXAONE: HuggingFace 캐시에서 로드 (EXAONE_MODEL_DIR 미사용)")
 
-    # Neon PostgreSQL 연결 대기 (에이전트 RAG·벡터스토어용)
     print("\n1. Neon PostgreSQL 연결 확인 중...")
     wait_for_postgres()
 
-    # EXAONE: 첫 채팅 시 로드 (Lazy Loading)
     if llm_provider == "exaone":
         print("\n2. EXAONE: Lazy Loading (첫 채팅 요청 시 로드)")
 
-    # Embedding·PGVector 서버 기동 시점 초기화 (단일 진입: ensure_rag_initialized 사용)
-    print("\n3. Embedding·PGVector 서버 기동 시 초기화 중...")
+    print("\n3. Embedding 서버 기동 시 초기화 중... (RAG: disclosures·competency 테이블 검색용)")
     ensure_rag_initialized()
-    if vector_store:
-        print("[OK] Embedding·PGVector 서버 기동 시 초기화 완료!")
-    else:
-        print("[WARNING] PGVector 미초기화 상태로 서버 기동 (RAG 비활성)")
-    # 스팸 감지 모델은 Lazy Loading (첫 요청 시 로드)
+    print("[OK] Embedding·RAG 초기화 완료!")
     print("\n4. 스팸 감지 모델: Lazy Loading (첫 요청 시 LLaMA 로드)")
     print("[INFO] VRAM 절약을 위해 스팸 테스트 요청 시 LLaMA 모델이 로드됩니다.")
 
@@ -236,13 +197,12 @@ def init_v1() -> None:
 
 
 def initialize_embeddings():
-    """Embedding 모델 초기화 — FlagEmbedding BGE-m3 단일 인스턴스 (PGVector·Disclosure·Competency 통합)."""
+    """Embedding 모델 초기화 — FlagEmbedding BGE-m3 (disclosures·competency RAG 검색용)."""
     global local_embeddings
 
     try:
         from domain.shared.embedding import get_embedding_model  # type: ignore
 
-        # Soccer·Disclosure·Competency 공통: FlagEmbedding BGE-m3 한 번만 로드 (중복 방지)
         device = getattr(settings, "embedding_device", None) or None
         local_embeddings = get_embedding_model(
             model_name=getattr(settings, "default_embedding_model", None),
@@ -250,9 +210,7 @@ def initialize_embeddings():
             devices=device,
         )
         local_embeddings.embed_query("test")
-        print(
-            "[OK] 로컬 Embedding 초기화 완료 (FlagEmbedding BGE-m3, PGVector·Disclosure·Competency 통합)"
-        )
+        print("[OK] 로컬 Embedding 초기화 완료 (FlagEmbedding BGE-m3, RAG: disclosures·competency)")
     except Exception as local_error:
         print(f"[WARNING] 로컬 Embedding 모델 초기화 실패: {str(local_error)[:100]}...")
         local_embeddings = None
@@ -260,146 +218,12 @@ def initialize_embeddings():
     if not local_embeddings:
         print(
             "[WARNING] 로컬 Embedding 모델 초기화에 실패했습니다. "
-            "Embedding 기능이 비활성화됩니다. 벡터 스토어와 RAG 기능을 사용할 수 없습니다."
+            "RAG(disclosures·competency 검색)가 비활성화됩니다."
         )
-
-
-def initialize_vector_store():
-    """PGVector 스토어 초기화."""
-    global vector_store, local_embeddings
-
-    # 사용할 embedding 모델 선택 (로컬 모델 사용)
-    if local_embeddings:
-        current_embeddings = local_embeddings
-        print("[INFO] 로컬 Embedding 모델 사용 (fallback)")
-    else:
-        print(
-            "[WARNING] 사용 가능한 Embedding 모델이 없습니다. "
-            "벡터 스토어를 초기화할 수 없습니다."
-        )
-        vector_store = None
-        return
-
-    try:
-        print("[INFO] ===== PGVector 연결 확인 시작 =====")
-        print(f"[INFO] 컬렉션 이름: {COLLECTION_NAME}")
-        print(f"[INFO] 연결 문자열: {CONNECTION_STRING[:60]}...")
-
-        # 기존 컬렉션이 있고 벡터 데이터가 있는지 확인
-        try:
-            print("[INFO] PGVector 객체 생성 중...")
-            vector_store = PGVector(
-                embedding_function=current_embeddings,
-                collection_name=COLLECTION_NAME,
-                connection_string=CONNECTION_STRING,
-            )
-            print("[OK] PGVector 객체 생성 완료")
-
-            # 벡터 데이터가 있는지 확인
-            import psycopg2  # type: ignore[import-untyped]
-
-            print("[INFO] 데이터베이스에서 벡터 데이터 확인 중...")
-            conn = psycopg2.connect(CONNECTION_STRING)
-            cur = conn.cursor()
-
-            # 컬렉션 UUID 확인
-            cur.execute(
-                f"""
-                SELECT uuid FROM langchain_pg_collection WHERE name = '{COLLECTION_NAME}'
-            """
-            )
-            collection_result = cur.fetchone()
-
-            if collection_result:
-                collection_uuid = collection_result[0]
-                print(f"[INFO] 컬렉션 UUID: {collection_uuid}")
-
-                # 벡터 개수 확인
-                cur.execute(
-                    f"""
-                    SELECT COUNT(*)
-                    FROM langchain_pg_embedding
-                    WHERE collection_id = '{collection_uuid}'
-                """
-                )
-                result = cur.fetchone()
-                vector_count = result[0] if result else 0
-
-                # 벡터 차원 확인
-                cur.execute(
-                    f"""
-                    SELECT array_length(embedding::vector, 1) as vector_dim
-                    FROM langchain_pg_embedding
-                    WHERE collection_id = '{collection_uuid}'
-                    LIMIT 1
-                """
-                )
-                dim_result = cur.fetchone()
-                vector_dim = dim_result[0] if dim_result and dim_result[0] else None
-
-                conn.close()
-
-                if vector_count > 0:
-                    print("[OK] 기존 PGVector 스토어 로드 완료")
-                    print(f"[INFO] 벡터 데이터 개수: {vector_count}개")
-                    if vector_dim:
-                        print(f"[INFO] 벡터 차원: {vector_dim}차원")
-                    print("[OK] ===== PGVector 연결 확인 완료 =====")
-                else:
-                    # 컬렉션은 있지만 벡터 데이터가 없음 (정상 - 사용자가 나중에 추가할 수 있음)
-                    print("[INFO] 컬렉션은 존재하지만 벡터 데이터가 없습니다.")
-                    print("[INFO] RAG 기능 사용 시 벡터 데이터를 추가해야 합니다.")
-                    print("[OK] ===== PGVector 연결 확인 완료 =====")
-            else:
-                conn.close()
-                print("[WARNING] 컬렉션이 데이터베이스에 존재하지 않습니다.")
-
-        except Exception as e:
-            # 컬렉션이 없으면 빈 컬렉션으로 생성
-            error_msg = str(e)
-            print("[INFO] 컬렉션 로드 실패, 새로 생성합니다...")
-            print(f"[INFO] 오류 내용: {error_msg[:150]}")
-            print("[INFO] 빈 PGVector 컬렉션 생성 중...")
-
-            # 빈 컬렉션으로 PGVector 스토어 생성 (초기 문서 없음)
-            vector_store = PGVector(
-                embedding_function=current_embeddings,
-                collection_name=COLLECTION_NAME,
-                connection_string=CONNECTION_STRING,
-            )
-            print("[OK] 빈 PGVector 컬렉션 생성 완료")
-            print("[INFO] RAG 기능 사용 시 벡터 데이터를 추가해야 합니다.")
-            print("[OK] ===== PGVector 연결 확인 완료 =====")
-    except Exception as e:
-        error_msg = str(e)
-        print(f"[ERROR] PGVector 스토어 초기화 실패: {error_msg[:200]}...")
-        raise
-
-
-def get_disclosure_vector_store() -> Optional[PGVector]:
-    """공시(disclosure) 전용 벡터 스토어 반환. 없으면 한 번만 생성 시도."""
-    global disclosure_vector_store
-    if disclosure_vector_store is not None:
-        return disclosure_vector_store
-    with _disclosure_store_lock:
-        if disclosure_vector_store is not None:
-            return disclosure_vector_store
-        if local_embeddings is None or vector_store is None:
-            return None
-        try:
-            disclosure_vector_store = PGVector(
-                embedding_function=local_embeddings,
-                collection_name=settings.disclosure_collection_name,
-                connection_string=CONNECTION_STRING,
-            )
-            return disclosure_vector_store
-        except Exception as e:
-            logging.debug("disclosure 벡터 스토어 로드 생략: %s", e)
-            return None
 
 
 def ensure_rag_initialized() -> None:
-    """RAG용 Embedding·벡터스토어를 한 번만 초기화. (서버 기동 시 init_v1에서 호출, 또는 첫 RAG 요청 시 호출)"""
+    """RAG용 Embedding을 한 번만 초기화. (서버 기동 시 init_v1에서 호출, 또는 첫 RAG 요청 시 호출)"""
     global _rag_initialized
     if _rag_initialized:
         return
@@ -408,13 +232,10 @@ def ensure_rag_initialized() -> None:
             return
         if local_embeddings is None:
             initialize_embeddings()
-        if local_embeddings and vector_store is None:
-            initialize_vector_store()
-        # Disclosure 쿼리 경로가 통합 BGE-m3(local_embeddings)와 동일 인스턴스 사용하도록 캐시 연결
         try:
             from domain.shared.embedding import preload_disclosure_embedding_model  # type: ignore
             if preload_disclosure_embedding_model():
-                print("[OK] RAG 임베딩 준비 완료 (FlagEmbedding BGE-m3 통합)")
+                print("[OK] RAG 임베딩 준비 완료 (FlagEmbedding BGE-m3, disclosures·competency)")
             else:
                 print("[WARNING] RAG 임베딩 준비 실패")
         except Exception as e:
@@ -456,6 +277,5 @@ async def health_check():
     """헬스 체크 엔드포인트."""
     return {
         "status": "healthy",
-        "vector_store": "initialized" if vector_store else "lazy (not loaded yet)",
         "local_embeddings": "initialized" if local_embeddings else "lazy (not loaded yet)",
     }

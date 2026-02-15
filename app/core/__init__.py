@@ -13,7 +13,6 @@
 from core.paths import (  # type: ignore
     get_app_root,
     get_artifacts_dir,
-    get_base_models_dir,
     get_data_dir,
     get_fine_tuned_dir,
     get_output_dir,
@@ -25,7 +24,6 @@ __all__ = [
     # paths
     "get_app_root",
     "get_artifacts_dir",
-    "get_base_models_dir",
     "get_data_dir",
     "get_fine_tuned_dir",
     "get_output_dir",

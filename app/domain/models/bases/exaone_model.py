@@ -194,8 +194,8 @@ class ExaoneLLM(BaseLLM):
         """EXAONE 모델 초기화.
 
         Args:
-            model_path: 로컬 모델 경로 (None이면 model_id 사용)
-            model_id: HuggingFace 모델 ID
+            model_path: 미사용 (HF 캐시만 사용)
+            model_id: HuggingFace 모델 ID (캐시에서 로드)
             device_map: 디바이스 매핑 ("auto", "cuda" 등, GPU 전용)
             dtype: 토치 데이터 타입 ("auto", "float16", "bfloat16", "float32")
             trust_remote_code: 원격 코드 신뢰 여부
@@ -215,37 +215,8 @@ class ExaoneLLM(BaseLLM):
         else:
             self.use_4bit = use_4bit
 
-        # 모델 경로 결정 (우선순위: model_path > EXAONE_MODEL_DIR > model_id)
-        if model_path and Path(model_path).exists():
-            self._load_path = model_path
-        else:
-            # EXAONE_MODEL_DIR 설정 확인 (메인 경로)
-            from core.config import settings  # type: ignore
-
-            env_model_dir = settings.exaone_model_dir
-            if env_model_dir:
-                env_path = Path(env_model_dir)
-                # 상대 경로인 경우 프로젝트 루트 기준으로 해석
-                if not env_path.is_absolute():
-                    # __file__ = app/models/exaone_model.py
-                    # parent.parent = app/ 디렉토리
-                    # parent.parent.parent = 프로젝트 루트 (RAG/)
-                    app_dir = Path(__file__).parent.parent  # models -> app
-                    project_root = app_dir.parent  # app -> 프로젝트 루트
-                    env_path = (project_root / env_path).resolve()
-
-                # app/artifacts 경로만 확인
-                if env_path.exists() and (env_path / "config.json").exists():
-                    self._load_path = str(env_path)
-                    print(
-                        f"[INFO] EXAONE_MODEL_DIR 환경 변수에서 모델 경로 사용: {self._load_path}"
-                    )
-                else:
-                    # 경로가 없으면 HuggingFace 모델 ID 사용
-                    self._load_path = model_id
-            else:
-                # 환경 변수가 없으면 HuggingFace 모델 ID 사용
-                self._load_path = model_id
+        # 모델: HuggingFace 모델 ID로 캐시에서 로드 (로컬 경로 미사용)
+        self._load_path = model_id
 
         self.model: Optional[Any] = None
         self.tokenizer: Optional[Any] = None

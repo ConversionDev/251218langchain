@@ -39,6 +39,18 @@ class AgentRequest(BaseModel):
     images: Optional[List[str]] = Field(None, description="첨부 이미지 base64 문자열 배열 (data URL 제외)")
 
 
+class SourceItem(BaseModel):
+    """RAG 출처 한 건 — 프론트에서 어느 DB/문서에서 왔는지 표시용."""
+
+    table: str = Field(..., description="테이블명: disclosures, competency_anchors")
+    id: Optional[int] = Field(None, description="문서 ID")
+    source: str = Field("", description="문서 식별자(예: 파일 stem)")
+    page: Optional[int] = Field(None, description="페이지 번호")
+    standard_type: str = Field("", description="표준 유형: IFRS_S1, IFRS_S2, OECD, ISO30414, GLOBAL_GREEN_STOCKTAKE")
+    section_title: str = Field("", description="섹션 제목")
+    unique_id: str = Field("", description="고유 ID")
+
+
 class AgentResponse(BaseModel):
     response: str = Field(..., description="에이전트 응답")
     provider: str = Field(..., description="사용된 LLM 제공자")
@@ -46,6 +58,7 @@ class AgentResponse(BaseModel):
     thread_id: Optional[str] = Field(None, description="사용된 대화 스레드 ID")
     semantic_action: Optional[str] = Field(None, description="시멘틱 분류 결과")
     context_preview: Optional[str] = Field(None, description="RAG에서 참고한 문서(검색된 컨텍스트) 미리보기")
+    sources: Optional[List[SourceItem]] = Field(None, description="RAG 출처 목록(테이블·표준·source·page 등)")
 
 
 class ProviderInfo(BaseModel):
@@ -181,7 +194,7 @@ async def agent_chat(request: Request):
                 elif msg.role == "system":
                     chat_history.append(SystemMessage(content=msg.content))
 
-        response_text, context_used = run_agent(
+        response_text, context_used, rag_sources = run_agent(
             user_text=message,
             provider=provider,
             system_prompt=payload.get("system_prompt"),

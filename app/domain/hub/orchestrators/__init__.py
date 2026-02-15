@@ -32,8 +32,10 @@ from .graph_orchestrator import (
     should_use_tools,
 )
 from .disclosure_orchestrator import (
+    build_documents_config_from_prepared_dir,
     build_disclosure_ingest_graph,
     get_disclosure_ingest_graph,
+    get_disclosure_prepared_dir,
     run_disclosure_ingest_orchestrate,
 )
 from .soccer_orchestrator import (
@@ -56,8 +58,10 @@ from .soccer_orchestrator import (
 
 __all__ = [
     # disclosure
+    "build_documents_config_from_prepared_dir",
     "build_disclosure_ingest_graph",
     "get_disclosure_ingest_graph",
+    "get_disclosure_prepared_dir",
     "run_disclosure_ingest_orchestrate",
     # classification
     "classify",

@@ -62,6 +62,7 @@ except ImportError:
         except ImportError:
             print("[ERROR] trl이 설치되지 않았습니다. pip install trl을 실행하세요.")
 
+from core.paths import get_data_dir, get_output_dir  # type: ignore
 from training.models.exaone.policy_solver.model_loader import TrainingDataLoader  # type: ignore
 
 
@@ -87,8 +88,6 @@ class LoRATrainer:
         """
         # 출력 디렉토리 설정
         if output_dir is None:
-            from domain.hub.shared.utils import get_output_dir  # type: ignore
-
             output_dir_path = get_output_dir() / "exaone" / "adapters"
         else:
             output_dir_path = Path(output_dir)
@@ -200,13 +199,8 @@ class LoRATrainer:
         Returns:
             학습 준비 완료된 객체들
         """
-        # 경로 자동 탐지
         if train_path is None or val_path is None:
-            current_dir = Path(
-                __file__
-            ).parent.parent.parent  # spam_agent -> service -> api
-            data_dir = current_dir / "data" / "sft_dataset" / "processed"
-
+            data_dir = get_data_dir() / "email" / "sft" / "processed"
             if train_path is None:
                 train_path = data_dir / "train.jsonl"
             if val_path is None:

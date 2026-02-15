@@ -18,11 +18,11 @@ if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 from core.llm.providers.llama import LLaMAGate  # type: ignore
+from core.paths import get_data_dir  # type: ignore
 from domain.hub.shared.utils import (  # type: ignore
     load_jsonl,
     save_jsonl,
     extract_email_metadata,
-    get_api_root,
 )
 
 
@@ -247,11 +247,10 @@ def main():
     parser.add_argument("--no-adaptive", action="store_true")
     args = parser.parse_args()
 
-    api_root = get_api_root()
-    data_dir = api_root / "data" / "sft_dataset" / "processed"
+    data_dir = get_data_dir() / "email" / "sft" / "processed"
     train_path = args.train_path or str(data_dir / "train.jsonl")
     val_path = args.val_path or str(data_dir / "val.jsonl")
-    output_dir = args.output_dir or str(api_root / "data" / "sft_dataset" / "filtered")
+    output_dir = args.output_dir or str(get_data_dir() / "email" / "sft" / "filtered")
 
     print("[INFO] LLaMA 분류기 로딩 중...")
     classifier = LLaMAGate()

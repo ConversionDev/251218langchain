@@ -1,11 +1,10 @@
 """
 데이터베이스 연결 유틸리티
 
-PGVector 및 연결 관리 유틸리티를 제공합니다.
+PostgreSQL 연결 대기 등. (LangChain PGVector 테이블 미사용)
 """
 
 import time
-from typing import Optional
 
 from core.config import get_settings  # type: ignore
 
@@ -59,66 +58,3 @@ def wait_for_postgres(max_retries: int = 30, delay: int = 2) -> None:
                 raise ConnectionError(f"Neon PostgreSQL 연결 실패: {e}")
 
 
-def get_vector_count(collection_name: Optional[str] = None) -> int:
-    """벡터 데이터 개수 조회.
-
-    Args:
-        collection_name: 컬렉션 이름 (None이면 설정에서 가져옴)
-
-    Returns:
-        벡터 데이터 개수
-    """
-    import psycopg2  # type: ignore[import-untyped]
-
-    settings = get_settings()
-    collection_name = collection_name or settings.collection_name
-    connection_string = settings.connection_string
-
-    try:
-        conn = psycopg2.connect(connection_string)
-        cur = conn.cursor()
-        cur.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM langchain_pg_embedding
-            WHERE collection_id = (
-                SELECT uuid FROM langchain_pg_collection WHERE name = '{collection_name}'
-            )
-        """
-        )
-        result = cur.fetchone()
-        vector_count = result[0] if result else 0
-        conn.close()
-        return vector_count
-    except Exception:
-        return 0
-
-
-def check_collection_exists(collection_name: Optional[str] = None) -> bool:
-    """컬렉션 존재 여부 확인.
-
-    Args:
-        collection_name: 컬렉션 이름 (None이면 설정에서 가져옴)
-
-    Returns:
-        컬렉션 존재 여부
-    """
-    import psycopg2  # type: ignore[import-untyped]
-
-    settings = get_settings()
-    collection_name = collection_name or settings.collection_name
-    connection_string = settings.connection_string
-
-    try:
-        conn = psycopg2.connect(connection_string)
-        cur = conn.cursor()
-        cur.execute(
-            f"""
-            SELECT uuid FROM langchain_pg_collection WHERE name = '{collection_name}'
-        """
-        )
-        result = cur.fetchone()
-        conn.close()
-        return result is not None
-    except Exception:
-        return False

@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "dev": "cross-env TMP=C:\\Temp TEMP=C:\\Temp next dev -p 3000 --turbo",
+    "dev": "next dev -p 3000 --turbo",
     "build": "next build && node scripts/generate-sw.js",
     "start": "next start",
     "lint": "next lint"

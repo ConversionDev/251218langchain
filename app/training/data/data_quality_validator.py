@@ -362,42 +362,6 @@ class DataQualityValidator:
         return stats
 
 
-# 주의: 이 파일의 main 함수는 transform_jsonl.py로 통합되었습니다.
-# 개별 검증이 필요한 경우에만 아래 주석을 해제하여 사용하세요.
-
-# def main():
-#     """메인 실행 함수 (선택적 사용)."""
-#     # 경로 설정
-#     current_dir = Path(__file__).parent.parent.parent  # spam_agent -> service -> api
-#     data_dir = current_dir / "data" / "sft_dataset"
-#
-#     # 입력 파일
-#     input_file = data_dir / "sft_train.jsonl"
-#
-#     if not input_file.exists():
-#         print(f"[ERROR] 파일을 찾을 수 없습니다: {input_file}")
-#         return
-#
-#     # 출력 파일
-#     output_file = data_dir / "sft_train_cleaned.jsonl"
-#     invalid_file = data_dir / "sft_train_invalid.jsonl"
-#
-#     # 검증 및 정제 실행
-#     validator = DataQualityValidator()
-#     stats = validator.clean_and_save(
-#         input_path=input_file,
-#         output_path=output_file,
-#         save_invalid=True,
-#         invalid_output_path=invalid_file,
-#     )
-#
-#     print()
-#     print("[OK] 데이터 품질 검증 및 정제 완료!")
-#     print(f"[INFO] 최종 통계:")
-#     print(f"  - 유효 샘플: {stats['valid']}개 ({stats['valid']/stats['total']*100:.2f}%)")
-#     print(f"  - 무효 샘플: {stats['invalid']}개 ({stats['invalid']/stats['total']*100:.2f}%)")
-#
-#
-# if __name__ == "__main__":
-#     main()
+# 사용처: sft_to_train_val_split.py에서 DataQualityValidator 사용.
+# 단독 실행이 필요하면 core.paths.get_data_dir() / "email" / "sft" 경로로 입력/출력 설정 후 clean_and_save() 호출.
 

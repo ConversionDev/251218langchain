@@ -44,7 +44,7 @@
 |-------------|-----------|
 | FastExtract | **disclosures** 테이블 (RAG 챗봇용) |
 | Structural  | **(예정) competency_anchors** 테이블 또는 동등 스키마 (인사 평가/시각화용) |
-| Intelligent | 용도에 따라 disclosures 또는 별도 컬렉션 |
+| Intelligent | 용도에 따라 disclosures 또는 별도 테이블 |
 
 ---
 

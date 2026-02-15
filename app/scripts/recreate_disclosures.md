@@ -27,7 +27,13 @@ alembic upgrade head
 - 004: embedding 컬럼에 HNSW 인덱스
 - 005: standard_type, (standard_type, page), unique_id B-tree 인덱스
 
-## 4. 이후
+## 4. 적재 경로 및 실행
 
-- ingest 스크립트로 공시 문서 다시 적재 (BGE-m3 임베딩 채움)
+- **입력 경로**: `app/data/disclosure/prepared/` (core.paths: `get_data_dir() / "disclosure" / "prepared"`)
+- **저장**: `disclosures` 테이블 (BGE-m3 임베딩 채움)
+- **실행** (app 디렉터리에서):
+  ```bash
+  cd app
+  python -m training.pipelines.ingest.run_disclosure_ingest
+  ```
 - RAG 채팅에서 IFRS/OECD 등 질의로 검색·참조 문서 확인

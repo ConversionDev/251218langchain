@@ -65,12 +65,16 @@ def convert_csv_to_jsonl(
 
 def main():
     """메인 실행 함수."""
-    app_dir = Path(__file__).resolve().parent.parent.parent
-    data_dir = app_dir / "data"
+    from core.paths import get_data_dir  # type: ignore
+    data_dir = get_data_dir()
+    email_raw = data_dir / "email" / "raw"
     csv_filename = "한국우편사업진흥원_스팸메일 수신차단 목록_20241231.csv"
-    csv_path = data_dir / csv_filename
+    csv_path = email_raw / csv_filename
+    if not csv_path.exists():
+        csv_path = data_dir / csv_filename
     jsonl_filename = csv_filename.replace(".csv", "_raw.jsonl")
-    jsonl_path = data_dir / jsonl_filename
+    jsonl_path = email_raw / jsonl_filename
+    email_raw.mkdir(parents=True, exist_ok=True)
 
     if not csv_path.exists():
         print(f"[ERROR] CSV 파일을 찾을 수 없습니다: {csv_path}")

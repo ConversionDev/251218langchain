@@ -25,10 +25,7 @@ if str(app_dir) not in sys.path:
 os.environ["UNSLOTH_DISABLE_TRAINER_PATCH"] = "1"
 
 from core.llm.providers.llama import LLaMAGate  # type: ignore  # noqa: E402
-from domain.hub.shared.utils import (  # type: ignore  # noqa: E402
-    get_data_dir,
-    get_output_dir,
-)
+from core.paths import get_data_dir, get_output_dir  # type: ignore  # noqa: E402
 from training.pipelines.ambiguous_case_filter import filter_training_data  # type: ignore  # noqa: E402
 from training.models.exaone.lora_adapter import LoRATrainer  # type: ignore  # noqa: E402
 
@@ -74,7 +71,7 @@ class OptimizedTrainingPipeline:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # 필터링된 데이터 저장 경로
-        self.filtered_data_dir = get_data_dir() / "sft_dataset" / "filtered"
+        self.filtered_data_dir = get_data_dir() / "email" / "sft" / "filtered"
 
     def run(self) -> Path:
         """전체 파이프라인 실행.
@@ -88,7 +85,7 @@ class OptimizedTrainingPipeline:
         print()
 
         # 경로 자동 탐지
-        data_dir = get_data_dir() / "sft_dataset" / "processed"
+        data_dir = get_data_dir() / "email" / "sft" / "processed"
         train_path = data_dir / "train.jsonl"
         val_path = data_dir / "val.jsonl"
 
