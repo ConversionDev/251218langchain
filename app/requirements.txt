@@ -31,6 +31,8 @@ langgraph-sdk==0.3.3
 # ===============================
 psycopg2-binary==2.9.11
 pgvector==0.4.2
+# FAISS: 벡터 검색(로컬). Windows에는 faiss-gpu wheel 없음 → faiss-cpu 사용. Linux에서 GPU 쓰려면 conda로 faiss-gpu.
+faiss-cpu>=1.9.0
 SQLAlchemy==2.0.46
 alembic==1.18.1
 

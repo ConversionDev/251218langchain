@@ -223,7 +223,7 @@ def initialize_embeddings():
 
 
 def ensure_rag_initialized() -> None:
-    """RAG용 Embedding을 한 번만 초기화. (서버 기동 시 init_v1에서 호출, 또는 첫 RAG 요청 시 호출)"""
+    """RAG용 Embedding + FAISS 인덱스 한 번만 초기화."""
     global _rag_initialized
     if _rag_initialized:
         return
@@ -240,6 +240,14 @@ def ensure_rag_initialized() -> None:
                 print("[WARNING] RAG 임베딩 준비 실패")
         except Exception as e:
             print(f"[WARNING] RAG 임베딩 준비 예외: {e}")
+        try:
+            from core.faiss_store import load_faiss_indices  # type: ignore
+            if load_faiss_indices():
+                print("[OK] FAISS 인덱스 로드 완료 (disclosures·competency_anchors)")
+            else:
+                print("[INFO] FAISS 인덱스 없음 또는 로드 스킵 (pgvector fallback)")
+        except Exception as e:
+            print(f"[WARNING] FAISS 로드 예외: {e}")
         _rag_initialized = True
 
 

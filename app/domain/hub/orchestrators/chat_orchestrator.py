@@ -219,9 +219,14 @@ async def run_agent_stream(
 
             elif kind == "on_chain_end":
                 output = data.get("output", {})
-                if event_name in ("rag", "rag_node") and isinstance(output, dict):
-                    context_used = (output.get("context") or "") or context_used
-                    rag_sources = output.get("rag_sources") or rag_sources
+                if isinstance(output, dict):
+                    if event_name in ("rag", "rag_node"):
+                        context_used = (output.get("context") or "") or context_used
+                        if output.get("rag_sources"):
+                            rag_sources = output.get("rag_sources")
+                    # 그래프 종료 시 state에서 한 번 더 채움 (이벤트 구조 차이 대비)
+                    if event_name == "LangGraph" and output.get("rag_sources"):
+                        rag_sources = output.get("rag_sources")
                 if isinstance(output, dict):
                     messages_output = output.get("messages", [])
                     if messages_output:

@@ -307,6 +307,23 @@ def _infer_disclosure_standard_types(query: str) -> Optional[List[str]]:
     return None
 
 
+def _has_competency_keyword(query: str) -> bool:
+    """질문에 직업/역량/능력 관련 키워드가 있는지. 없으면 competency_anchors 출처 미포함.
+    O*NET 등 역량/능력 용어(comprehension, fluency, ideas 등) 포함."""
+    if not query or not query.strip():
+        return False
+    q = query.strip().lower()
+    keywords = (
+        "직업", "역량", "능력", "직무", "스킬", "skill", "competency", "ability",
+        "onet", "o*net", "ncs", "수행준거", "지식", "기술", "태도",
+        # O*NET/역량 관련 영문 용어 (Oral Comprehension, Fluency of Ideas 등)
+        "comprehension", "fluency", "ideas", "expression", "reasoning", "writing",
+        "oral", "written", "originality", "deductive", "inductive", "memorization",
+        "mathematical", "number facility", "problem sensitivity", "selective attention",
+    )
+    return any(kw in q for kw in keywords)
+
+
 def _build_rag_sources(docs: List[Any]) -> List[Dict[str, Any]]:
     """프론트 출처 표시용: table, id, source, page, standard_type, section_title 목록."""
     out: List[Dict[str, Any]] = []
@@ -413,103 +430,118 @@ def rag_node(state: ChatState) -> ChatState:
                 if query_vec is not None:
                     db = SessionLocal()
                     try:
-                        standard_types = _infer_disclosure_standard_types(user_query)
-                        pairs = search_disclosures_with_filter(
-                            db, query_vec, k=10, standard_types=standard_types
-                        )
-                        disclosure_count_before_threshold = len(pairs)
-                        disclosure_passed = 0
-                        min_distance = None
-                        closest_doc = None
-                        passed_docs: List[Any] = []
-                        for doc, distance in pairs:
-                            if min_distance is None or distance < min_distance:
-                                min_distance = distance
-                                closest_doc = doc
-                            if distance <= RAG_DISTANCE_THRESHOLD:
-                                passed_docs.append(doc)
-                                disclosure_passed += 1
-                        # 표준 키워드 없을 때: 최소거리가 크면 무관한 질문으로 보고 disclosure 결과 사용 안 함
-                        if (
-                            standard_types is None
-                            and min_distance is not None
-                            and min_distance > RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE
-                        ):
-                            passed_docs = []
+                        # 역량/능력 질문이면 disclosure 검색 생략 → competency_anchors만 사용 (IFRS/OECD 출처 혼선 방지)
+                        if not _has_competency_keyword(user_query):
+                            standard_types = _infer_disclosure_standard_types(user_query)
+                            pairs = search_disclosures_with_filter(
+                                db, query_vec, k=10, standard_types=standard_types
+                            )
+                            disclosure_count_before_threshold = len(pairs)
                             disclosure_passed = 0
-                            logger.info(
-                                "[RAG] disclosure: 키워드 없음, 최소거리=%.4f > %.2f → 무관한 질문으로 판단, disclosure 제외",
-                                min_distance,
-                                RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE,
+                            min_distance = None
+                            closest_doc = None
+                            passed_docs: List[Any] = []
+                            for doc, distance in pairs:
+                                if min_distance is None or distance < min_distance:
+                                    min_distance = distance
+                                    closest_doc = doc
+                                if distance <= RAG_DISTANCE_THRESHOLD:
+                                    passed_docs.append(doc)
+                                    disclosure_passed += 1
+                            # 표준 키워드 없을 때: disclosure 출처 전부 제외 (무관한 질문에서 OECD 등 잘못된 출처 방지)
+                            if standard_types is None:
+                                passed_docs = []
+                                disclosure_passed = 0
+                                logger.info(
+                                    "[RAG] disclosure: 키워드 없음(IFRS/OECD/공시 등) → 무관한 질문으로 판단, disclosure 제외",
+                                )
+                            else:
+                                # 키워드 있을 때만: 임계값 통과분 + (통과 0건이면 최소거리 1건) 포함
+                                if (
+                                    min_distance is not None
+                                    and min_distance > RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE
+                                ):
+                                    passed_docs = []
+                                    disclosure_passed = 0
+                                    logger.info(
+                                        "[RAG] disclosure: 최소거리=%.4f > %.2f → disclosure 제외",
+                                        min_distance,
+                                        RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE,
+                                    )
+                                else:
+                                    for doc in passed_docs:
+                                        if getattr(doc, "metadata", None) is not None:
+                                            doc.metadata["table"] = "disclosures"
+                                        all_docs.append(doc)
+                                    if (
+                                        disclosure_count_before_threshold > 0
+                                        and disclosure_passed == 0
+                                        and closest_doc is not None
+                                    ):
+                                        if getattr(closest_doc, "metadata", None) is not None:
+                                            closest_doc.metadata["table"] = "disclosures"
+                                        all_docs.append(closest_doc)
+                                        disclosure_passed = 1
+                                        logger.info(
+                                            "[RAG] disclosure: 임계값 미통과 → 최소거리 1건 포함, 거리=%.4f",
+                                            min_distance or 0,
+                                        )
+                            extra = ""
+                            if disclosure_count_before_threshold > 0 and disclosure_passed == 0 and min_distance is not None and closest_doc is None:
+                                extra = f", 최소거리={min_distance:.4f}"
+                            level = logger.warning if disclosure_count_before_threshold > 0 and disclosure_passed == 0 else logger.info
+                            level(
+                                "[RAG] disclosure: standard_types=%s, 후보=%s, 임계값 통과=%s (threshold=%.2f)%s",
+                                standard_types,
+                                disclosure_count_before_threshold,
+                                disclosure_passed,
+                                RAG_DISTANCE_THRESHOLD,
+                                extra,
                             )
                         else:
-                            for doc in passed_docs:
-                                if getattr(doc, "metadata", None) is not None:
-                                    doc.metadata["table"] = "disclosures"
-                                all_docs.append(doc)
-                            # 후보가 있으나 임계값 통과 0건이면 최소거리 문서 1건 포함 (DB 관련 내용 있으므로 출처 표시)
-                            if (
-                                disclosure_count_before_threshold > 0
-                                and disclosure_passed == 0
-                                and closest_doc is not None
-                            ):
-                                if getattr(closest_doc, "metadata", None) is not None:
-                                    closest_doc.metadata["table"] = "disclosures"
-                                all_docs.append(closest_doc)
-                                disclosure_passed = 1
-                                logger.info(
-                                    "[RAG] disclosure: 임계값 미통과 → 최소거리 1건 포함 (출처 표시), 거리=%.4f",
-                                    min_distance or 0,
-                                )
-                        extra = ""
-                        if disclosure_count_before_threshold > 0 and disclosure_passed == 0 and min_distance is not None and closest_doc is None:
-                            extra = f", 최소거리={min_distance:.4f}"
-                        level = logger.warning if disclosure_count_before_threshold > 0 and disclosure_passed == 0 else logger.info
-                        level(
-                            "[RAG] disclosure: standard_types=%s, 후보=%s, 임계값 통과=%s (threshold=%.2f)%s",
-                            standard_types,
-                            disclosure_count_before_threshold,
-                            disclosure_passed,
-                            RAG_DISTANCE_THRESHOLD,
-                            extra,
-                        )
-                        # competency_anchors 테이블 검색 (동일 BGE-m3 벡터 공간, category/level 필터 없이 k건)
-                        anchor_pairs = search_competency_anchors_with_filter(db, query_vec, k=5)
+                            logger.info(
+                                "[RAG] disclosure: 역량/능력 질문으로 판단, disclosure 검색 생략 (competency_anchors만 사용)",
+                            )
+                        # competency_anchors: 직업/역량 키워드 없으면 출처 미포함 (무관한 질문에서 잘못된 출처 방지)
                         anchor_passed = 0
-                        min_anchor_distance = None
-                        closest_anchor_doc = None
-                        for doc, distance in anchor_pairs:
-                            if min_anchor_distance is None or distance < min_anchor_distance:
-                                min_anchor_distance = distance
-                                closest_anchor_doc = doc
-                            if distance <= RAG_DISTANCE_THRESHOLD:
-                                if getattr(doc, "metadata", None) is not None:
-                                    doc.metadata["table"] = "competency_anchors"
-                                all_docs.append(doc)
-                                anchor_passed += 1
-                        # 후보가 있으나 임계값 통과 0건이면, 최소거리가 상한 이하일 때만 최소거리 1건 포함 (무관한 질문 시 능력/직무 출처 방지)
-                        if (
-                            anchor_pairs
-                            and anchor_passed == 0
-                            and closest_anchor_doc is not None
-                            and (min_anchor_distance is not None and min_anchor_distance <= RAG_ANCHOR_FALLBACK_MAX_DISTANCE)
-                        ):
-                            if getattr(closest_anchor_doc, "metadata", None) is not None:
-                                closest_anchor_doc.metadata["table"] = "competency_anchors"
-                            all_docs.append(closest_anchor_doc)
-                            anchor_passed = 1
+                        if not _has_competency_keyword(user_query):
                             logger.info(
-                                "[RAG] competency_anchors: 임계값 미통과 → 최소거리 1건 포함 (거리=%.4f <= %.2f)",
-                                min_anchor_distance or 0,
-                                RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
+                                "[RAG] competency_anchors: 키워드 없음(직업/역량/능력 등) → 무관한 질문으로 판단, competency 제외",
                             )
-                        elif anchor_pairs and anchor_passed == 0 and min_anchor_distance is not None and min_anchor_distance > RAG_ANCHOR_FALLBACK_MAX_DISTANCE:
-                            logger.info(
-                                "[RAG] competency_anchors: 최소거리=%.4f > %.2f → 무관한 질문으로 판단, fallback 제외",
-                                min_anchor_distance,
-                                RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
-                            )
-                        if anchor_pairs:
+                        else:
+                            anchor_pairs = search_competency_anchors_with_filter(db, query_vec, k=5)
+                            min_anchor_distance = None
+                            closest_anchor_doc = None
+                            for doc, distance in anchor_pairs:
+                                if min_anchor_distance is None or distance < min_anchor_distance:
+                                    min_anchor_distance = distance
+                                    closest_anchor_doc = doc
+                                if distance <= RAG_DISTANCE_THRESHOLD:
+                                    if getattr(doc, "metadata", None) is not None:
+                                        doc.metadata["table"] = "competency_anchors"
+                                    all_docs.append(doc)
+                                    anchor_passed += 1
+                            if (
+                                anchor_pairs
+                                and anchor_passed == 0
+                                and closest_anchor_doc is not None
+                                and (min_anchor_distance is not None and min_anchor_distance <= RAG_ANCHOR_FALLBACK_MAX_DISTANCE)
+                            ):
+                                if getattr(closest_anchor_doc, "metadata", None) is not None:
+                                    closest_anchor_doc.metadata["table"] = "competency_anchors"
+                                all_docs.append(closest_anchor_doc)
+                                anchor_passed = 1
+                                logger.info(
+                                    "[RAG] competency_anchors: 임계값 미통과 → 최소거리 1건 포함 (거리=%.4f <= %.2f)",
+                                    min_anchor_distance or 0,
+                                    RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
+                                )
+                            elif anchor_pairs and anchor_passed == 0 and min_anchor_distance is not None and min_anchor_distance > RAG_ANCHOR_FALLBACK_MAX_DISTANCE:
+                                logger.info(
+                                    "[RAG] competency_anchors: 최소거리=%.4f > %.2f → fallback 제외",
+                                    min_anchor_distance,
+                                    RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
+                                )
                             logger.info(
                                 "[RAG] competency_anchors: 후보=%s, 임계값 통과=%s (threshold=%.2f)",
                                 len(anchor_pairs),

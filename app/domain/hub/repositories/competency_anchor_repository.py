@@ -183,13 +183,71 @@ def search_competency_anchors_with_filter(
     level: Optional[int] = None,
 ) -> List[Tuple[Document, float]]:
     """
-    competency_anchors에서 벡터 유사도 검색.
-    category/level이 None이면 해당 조건 없음(전체 검색). 있으면 btree 인덱스 활용.
+    competency_anchors에서 벡터 유사도 검색. FAISS 있으면 FAISS+Neon, 없으면 pgvector.
     반환: (Document, distance) 리스트. 코사인 거리(작을수록 유사).
     """
+    try:
+        from core.faiss_store import (  # type: ignore
+            get_competency_id_map,
+            is_faiss_competency_ready,
+            search_faiss_competency,
+        )
+    except ImportError:
+        pass
+    else:
+        if is_faiss_competency_ready():
+            k_faiss = max(k, 50)
+            indices, ip_scores = search_faiss_competency(query_embedding, k_faiss)
+            id_map = get_competency_id_map()
+            if not id_map or not indices:
+                return []
+            unique_ids = [id_map[i] for i in indices if i >= 0 and i < len(id_map)]
+            if not unique_ids:
+                return []
+            sql = (
+                "SELECT id, content, category, level, section_title, source, source_type, unique_id "
+                "FROM competency_anchors WHERE unique_id = ANY(:uids)"
+            )
+            params_f: Any = {"uids": unique_ids}
+            if category is not None:
+                sql += " AND category = :category"
+                params_f["category"] = category
+            if level is not None:
+                sql += " AND level = :level"
+                params_f["level"] = level
+            r = db.execute(sql_text(sql), params_f)
+            rows_by_uid = {}
+            for row in r:
+                (doc_id, content, cat, lv, section_title, source, source_type, unique_id) = row
+                rows_by_uid[unique_id] = (doc_id, content, cat, lv, section_title, source, source_type, unique_id)
+            result: List[Tuple[Document, float]] = []
+            for i, idx in enumerate(indices):
+                if idx < 0 or idx >= len(id_map):
+                    continue
+                uid = id_map[idx]
+                if uid not in rows_by_uid:
+                    continue
+                doc_id, content, cat, lv, section_title, source, source_type, unique_id = rows_by_uid[uid]
+                ip = ip_scores[i] if i < len(ip_scores) else 0.0
+                distance = 1.0 - float(ip)
+                doc = Document(
+                    page_content=content or "",
+                    metadata={
+                        "id": doc_id,
+                        "category": cat or "",
+                        "level": lv,
+                        "section_title": section_title or "",
+                        "source": source or "",
+                        "source_type": source_type or "",
+                        "unique_id": unique_id or "",
+                    },
+                )
+                result.append((doc, distance))
+            result.sort(key=lambda x: x[1])
+            return result[:k]
     vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
     conditions = ["embedding IS NOT NULL"]
-    params: Any = {"vec": vec_str, "k": k}
+    params = {"vec": vec_str, "k": k}
     if category is not None:
         conditions.append("category = :category")
         params["category"] = category
@@ -204,7 +262,7 @@ def search_competency_anchors_with_filter(
         f"ORDER BY embedding <-> CAST(:vec AS vector) LIMIT :k"
     )
     r = db.execute(sql_text(sql), params)
-    result: List[Tuple[Document, float]] = []
+    result = []
     for row in r:
         (doc_id, content, cat, lv, section_title, source, source_type, unique_id, distance) = row
         doc = Document(

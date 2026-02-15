@@ -34,6 +34,44 @@ def delete_by_sources(db: Session, sources: List[str]) -> int:
     return deleted  # type: ignore
 
 
+def save_batch_text_only(
+    db: Session,
+    documents: List[Document],
+    sources_to_replace: Optional[List[str]] = None,
+) -> int:
+    """
+    Document 리스트를 disclosures에 텍스트·메타만 저장(embedding 없음).
+    FAISS 적재 시 사용. sources_to_replace 있으면 해당 source 기존 행 삭제 후 INSERT.
+    """
+    if not documents:
+        return 0
+    if sources_to_replace:
+        delete_by_sources(db, sources_to_replace)
+        db.flush()
+    for doc in tqdm(documents, desc="Insert (disclosures, text only)", unit="doc"):
+        meta = doc.metadata or {}
+        metadata_json = {
+            "page": meta.get("page"),
+            "source": meta.get("source"),
+            "section_title": meta.get("section_title"),
+        }
+        row = Disclosure(
+            content=doc.page_content,
+            embedding_content=_build_embedding_content(doc),
+            source=meta.get("source"),
+            page=meta.get("page"),
+            standard_type=meta.get("standard_type"),
+            section_title=meta.get("section_title"),
+            metadata_=metadata_json,
+            unique_id=meta.get("unique_id"),
+            embedding=None,
+        )
+        db.add(row)
+    db.flush()
+    db.commit()
+    return len(documents)
+
+
 def save_batch(
     db: Session,
     documents: List[Document],
@@ -136,10 +174,64 @@ def search_disclosures_with_filter(
     standard_types: Optional[List[str]] = None,
 ) -> List[Tuple[Document, float]]:
     """
-    disclosures 테이블에서 벡터 유사도 검색. id, content, source, page, standard_type, section_title, unique_id 반환.
-    standard_types가 있으면 해당 표준만 검색(예: ['IFRS_S1','IFRS_S2'], ['OECD'], ['ISO30414']).
+    disclosures 테이블에서 벡터 유사도 검색. FAISS 있으면 FAISS+Neon, 없으면 pgvector.
     반환: (Document, distance) 리스트. 코사인 거리(작을수록 유사).
     """
+    try:
+        from core.faiss_store import (  # type: ignore
+            get_disclosure_id_map,
+            is_faiss_disclosure_ready,
+            search_faiss_disclosure,
+        )
+    except ImportError:
+        pass
+    else:
+        if is_faiss_disclosure_ready():
+            k_faiss = max(k, 200) if standard_types else max(k, 100)
+            indices, ip_scores = search_faiss_disclosure(query_embedding, k_faiss)
+            id_map = get_disclosure_id_map()
+            if not id_map or not indices:
+                return []
+            unique_ids = [id_map[i] for i in indices if 0 <= i < len(id_map)]
+            if not unique_ids:
+                return []
+            sql = (
+                "SELECT id, content, source, page, standard_type, section_title, unique_id "
+                "FROM disclosures WHERE unique_id = ANY(:uids)"
+            )
+            params_f: Any = {"uids": unique_ids}
+            if standard_types:
+                sql += " AND standard_type = ANY(:standard_types)"
+                params_f["standard_types"] = standard_types
+            r = db.execute(sql_text(sql), params_f)
+            rows_by_uid = {}
+            for row in r:
+                doc_id, content, source, page, standard_type, section_title, unique_id = row
+                rows_by_uid[unique_id] = (doc_id, content, source, page, standard_type, section_title, unique_id)
+            result: List[Tuple[Document, float]] = []
+            for i, idx in enumerate(indices):
+                if idx < 0 or idx >= len(id_map):
+                    continue
+                uid = id_map[idx]
+                if uid not in rows_by_uid:
+                    continue
+                doc_id, content, source, page, standard_type, section_title, unique_id = rows_by_uid[uid]
+                ip = ip_scores[i] if i < len(ip_scores) else 0.0
+                distance = 1.0 - float(ip)
+                doc = Document(
+                    page_content=content or "",
+                    metadata={
+                        "id": doc_id,
+                        "source": source or "",
+                        "page": page,
+                        "standard_type": standard_type or "",
+                        "section_title": section_title or "",
+                        "unique_id": unique_id or "",
+                    },
+                )
+                result.append((doc, distance))
+            result.sort(key=lambda x: x[1])
+            return result[:k]
     vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
     if standard_types:
         sql = (
@@ -160,7 +252,7 @@ def search_disclosures_with_filter(
         )
         params = {"vec": vec_str, "k": k}
     r = db.execute(sql_text(sql), params)
-    result: List[Tuple[Document, float]] = []
+    rows: List[Tuple[Document, float]] = []
     for row in r:
         doc_id, content, source, page, standard_type, section_title, unique_id, distance = row
         doc = Document(
@@ -174,5 +266,5 @@ def search_disclosures_with_filter(
                 "unique_id": unique_id or "",
             },
         )
-        result.append((doc, float(distance)))
-    return result
+        rows.append((doc, float(distance)))
+    return rows

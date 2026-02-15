@@ -46,6 +46,13 @@ def get_fine_tuned_dir() -> Path:
     return get_artifacts_dir() / "fine_tuned"
 
 
+def get_faiss_dir() -> Path:
+    """FAISS 인덱스·id_map 저장 디렉토리. artifacts/faiss/."""
+    d = get_artifacts_dir() / "faiss"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_data_dir() -> Path:
     """데이터 디렉토리 경로 반환.
 

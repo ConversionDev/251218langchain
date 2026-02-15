@@ -1,8 +1,8 @@
 """LangGraph 에이전트 라우터.
 
 LangGraph 기반 에이전트 API 엔드포인트를 제공합니다.
-- BP: POST /agent/upload(멀티파트) → file_ids 반환.
-- POST /agent/chat(stream): JSON만 (message, file_ids 등).
+- POST /agent/upload: 멀티파트 → file_ids 반환.
+- POST /agent/chat/stream: JSON (message, file_ids 등) → SSE 스트리밍.
 """
 
 import json
@@ -37,28 +37,6 @@ class AgentRequest(BaseModel):
     chat_history: Optional[List[MessageItem]] = Field(None, description="이전 대화 기록")
     thread_id: Optional[str] = Field(None, description="대화 스레드 ID")
     images: Optional[List[str]] = Field(None, description="첨부 이미지 base64 문자열 배열 (data URL 제외)")
-
-
-class SourceItem(BaseModel):
-    """RAG 출처 한 건 — 프론트에서 어느 DB/문서에서 왔는지 표시용."""
-
-    table: str = Field(..., description="테이블명: disclosures, competency_anchors")
-    id: Optional[int] = Field(None, description="문서 ID")
-    source: str = Field("", description="문서 식별자(예: 파일 stem)")
-    page: Optional[int] = Field(None, description="페이지 번호")
-    standard_type: str = Field("", description="표준 유형: IFRS_S1, IFRS_S2, OECD, ISO30414, GLOBAL_GREEN_STOCKTAKE")
-    section_title: str = Field("", description="섹션 제목")
-    unique_id: str = Field("", description="고유 ID")
-
-
-class AgentResponse(BaseModel):
-    response: str = Field(..., description="에이전트 응답")
-    provider: str = Field(..., description="사용된 LLM 제공자")
-    used_rag: bool = Field(..., description="RAG 사용 여부")
-    thread_id: Optional[str] = Field(None, description="사용된 대화 스레드 ID")
-    semantic_action: Optional[str] = Field(None, description="시멘틱 분류 결과")
-    context_preview: Optional[str] = Field(None, description="RAG에서 참고한 문서(검색된 컨텍스트) 미리보기")
-    sources: Optional[List[SourceItem]] = Field(None, description="RAG 출처 목록(테이블·표준·source·page 등)")
 
 
 class ProviderInfo(BaseModel):
@@ -137,85 +115,6 @@ async def agent_upload(files: List[UploadFile] = File(default=[], description="�
             file_ids.append(save_upload_file(data))
 
     return {"file_ids": file_ids}
-
-
-@router.post("/chat", response_model=AgentResponse)
-async def agent_chat(request: Request):
-    payload = await _parse_chat_payload(request)
-    _resolve_file_ids_to_images(payload)
-    semantic_action: Optional[str] = None
-    try:
-        import importlib
-        import sys
-
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
-        from domain.hub.llm import get_provider_name  # type: ignore
-
-        provider = payload.get("provider") or get_provider_name()
-        message = payload.get("message", "")
-
-        try:
-            from domain.hub.orchestrators import (
-                classify,
-                is_classifier_available,
-                is_rule_policy_related,
-            )
-            if is_classifier_available() and is_rule_policy_related(message):
-                semantic_action = classify(message)
-                msg_preview = (message[:80] + "…") if len(message) > 80 else message
-                logger.info("[시멘틱 분류] 질문: %s → %s", msg_preview, semantic_action)
-                if semantic_action == "BLOCK":
-                    return AgentResponse(
-                        response=_BLOCK_MESSAGE,
-                        provider=provider,
-                        used_rag=payload.get("use_rag", True),
-                        thread_id=payload.get("thread_id"),
-                        semantic_action=semantic_action,
-                        context_preview=None,
-                    )
-        except Exception:
-            pass
-
-        if "domain.hub.orchestrators.chat_orchestrator" in sys.modules:
-            graph_module = sys.modules["domain.hub.orchestrators.chat_orchestrator"]
-        else:
-            graph_module = importlib.import_module("domain.hub.orchestrators.chat_orchestrator")
-        run_agent = graph_module.run_agent
-
-        chat_history = None
-        if payload.get("chat_history"):
-            chat_history = []
-            for msg in payload["chat_history"]:
-                if msg.role == "user":
-                    chat_history.append(HumanMessage(content=msg.content))
-                elif msg.role == "assistant":
-                    chat_history.append(AIMessage(content=msg.content))
-                elif msg.role == "system":
-                    chat_history.append(SystemMessage(content=msg.content))
-
-        response_text, context_used, rag_sources = run_agent(
-            user_text=message,
-            provider=provider,
-            system_prompt=payload.get("system_prompt"),
-            chat_history=chat_history,
-            thread_id=payload.get("thread_id"),
-            semantic_action=semantic_action,
-            images=payload.get("images"),
-        )
-
-        context_preview = (context_used[:600] + "…") if context_used and len(context_used) > 600 else (context_used or None)
-
-        return AgentResponse(
-            response=response_text,
-            provider=provider,
-            used_rag=payload.get("use_rag", True),
-            thread_id=payload.get("thread_id"),
-            semantic_action=semantic_action,
-            context_preview=context_preview,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"에이전트 실행 오류: {str(e)}")
 
 
 @router.post("/chat/stream")

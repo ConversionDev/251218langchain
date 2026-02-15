@@ -1,10 +1,10 @@
 """
-Competency anchors 파이프라인: raw(xlsx+pdf) → prepared JSONL → 검증 → competency_anchors 적재.
+Competency anchors 파이프라인: raw(xlsx+pdf) → prepared JSONL → 검증 → FAISS+Neon 적재.
 
 한 번 실행 시:
-  1. raw/*.xlsx, *.pdf → prepared/competency_rows.jsonl (전략 분기, 2000건 제한)
-  2. 검증: 행 수·필수 필드
-  3. JSONL → save_batch_upsert → fill_embeddings_for_anchors
+  1. raw → prepared/competency_rows.jsonl (2000건 제한)
+  2. 검증
+  3. 임베딩 생성 → FAISS 인덱스+id_map 저장 → Neon에는 텍스트만 save_batch_upsert (embedding 없음)
 
 사용:
   cd app && python -m training.pipelines.ingest.run_competency_ingest
@@ -14,14 +14,17 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np  # type: ignore
+
 # app 루트를 경로에 추가
 app_dir = Path(__file__).resolve().parent.parent.parent.parent
 if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 from core.database import SessionLocal  # type: ignore
+from core.faiss_store import build_and_save_index  # type: ignore
 from domain.hub.repositories.competency_anchor_repository import (  # type: ignore
-    fill_embeddings_for_anchors,
+    _build_embedding_content,
     save_batch_upsert,
 )
 from domain.shared.embedding import get_embedding_model  # type: ignore
@@ -78,13 +81,20 @@ def main() -> None:
         sys.exit(0)
 
     print(f"[INFO] 적재 입력: {len(rows)}건")
+    embeddings_model = get_embedding_model(use_fp16=True)
+    texts = [_build_embedding_content(r) for r in rows]
+    vectors = embeddings_model.embed_documents(texts)
+    if len(vectors) != len(rows):
+        print(f"[ERROR] 임베딩 개수 불일치: {len(vectors)} vs {len(rows)}")
+        sys.exit(1)
+    arr = np.array(vectors, dtype=np.float32)
+    unique_ids = [str(r.get("unique_id", "")) for r in rows]
+    build_and_save_index(arr, unique_ids, "competency_anchors")
+    print("[INFO] FAISS 인덱스·id_map 저장 완료")
     db = SessionLocal()
     try:
         inserted = save_batch_upsert(db, rows)
-        print(f"[INFO] Upsert 완료: {inserted}건")
-        embeddings_model = get_embedding_model(use_fp16=True)
-        filled = fill_embeddings_for_anchors(db, embeddings_model)
-        print(f"[OK] 임베딩 채움: {filled}건")
+        print(f"[OK] Neon 텍스트 적재 완료: {inserted}건")
     finally:
         db.close()
 

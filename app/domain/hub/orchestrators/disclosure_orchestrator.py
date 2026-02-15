@@ -96,9 +96,15 @@ def _load_chunks_node(state: DisclosureIngestState) -> DisclosureIngestState:
 
 
 def _embed_and_store_node(state: DisclosureIngestState) -> DisclosureIngestState:
-    """Document 리스트를 disclosures 테이블에 적재. sources_to_replace 있으면 해당 source 기존 행 삭제 후 INSERT."""
+    """Document 리스트를 FAISS 인덱스 구축 + Neon 텍스트만 적재. sources_to_replace 있으면 해당 source 기존 행 삭제 후 INSERT."""
+    import numpy as np  # type: ignore
+
     from core.database import SessionLocal  # type: ignore
-    from domain.hub.repositories.disclosure_repository import save_batch  # type: ignore
+    from core.faiss_store import build_and_save_index  # type: ignore
+    from domain.hub.repositories.disclosure_repository import (  # type: ignore
+        _build_embedding_content,
+        save_batch_text_only,
+    )
 
     docs = state.get("documents") or []
     embeddings_model = state.get("embeddings_model")
@@ -113,8 +119,19 @@ def _embed_and_store_node(state: DisclosureIngestState) -> DisclosureIngestState
         }
     db = SessionLocal()
     try:
-        n = save_batch(db, docs, embeddings_model, sources_to_replace=sources_to_replace)
-        logger.info("[DisclosureIngest] EmbedAndStore: %s docs -> disclosures (replaced %s)", n, sources_to_replace)
+        texts = [_build_embedding_content(doc) for doc in docs]
+        vectors = embeddings_model.embed_documents(texts)
+        if not vectors or len(vectors) != len(docs):
+            return {
+                "error": "임베딩 개수 불일치",
+                "doc_count": 0,
+                "processing_path": path + " -> EmbedAndStore(fail)",
+            }
+        arr = np.array(vectors, dtype=np.float32)
+        unique_ids = [str((doc.metadata or {}).get("unique_id", "")) for doc in docs]
+        build_and_save_index(arr, unique_ids, "disclosures")
+        n = save_batch_text_only(db, docs, sources_to_replace=sources_to_replace)
+        logger.info("[DisclosureIngest] FAISS+Neon(text): %s docs -> disclosures (replaced %s)", n, sources_to_replace)
         return {
             "doc_count": n,
             "processing_path": path + " -> EmbedAndStore",
