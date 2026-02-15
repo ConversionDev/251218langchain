@@ -132,13 +132,16 @@ def get_embedding_model(
 
 def get_disclosure_embedding_model() -> Optional["FlagEmbeddingWrapper"]:
     """
-    disclosure 테이블 쿼리 임베딩용 BGE-m3. fp16 한 번만 로드해 프로세스 내 재사용 (GPU 통일).
+    disclosure 테이블 쿼리 임베딩용 BGE-m3.
+    get_embedding_model과 동일한 devices 사용 → 서버당 단일 인스턴스(중복 로드 방지).
     """
     global _disclosure_bge_model
     if _disclosure_bge_model is not None:
         return _disclosure_bge_model
     try:
-        _disclosure_bge_model = get_embedding_model(use_fp16=True)
+        from core.config import get_settings  # type: ignore
+        devices = getattr(get_settings(), "embedding_device", None) or None
+        _disclosure_bge_model = get_embedding_model(use_fp16=True, devices=devices)
         _disclosure_bge_model.embed_query("test")
         return _disclosure_bge_model
     except Exception:

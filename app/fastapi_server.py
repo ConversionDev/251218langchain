@@ -236,40 +236,22 @@ def init_v1() -> None:
 
 
 def initialize_embeddings():
-    """Embedding 모델 초기화 - 로컬 모델 초기화."""
-    import torch
-
+    """Embedding 모델 초기화 — FlagEmbedding BGE-m3 단일 인스턴스 (PGVector·Disclosure·Competency 통합)."""
     global local_embeddings
 
-    # 로컬 Embedding 초기화 (GPU 사용 가능 시 자동 감지)
     try:
-        # langchain-huggingface 사용 (deprecation 경고 해결)
-        try:
-            from langchain_huggingface import HuggingFaceEmbeddings
-        except ImportError:
-            # fallback to langchain_community
-            from langchain_community.embeddings import HuggingFaceEmbeddings
+        from domain.shared.embedding import get_embedding_model  # type: ignore
 
-        # GPU 필수 확인
-        if not torch.cuda.is_available():
-            raise RuntimeError(
-                "CUDA가 사용 불가능합니다. GPU가 필요합니다.\n"
-                "torch.cuda.is_available()이 False입니다."
-            )
-
-        # EMBEDDING_DEVICE 환경 변수 또는 CUDA 사용
-        embedding_device = settings.embedding_device
-        if embedding_device is None:
-            embedding_device = "cuda"  # GPU 전용
-
-        local_embeddings = HuggingFaceEmbeddings(
-            model_name=settings.default_embedding_model,
-            model_kwargs={"device": embedding_device},
+        # Soccer·Disclosure·Competency 공통: FlagEmbedding BGE-m3 한 번만 로드 (중복 방지)
+        device = getattr(settings, "embedding_device", None) or None
+        local_embeddings = get_embedding_model(
+            model_name=getattr(settings, "default_embedding_model", None),
+            use_fp16=True,
+            devices=device,
         )
-        # 간단한 테스트
         local_embeddings.embed_query("test")
         print(
-            f"[OK] 로컬 Embedding 모델 초기화 완료 (sentence-transformers, device={embedding_device})"
+            "[OK] 로컬 Embedding 초기화 완료 (FlagEmbedding BGE-m3, PGVector·Disclosure·Competency 통합)"
         )
     except Exception as local_error:
         print(f"[WARNING] 로컬 Embedding 모델 초기화 실패: {str(local_error)[:100]}...")
@@ -428,15 +410,15 @@ def ensure_rag_initialized() -> None:
             initialize_embeddings()
         if local_embeddings and vector_store is None:
             initialize_vector_store()
-        # disclosure 테이블 쿼리용 BGE-m3 한 번만 사전 로드 (fp16, GPU 통일)
+        # Disclosure 쿼리 경로가 통합 BGE-m3(local_embeddings)와 동일 인스턴스 사용하도록 캐시 연결
         try:
             from domain.shared.embedding import preload_disclosure_embedding_model  # type: ignore
             if preload_disclosure_embedding_model():
-                print("[OK] Disclosure 쿼리 임베딩(BGE-m3) 사전 로드 완료")
+                print("[OK] RAG 임베딩 준비 완료 (FlagEmbedding BGE-m3 통합)")
             else:
-                print("[WARNING] Disclosure 쿼리 임베딩(BGE-m3) 사전 로드 실패")
+                print("[WARNING] RAG 임베딩 준비 실패")
         except Exception as e:
-            print(f"[WARNING] Disclosure BGE preload 예외: {e}")
+            print(f"[WARNING] RAG 임베딩 준비 예외: {e}")
         _rag_initialized = True
 
 
