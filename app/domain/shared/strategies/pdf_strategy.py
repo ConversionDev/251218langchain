@@ -2,7 +2,7 @@
 PDF 추출 전략 — GoF Strategy 패턴.
 
 - 추상 클래스: PDFExtractStrategy (extract(pdf_path) -> str).
-- StrategyFactory: 파일명/경로 키워드로 전략 선택 (pdf_strategy.md §3 Step 1 Primary).
+- StrategyFactory: 파일명/경로 키워드로 전략 선택 (docs/extraction-and-data.md §3 Step 1 Primary).
 """
 
 from abc import ABC, abstractmethod
@@ -28,7 +28,7 @@ class PDFExtractStrategy(ABC):
 
 
 class StrategyFactory:
-    """파일명/경로 키워드로 전략 선택. pdf_strategy.md §3 Step 1 Primary 기준."""
+    """파일명/경로 키워드로 전략 선택. docs/extraction-and-data.md §3 Step 1 Primary 기준."""
 
     # 키워드(소문자) → 전략 타입. 경로 또는 파일명에 포함되면 해당 전략 선택.
     _KEYWORD_STRATEGY: list[tuple[list[str], PdfStrategyType]] = [

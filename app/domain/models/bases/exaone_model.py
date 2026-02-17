@@ -41,27 +41,17 @@ from transformers import (
 )
 
 # Tool Calling을 위한 시스템 프롬프트 템플릿
-TOOL_CALLING_SYSTEM_PROMPT = """당신은 도움이 되는 AI 어시스턴트입니다. 사용자의 요청을 처리하기 위해 다음 도구들을 사용할 수 있습니다.
+# (직접 답변 우선, 필요할 때만 도구 사용하도록 설계)
+TOOL_CALLING_SYSTEM_PROMPT = """[도구 사용 원칙]
+질문에 직접 답변하는 것을 우선하세요. 검색·계산 등이 꼭 필요할 때만 도구를 호출하세요. 도구 설명을 하지 말고, 필요 시 바로 JSON으로 호출하세요.
 
-## 사용 가능한 도구:
+[사용 가능한 도구]
 {tools_description}
 
-## 도구 호출 규칙:
-1. 도구를 호출해야 할 경우, 반드시 다음 JSON 형식으로만 응답하세요:
-```json
-{{"name": "도구이름", "arguments": {{"인자명": "값"}}}}
-```
+[도구 호출 형식] 필요할 때만 사용. JSON만 출력: {{"name": "도구이름", "arguments": {{...}}}} 또는 [{{...}}, {{...}}]"""
 
-2. 여러 도구를 호출해야 할 경우:
-```json
-[{{"name": "도구1", "arguments": {{}}}}, {{"name": "도구2", "arguments": {{}}}}]
-```
-
-3. 도구 호출이 필요 없으면 일반 텍스트로 응답하세요.
-
-4. JSON 형식으로 도구를 호출할 때는 다른 텍스트 없이 JSON만 출력하세요.
-
-중요: 도구를 호출할 때는 반드시 위의 JSON 형식만 사용하세요."""
+# Transformers v5용 config(RopeParameters) 이전 리비전 → transformers 4.x 호환
+EXAONE_MODEL_REVISION = "0ff6b5e"
 
 
 def _format_tool_description(tool: BaseTool) -> str:
@@ -264,6 +254,7 @@ class ExaoneLLM(BaseLLM):
 
             # dtype 명시 시 fp32 로드 후 캐스팅 방지. (torch_dtype deprecated → dtype 사용)
             load_kwargs: Dict[str, Any] = {
+                "revision": EXAONE_MODEL_REVISION,
                 "dtype": dtype,
                 "device_map": {"": "cuda:0"},
                 "trust_remote_code": self.trust_remote_code,
@@ -283,14 +274,10 @@ class ExaoneLLM(BaseLLM):
 
             from core.config import settings  # type: ignore
 
-            if settings.exaone_use_compile and hasattr(torch, "compile"):
-                print("[INFO] torch.compile() 최적화 적용 중...")
-                self.model = torch.compile(self.model, mode="reduce-overhead")
-                print("[OK] torch.compile() 적용 완료")
-
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     self._load_path,
+                    revision=EXAONE_MODEL_REVISION,
                     trust_remote_code=self.trust_remote_code,
                     use_fast=True,
                     local_files_only=True,
@@ -298,12 +285,32 @@ class ExaoneLLM(BaseLLM):
             except Exception:
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     self._load_path,
+                    revision=EXAONE_MODEL_REVISION,
                     trust_remote_code=self.trust_remote_code,
                     local_files_only=True,
                 )
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+            # 역량 SFT 어댑터 로드 (설정 켜져 있고 경로 존재 시)
+            from core.paths import get_output_dir  # type: ignore
+
+            adapter_dir = get_output_dir() / "exaone" / "competency_adapters"
+            if settings.exaone_use_competency_adapter and adapter_dir.is_dir():
+                adapter_config = adapter_dir / "adapter_config.json"
+                if adapter_config.exists():
+                    try:
+                        from peft import PeftModel  # type: ignore
+                        self.model = PeftModel.from_pretrained(self.model, str(adapter_dir))
+                        print("[OK] EXAONE 역량 어댑터 로드 완료 (competency_adapters)")
+                    except Exception as e:
+                        print(f"[WARN] 역량 어댑터 로드 실패, 베이스만 사용: {e}")
+
+            if settings.exaone_use_compile and hasattr(torch, "compile"):
+                print("[INFO] torch.compile() 최적화 적용 중...")
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+                print("[OK] torch.compile() 적용 완료")
 
             # 디바이스 정보 확인 및 출력
             if hasattr(self.model, "device"):
@@ -485,7 +492,7 @@ class ExaoneLangChainWrapper(BaseChatModel):
             has_system = any(isinstance(m, SystemMessage) for m in messages)
 
             if has_system:
-                # 기존 시스템 메시지에 도구 프롬프트 추가
+                # 기존 시스템 메시지에 도구 프롬프트 추가 (역량 지시 우선, 도구는 보조)
                 new_messages = []
                 for msg in messages:
                     if isinstance(msg, SystemMessage):

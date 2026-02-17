@@ -3,23 +3,16 @@ Disclosure PDF ↔ prepared txt 일치 검증.
 
 - raw 내 각 PDF에 대해 prepared/{stem}.txt 존재 여부.
 - PDF 페이지 수와 txt 내 페이지 구분자로 나눈 segment 수 일치 여부.
+- PDF 접근: domain/shared/document_extract 사용.
 """
 
 from pathlib import Path
 from typing import Optional, Tuple
 
+from domain.shared.document_extract import get_pdf_page_count  # type: ignore
+
 # disclosure_chunking, pdf_strategy와 동일
 PAGE_SEP = "\n--- Page Break ---\n"
-
-
-def get_pdf_page_count(pdf_path: Path) -> int:
-    """PDF 페이지 수 반환."""
-    import fitz  # type: ignore[import-untyped]
-    doc = fitz.open(pdf_path)
-    try:
-        return len(doc)
-    finally:
-        doc.close()
 
 
 def verify_pdf_text_match(

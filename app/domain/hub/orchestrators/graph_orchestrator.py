@@ -158,7 +158,9 @@ def model_node(state: ChatState) -> ChatState:
 
     LLMProvider = _get_llm_provider()
     provider = state.get("model_provider") or LLMProvider.get_provider_name()
-    llm = _get_llm(provider=provider)
+    max_tokens = state.get("max_tokens") or 2048
+    temperature = state.get("temperature") or 0.7
+    llm = _get_llm(provider=provider, max_tokens=max_tokens, temperature=temperature)
 
     messages = list(state.get("messages", []))
     context = state.get("context")
@@ -257,6 +259,8 @@ RAG_DISTANCE_THRESHOLD = 0.8
 RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE = 0.75
 # competency_anchors fallback: 최소거리 1건 넣을 때의 상한. 이보다 크면 무관한 질문으로 보고 fallback 안 함
 RAG_ANCHOR_FALLBACK_MAX_DISTANCE = 0.9
+# 직원 검색: 엉뚱한 인물 추천 방지를 위해 disclosure/competency보다 엄격 (작을수록 유사, 0.6 이하만 포함)
+RAG_EMPLOYEE_DISTANCE_THRESHOLD = 0.6
 
 def _infer_disclosure_standard_filter(query: str) -> Optional[Dict[str, Any]]:
     """
@@ -324,12 +328,25 @@ def _has_competency_keyword(query: str) -> bool:
     return any(kw in q for kw in keywords)
 
 
+def _has_employee_keyword(query: str) -> bool:
+    """질문에 직원/인력/이력서/부서 관련 키워드가 있는지. 있으면 employees 테이블도 RAG 검색."""
+    if not query or not query.strip():
+        return False
+    q = query.strip().lower()
+    keywords = (
+        "직원", "임직원", "인력", "사람", "스태프", "employee", "staff", "직원 수",
+        "이력서", "resume", "경력", "학력", "부서", "department", "팀", "team",
+        "누가", "누구", "어떤 사람", "교육 이수", "훈련", "training",
+    )
+    return any(kw in q for kw in keywords)
+
+
 def _build_rag_sources(docs: List[Any]) -> List[Dict[str, Any]]:
-    """프론트 출처 표시용: table, id, source, page, standard_type, section_title 목록."""
+    """프론트 출처 표시용: table, id, source, page, standard_type, section_title, name, department 등."""
     out: List[Dict[str, Any]] = []
     for doc in docs:
         meta = getattr(doc, "metadata", None) or {}
-        out.append({
+        row = {
             "table": meta.get("table", "disclosures"),
             "id": meta.get("id") or meta.get("doc_id"),
             "source": meta.get("source", ""),
@@ -337,7 +354,14 @@ def _build_rag_sources(docs: List[Any]) -> List[Dict[str, Any]]:
             "standard_type": meta.get("standard_type", ""),
             "section_title": meta.get("section_title", ""),
             "unique_id": meta.get("unique_id", ""),
-        })
+        }
+        if meta.get("name") is not None:
+            row["name"] = meta.get("name")
+        if meta.get("department") is not None:
+            row["department"] = meta.get("department")
+        if meta.get("job_title") is not None:
+            row["job_title"] = meta.get("job_title")
+        out.append(row)
     return out
 
 
@@ -366,13 +390,24 @@ def _build_context_with_sources(docs: List[Any]) -> str:
             tokens.append(f"category={meta.get('category')}")
         if meta.get("section_title"):
             tokens.append(f"section_title={meta.get('section_title')}")
+        if meta.get("name"):
+            tokens.append(f"name={meta.get('name')}")
+        if meta.get("department"):
+            tokens.append(f"department={meta.get('department')}")
+        if meta.get("job_title"):
+            tokens.append(f"job_title={meta.get('job_title')}")
         cite = "[출처: " + ", ".join(tokens) + "]" if tokens else "[출처: (메타데이터 없음)]"
         parts.append(f"{cite}\n{doc.page_content}")
     return "\n\n".join(parts)
 
 
 def rag_node(state: ChatState) -> ChatState:
-    """RAG 노드. disclosures·competency_anchors 테이블 검색 후, 거리 임계값 이하인 문서만 컨텍스트로 사용."""
+    """RAG 노드. Query 분류(공시 기준 / 인물·역량 / 복합)에 따라 검색 후 컨텍스트 융합.
+    - 공시 기준 질문: disclosures 검색 (standard_types).
+    - 인물·역량 질문: competency_anchors 검색.
+    - 직원/인력 질문: employees 검색 (pgvector HNSW, 임계값 0.6).
+    - 복합(예: 직원 중 ISO 30414 만족하는 사람): disclosure + employees 둘 다 검색해 all_docs에 합침.
+    """
     messages = state.get("messages", [])
 
     user_query: Optional[str] = None
@@ -404,6 +439,9 @@ def rag_node(state: ChatState) -> ChatState:
                 )
                 from domain.hub.repositories.competency_anchor_repository import (  # type: ignore
                     search_competency_anchors_with_filter,
+                )
+                from domain.hub.repositories.employee_repository import (  # type: ignore
+                    search_employees_with_filter,
                 )
 
                 # disclosure 테이블은 FlagEmbedding(BGE-m3)으로 적재됨 → 쿼리도 동일 모델(fp16)로 같은 벡터 공간
@@ -548,6 +586,24 @@ def rag_node(state: ChatState) -> ChatState:
                                 anchor_passed,
                                 RAG_DISTANCE_THRESHOLD,
                             )
+                        # employees: 직원/인력/이력서/부서 질문 시 검색. 공시+인물 복합 질문(예: 직원 중 ISO 30414 만족하는 사람)이면 disclosure와 융합됨.
+                        if _has_employee_keyword(user_query):
+                            emp_pairs = search_employees_with_filter(db, query_vec, k=5)
+                            emp_passed = 0
+                            for doc, dist in emp_pairs:
+                                if dist <= RAG_EMPLOYEE_DISTANCE_THRESHOLD:
+                                    if getattr(doc, "metadata", None) is not None:
+                                        doc.metadata["table"] = "employees"
+                                    all_docs.append(doc)
+                                    emp_passed += 1
+                            logger.info(
+                                "[RAG] employees: 후보=%s, 임계값 통과=%s (threshold=%.2f)",
+                                len(emp_pairs),
+                                emp_passed,
+                                RAG_EMPLOYEE_DISTANCE_THRESHOLD,
+                            )
+                        else:
+                            logger.info("[RAG] employees: 직원/인력 키워드 없음 → 검색 생략")
                     finally:
                         db.close()
                 else:

@@ -5,9 +5,12 @@
 """
 
 import os
+import threading
 from typing import Dict, List, Optional, Set
 
 from langchain_core.language_models import BaseChatModel
+
+_lock_direct_load = threading.Lock()
 
 
 class LLMProvider:
@@ -15,6 +18,7 @@ class LLMProvider:
 
     _instances: Dict[str, BaseChatModel] = {}
     _creating: Set[str] = set()  # 순환 호출 방지: 생성 중인 cache_key
+    _direct_loaded_llm: Optional[BaseChatModel] = None  # _load_exaone_direct()로 한 번만 로드, 재사용
     _supports_tool_calling: Dict[str, bool] = {
         "exaone": True,  # EXAONE은 JSON Tool Calling 지원 (프롬프트 기반)
     }
@@ -75,11 +79,17 @@ class LLMProvider:
 
     @classmethod
     def _load_exaone_direct(cls) -> BaseChatModel:
-        """ExaOne 모델 직접 로드 (순환 호출 시 사용). domain.models.bases.exaone_model 사용."""
-        from domain.models.bases.exaone_model import load_exaone_model  # type: ignore
+        """ExaOne 모델 직접 로드 (순환 호출 시 사용). 이미 로드된 인스턴스가 있으면 재사용."""
+        if cls._direct_loaded_llm is not None:
+            return cls._direct_loaded_llm
+        with _lock_direct_load:
+            if cls._direct_loaded_llm is not None:
+                return cls._direct_loaded_llm
+            from domain.models.bases.exaone_model import load_exaone_model  # type: ignore
 
-        exaone_llm = load_exaone_model(register=False)
-        return exaone_llm.get_langchain_model()
+            exaone_llm = load_exaone_model(register=False)
+            cls._direct_loaded_llm = exaone_llm.get_langchain_model()
+            return cls._direct_loaded_llm
 
     @classmethod
     def _create_exaone_llm(
@@ -101,6 +111,7 @@ class LLMProvider:
     def clear_cache(cls) -> None:
         """캐시된 LLM 인스턴스 정리."""
         cls._instances.clear()
+        cls._direct_loaded_llm = None
 
 
 def get_llm(

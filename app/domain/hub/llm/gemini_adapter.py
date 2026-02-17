@@ -5,11 +5,33 @@ Gemini 멀티모달 어댑터.
 API 키는 core.config의 gemini_api_key(GEMINI_API_KEY)에서 읽습니다.
 """
 
+import atexit
 import base64
 import logging
+import warnings
 from typing import Generator, List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _close_genai_client() -> None:
+    """프로세스 종료 시 google.generativeai 내부 클라이언트 정리 (서버가 안 내려가는 현상 완화)."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            import google.generativeai as genai
+        for attr in ("_client", "client", "_http_client"):
+            client = getattr(genai, attr, None)
+            if client is not None and hasattr(client, "close"):
+                try:
+                    client.close()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+atexit.register(_close_genai_client)
 
 # 이미지 개수·크기 제한 (선택)
 MAX_IMAGES = 5
@@ -59,7 +81,9 @@ def stream_multimodal(
         yield "이미지 분석을 사용하려면 서버에 Gemini API 키가 설정되어 있어야 합니다."
         return
 
-    import google.generativeai as genai
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=FutureWarning)
+        import google.generativeai as genai
 
     genai.configure(api_key=api_key)
     model_id = getattr(settings, "gemini_model", None) or "gemini-2.5-flash"
@@ -93,6 +117,7 @@ def stream_multimodal(
         yield "처리할 수 있는 입력이 없습니다."
         return
 
+    response = None
     try:
         response = model.generate_content(parts, stream=True)
         for chunk in response:
@@ -101,6 +126,12 @@ def stream_multimodal(
     except Exception as e:
         logger.exception("Gemini 멀티모달 호출 실패: %s", e)
         yield f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
+    finally:
+        if response is not None and hasattr(response, "close"):
+            try:
+                response.close()
+            except Exception:
+                pass
 
 
 def generate_multimodal(
@@ -134,7 +165,9 @@ def get_image_caption_for_rag(images: List[str]) -> str:
         logger.warning("Gemini API 키 없음. 이미지→RAG 쿼리 추출 불가.")
         return ""
 
-    import google.generativeai as genai
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=FutureWarning)
+        import google.generativeai as genai
 
     genai.configure(api_key=api_key)
     model_id = getattr(settings, "gemini_model", None) or "gemini-2.5-flash"

@@ -70,6 +70,11 @@ async def _app_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if init_error:
         logging.warning("백엔드 초기화 중 오류가 있었습니다: %s", init_error)
     print("\n[INFO] 서버 종료 중...")
+    try:
+        from domain.hub.llm.gemini_adapter import _close_genai_client
+        _close_genai_client()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -255,7 +260,10 @@ def ensure_rag_initialized() -> None:
 from api.routers import (  # type: ignore  # noqa: E402
     chat_router,
     disclosure_router,
+    document_router,
     email_router,
+    employee_router,
+    resume_router,
     soccer_router,
 )
 from gateway import register_routes  # type: ignore  # noqa: E402
@@ -265,7 +273,10 @@ register_routes(
     mcp_app,
     chat_router=chat_router,
     disclosure_router=disclosure_router,
+    document_router=document_router,
     email_router=email_router,
+    employee_router=employee_router,
+    resume_router=resume_router,
     soccer_router=soccer_router,
 )
 

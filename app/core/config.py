@@ -144,6 +144,11 @@ class Settings(BaseSettings):
         description="4-bit 양자화 사용 여부",
     )
 
+    exaone_use_competency_adapter: bool = Field(
+        default=True,
+        description="역량 SFT 어댑터(competency_adapters) 로드 여부. True면 artifacts/fine_tuned/exaone/competency_adapters 사용",
+    )
+
     # ===================
     # API 키
     # ===================

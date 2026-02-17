@@ -30,6 +30,7 @@ if str(current_dir) not in sys.path:
 from core.database import Base  # type: ignore
 from domain.models.bases.competency_anchor import CompetencyAnchor  # noqa: F401
 from domain.models.bases.disclosure import Disclosure  # noqa: F401
+from domain.models.bases.employee import Employee  # noqa: F401
 from domain.models.bases.soccer import (  # noqa: F401
     Player,
     Schedule,

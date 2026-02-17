@@ -5,6 +5,7 @@ LangGraph 기반 에이전트 API 엔드포인트를 제공합니다.
 - POST /agent/chat/stream: JSON (message, file_ids 등) → SSE 스트리밍.
 """
 
+import base64
 import json
 import logging
 from typing import Any, Dict, List, Optional
@@ -15,6 +16,8 @@ from pydantic import BaseModel, Field
 
 from core.config import get_settings  # type: ignore
 from api.shared.upload_store import (  # type: ignore
+    delete_upload_file,
+    load_upload_file,
     load_upload_files_as_base64,
     save_upload_file,
 )
@@ -45,12 +48,6 @@ class ProviderInfo(BaseModel):
     is_current: bool
 
 
-_BLOCK_MESSAGE = (
-    "해당 질문은 서비스 범위 밖입니다. "
-    "축구/선수/경기 관련 질문만 답변해 드립니다."
-)
-
-
 async def _parse_chat_payload(request: Request) -> Dict[str, Any]:
     """JSON body만 파싱해 채팅 페이로드 반환."""
     body = await request.json()
@@ -70,11 +67,15 @@ async def _parse_chat_payload(request: Request) -> Dict[str, Any]:
         "system_prompt": body.get("system_prompt"),
         "images": body.get("images"),
         "file_ids": body.get("file_ids"),
+        "file_names": body.get("file_names"),
     }
 
 
-def _resolve_file_ids_to_images(payload: Dict[str, Any]) -> None:
-    """payload에 file_ids만 있고 images가 없으면, 파일 로드 후 images로 채우고(1회 사용 후 삭제)."""
+_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
+def _resolve_file_ids_to_payload(payload: Dict[str, Any]) -> None:
+    """file_ids(+ file_names)를 로드해 이미지는 base64로, 문서(PDF/TXT/Word/Excel)는 텍스트 추출 후 메시지에 주입."""
     file_ids = payload.get("file_ids")
     if not file_ids or payload.get("images") is not None:
         return
@@ -83,10 +84,59 @@ def _resolve_file_ids_to_images(payload: Dict[str, Any]) -> None:
     ids = [str(x) for x in file_ids if x]
     if not ids:
         return
-    payload["images"] = load_upload_files_as_base64(ids, delete_after=True)
-    if ids and not payload["images"]:
-        logger.warning("[file_ids] 일부 또는 전부 로드 실패(만료/없음): %s", ids[:5])
+    file_names: List[str] = payload.get("file_names") or []
+    if len(file_names) != len(ids):
+        file_names = [""] * len(ids)
+
+    # 파일명이 없으면 기존 동작: 전부 이미지로 처리 (하위 호환)
+    if not any(file_names):
+        payload["images"] = load_upload_files_as_base64(ids, delete_after=True)
+        payload.pop("file_ids", None)
+        payload.pop("file_names", None)
+        return
+
+    from domain.shared.document_extract import (  # type: ignore
+        SUPPORTED_EXCEL_EXTENSIONS,
+        SUPPORTED_TEXT_EXTENSIONS,
+        extract_text_from_document,
+        extract_excel_from_document,
+    )
+
+    images_b64: List[str] = []
+    document_texts: List[str] = []
+    for i, fid in enumerate(ids):
+        data = load_upload_file(fid)
+        if not data:
+            continue
+        name = (file_names[i] or "").strip()
+        ext = (name.rsplit(".", 1)[-1].lower() if "." in name else "")
+        ext = f".{ext}" if ext else ""
+
+        try:
+            if ext in _IMAGE_EXTENSIONS:
+                images_b64.append(base64.b64encode(data).decode("utf-8"))
+            elif ext in SUPPORTED_TEXT_EXTENSIONS:
+                text = extract_text_from_document(data=data, filename=name or f"doc{i}.txt")
+                if text.strip():
+                    document_texts.append(f"[첨부 문서: {name or '문서'}]\n{text[:30000]}")
+            elif ext in SUPPORTED_EXCEL_EXTENSIONS:
+                rows = extract_excel_from_document(data=data, filename=name or f"sheet{i}.xlsx")
+                if rows:
+                    lines = ["\t".join(str(v) for v in row.values()) for row in rows[:500]]
+                    document_texts.append(f"[첨부 문서: {name or '엑셀'}]\n" + "\n".join(lines))
+            # else: 알 수 없는 확장자는 무시
+        except Exception as e:
+            logger.warning("첨부 파일 처리 실패 %s: %s", name or fid, e)
+        finally:
+            delete_upload_file(fid)
+
+    if images_b64:
+        payload["images"] = images_b64
+    if document_texts:
+        base_msg = payload.get("message") or ""
+        payload["message"] = base_msg + "\n\n" + "\n\n".join(document_texts)
     payload.pop("file_ids", None)
+    payload.pop("file_names", None)
 
 
 @router.post("/upload")
@@ -120,7 +170,7 @@ async def agent_upload(files: List[UploadFile] = File(default=[], description="�
 @router.post("/chat/stream")
 async def agent_chat_stream(request: Request):
     payload = await _parse_chat_payload(request)
-    _resolve_file_ids_to_images(payload)
+    _resolve_file_ids_to_payload(payload)
     message = payload.get("message", "")
     try:
         import importlib
@@ -131,31 +181,6 @@ async def agent_chat_stream(request: Request):
         from domain.hub.llm import get_provider_name  # type: ignore
 
         provider = payload.get("provider") or get_provider_name()
-        stream_semantic_action: Optional[str] = None
-
-        try:
-            from domain.hub.orchestrators import (
-                classify,
-                is_classifier_available,
-                is_rule_policy_related,
-            )
-            if is_classifier_available() and is_rule_policy_related(message):
-                action = classify(message)
-                msg_preview = (message[:80] + "…") if len(message) > 80 else message
-                logger.info("[시멘틱 분류] 질문: %s → %s", msg_preview, action)
-                if action == "BLOCK":
-                    async def block_stream():
-                        yield f"data: {json.dumps({'semantic_action': action})}\n\n"
-                        yield f"data: {json.dumps({'content': _BLOCK_MESSAGE})}\n\n"
-                        yield "data: [DONE]\n\n"
-                    return StreamingResponse(
-                        block_stream(),
-                        media_type="text/event-stream",
-                        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-                    )
-                stream_semantic_action = action
-        except Exception:
-            pass
 
         if "domain.hub.orchestrators.chat_orchestrator" in sys.modules:
             graph_module = sys.modules["domain.hub.orchestrators.chat_orchestrator"]
@@ -176,14 +201,12 @@ async def agent_chat_stream(request: Request):
 
         async def generate():
             try:
-                yield f"data: {json.dumps({'semantic_action': stream_semantic_action})}\n\n"
                 async for chunk in run_agent_stream(
                     user_text=message,
                     provider=provider,
                     system_prompt=payload.get("system_prompt"),
                     chat_history=chat_history,
                     thread_id=payload.get("thread_id"),
-                    semantic_action=stream_semantic_action,
                     images=payload.get("images"),
                 ):
                     if isinstance(chunk, dict):

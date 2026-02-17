@@ -1,7 +1,7 @@
 """
 PDF 추출 전략 식별자.
 
-pdf_strategy.md 전략 매트릭스와 1:1 대응.
+docs/extraction-and-data.md 전략 매트릭스와 1:1 대응.
 Secondary 라우팅(ExaOne 샘플 분석) 시 전략 번호(0~2)로 할당·캐시할 때 사용.
 """
 

@@ -32,3 +32,5 @@ class ChatState(TypedDict, total=False):
     model_provider: Optional[str]
     images: Optional[List[str]]  # base64 이미지 배열 (멀티모달 시 Gemini 사용)
     rag_sources: Optional[List[Dict[str, Any]]]  # 프론트 출처 표시용: table, id, source, page, standard_type 등
+    max_tokens: Optional[int]  # 생성 시 최대 토큰 (이력서 등 속도 최적화용)
+    temperature: Optional[float]  # 생성 온도

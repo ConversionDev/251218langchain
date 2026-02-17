@@ -1,7 +1,7 @@
 """
 Structural 전략 — pdfplumber.
 
-표(Table) 구조 보존. competency_anchors(NCS) 수행준거 추출용. pdf_strategy.md §2 Structural.
+표(Table) 구조 보존. competency_anchors(NCS) 수행준거 추출용. docs/extraction-and-data.md §2 Structural.
 의존성: pdfplumber (requirements.txt에 추가 필요).
 """
 

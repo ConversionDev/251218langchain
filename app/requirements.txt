@@ -103,11 +103,18 @@ websockets==16.0
 fastmcp>=2.14.0,<3
 
 # ===============================
-# PDF / Excel (전략 패턴: domain/shared/strategies, strategy_imples)
-# PDF: pymupdf, pdfplumber. Excel: openpyxl (pandas read_excel 엔진).
-# pip list 기준: pdfplumber 0.11.9, openpyxl 3.1.5.
+# PDF / Excel / Word / HWP (전략: domain/shared, document_extract)
+# PDF: pymupdf, pdfplumber. Excel: openpyxl. Word: python-docx. HWP: pyhwp(.hwp v5).
 # ===============================
 pymupdf==1.25.1
 pdfplumber==0.11.9
 openpyxl==3.1.5
+python-docx==1.2.0
+pyhwp>=0.1b15
+
+# ===============================
+# Clustering 시각화 (run_competency_visualization.py)
+# ===============================
+umap-learn==0.5.11
+plotly==6.5.2
 

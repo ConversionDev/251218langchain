@@ -2,9 +2,9 @@
 Competency anchors 파이프라인: raw(xlsx+pdf) → prepared JSONL → 검증 → FAISS+Neon 적재.
 
 한 번 실행 시:
-  1. raw → prepared/competency_rows.jsonl (2000건 제한)
+  1. raw 전체(Abilities.xlsx, Task Statements.xlsx, Technology Skills.xlsx, Work Styles.xlsx, NCS PDF 4종) → prepared/competency_rows.jsonl (제한 없음)
   2. 검증
-  3. 임베딩 생성 → FAISS 인덱스+id_map 저장 → Neon에는 텍스트만 save_batch_upsert (embedding 없음)
+  3. 임베딩 생성 → 로컬 FAISS 인덱스+id_map 저장 → Neon에는 텍스트만 save_batch_upsert (embedding 없음)
 
 사용:
   cd app && python -m training.pipelines.ingest.run_competency_ingest
@@ -12,6 +12,7 @@ Competency anchors 파이프라인: raw(xlsx+pdf) → prepared JSONL → 검증 
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import numpy as np  # type: ignore
@@ -40,15 +41,17 @@ def main() -> None:
     raw_dir = get_competency_raw_dir()
     prepared_dir = get_competency_prepared_dir()
 
-    # 1. raw → prepared (2000건 제한)
+    # 1. raw 전체 → prepared (제한 없음: Abilities, Task Statements, Technology Skills, Work Styles, NCS PDF 4종)
     if raw_dir.exists():
         xlsx = list(raw_dir.glob("*.xlsx"))
         pdfs = list(raw_dir.glob("*.pdf"))
         if xlsx or pdfs:
-            print(f"[INFO] raw (xlsx {len(xlsx)}, pdf {len(pdfs)}) → prepared JSONL 변환 중 (최대 2000건)...")
+            print(f"[INFO] raw (xlsx {len(xlsx)}, pdf {len(pdfs)}) → prepared JSONL 변환 중 (전체)...")
+            t0 = time.perf_counter()
             try:
-                extracted = extract_raw_to_prepared(raw_dir, prepared_dir, limit=2000)
-                print(f"[INFO] 추출 완료: {len(extracted)}건")
+                extracted = extract_raw_to_prepared(raw_dir, prepared_dir, limit=None)
+                elapsed = time.perf_counter() - t0
+                print(f"[INFO] 추출 완료: {len(extracted)}건, 소요: {elapsed:.1f}s, 속도: {len(extracted) / elapsed:.0f}건/s")
             except RuntimeError as e:
                 print(f"[ERROR] {e}")
                 sys.exit(1)
@@ -56,11 +59,12 @@ def main() -> None:
         print(f"[INFO] raw 디렉터리 없음: {raw_dir}")
 
     # 2. 검증
+    t0 = time.perf_counter()
     ok, err = verify_competency_prepared(prepared_dir)
     if not ok:
         print(f"[ERROR] 검증 실패: {err}")
         sys.exit(1)
-    print("[INFO] 검증 통과")
+    print(f"[INFO] 검증 통과, 소요: {time.perf_counter() - t0:.1f}s")
 
     # 3. prepared JSONL → DB 적재
     path = prepared_dir / "competency_rows.jsonl"
@@ -83,18 +87,23 @@ def main() -> None:
     print(f"[INFO] 적재 입력: {len(rows)}건")
     embeddings_model = get_embedding_model(use_fp16=True)
     texts = [_build_embedding_content(r) for r in rows]
+    t0 = time.perf_counter()
     vectors = embeddings_model.embed_documents(texts)
+    emb_elapsed = time.perf_counter() - t0
+    print(f"[INFO] 임베딩 완료: {len(vectors)}건, 소요: {emb_elapsed:.1f}s, 속도: {len(vectors) / emb_elapsed:.0f}건/s")
     if len(vectors) != len(rows):
         print(f"[ERROR] 임베딩 개수 불일치: {len(vectors)} vs {len(rows)}")
         sys.exit(1)
     arr = np.array(vectors, dtype=np.float32)
     unique_ids = [str(r.get("unique_id", "")) for r in rows]
+    t0 = time.perf_counter()
     build_and_save_index(arr, unique_ids, "competency_anchors")
-    print("[INFO] FAISS 인덱스·id_map 저장 완료")
+    print(f"[INFO] FAISS 인덱스·id_map 저장 완료, 소요: {time.perf_counter() - t0:.1f}s")
     db = SessionLocal()
     try:
+        t0 = time.perf_counter()
         inserted = save_batch_upsert(db, rows)
-        print(f"[OK] Neon 텍스트 적재 완료: {inserted}건")
+        print(f"[OK] Neon 텍스트 적재 완료: {inserted}건, 소요: {time.perf_counter() - t0:.1f}s")
     finally:
         db.close()
 

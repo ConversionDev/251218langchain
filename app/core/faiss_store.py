@@ -3,6 +3,7 @@ FAISS 인덱스·id_map 로드/저장 및 검색 헬퍼.
 
 - 벡터는 IndexFlatIP + L2 정규화로 코사인 유사도와 동일.
 - disclosures / competency_anchors 각각 별도 인덱스·id_map.
+- employees는 FAISS 미사용, Neon pgvector(HNSW) 전용.
 """
 
 from typing import Any, List, Optional, Tuple
@@ -29,7 +30,7 @@ def _normalize_l2(vec: np.ndarray) -> np.ndarray:
 
 
 def load_faiss_indices() -> bool:
-    """artifacts/faiss/ 에서 disclosures.index, competency_anchors.index 및 id_map 로드. 성공 시 True."""
+    """artifacts/faiss/ 에서 disclosures, competency_anchors 인덱스·id_map 로드. 성공 시 True."""
     global _disclosure_index, _disclosure_id_map, _competency_index, _competency_id_map
     import pickle as pkl
 

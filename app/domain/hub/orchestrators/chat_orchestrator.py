@@ -37,6 +37,8 @@ def run_agent(
     thread_id: Optional[str] = None,
     semantic_action: Optional[str] = None,
     images: Optional[List[str]] = None,
+    max_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
 ) -> Tuple[str, str]:
     """에이전트를 실행하고 응답을 반환합니다. RAG는 항상 사용.
 
@@ -47,6 +49,8 @@ def run_agent(
         chat_history: 이전 대화 기록
         thread_id: 대화 스레드 ID
         semantic_action: 시멘틱 분류 결과 (RULE_BASED/POLICY_BASED) → 답변과 UI 태그 일치용
+        max_tokens: 생성 최대 토큰 (이력서 등 속도 최적화 시 1024 등)
+        temperature: 생성 온도 (이력서 등 0.3 권장)
 
     Returns:
         (에이전트 응답 문자열, RAG에서 사용한 컨텍스트)
@@ -83,6 +87,10 @@ def run_agent(
         "model_provider": provider or "",
         "images": images or [],
     }
+    if max_tokens is not None:
+        initial_state["max_tokens"] = max_tokens
+    if temperature is not None:
+        initial_state["temperature"] = temperature
     config = get_thread_config(thread_id)
     result: ChatState = graph.invoke(initial_state, config=config)
 

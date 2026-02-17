@@ -1,6 +1,11 @@
 # domain/shared/vision.py
-import google.generativeai as genai
-from core.config import settings # 설정 파일에 API_KEY 저장 가정
+import warnings
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category=FutureWarning)
+    import google.generativeai as genai
+
+from core.config import settings  # 설정 파일에 API_KEY 저장 가정
 
 class VisionAnalyzer:
     def __init__(self):

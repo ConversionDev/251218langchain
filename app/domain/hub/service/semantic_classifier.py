@@ -1,16 +1,10 @@
 """
 시멘틱 분류 서비스
 
-학습된 Llama 3.2B 어댑터로 사용자 질문을 BLOCK / RULE_BASED / POLICY_BASED 로 분류합니다.
+Hub 공통 Llama 로더(LlamaManager)의 베이스+PEFT 어댑터로 사용자 질문을
+BLOCK / RULE_BASED / POLICY_BASED 로 분류합니다.
 규칙 기반(DB)·정책 기반(LLM)·차단(서비스 밖) 라우팅에 사용합니다.
 """
-
-from pathlib import Path
-from typing import Literal, Optional
-
-# app 디렉터리: domain/hub/service -> app
-_APP_DIR = Path(__file__).resolve().parent.parent.parent.parent
-_ADAPTER_BASE = _APP_DIR / "artifacts" / "semantic_classifier" / "adapters"
 
 # 학습 시 사용한 프롬프트와 동일하게 맞춤
 _SYSTEM = (
@@ -20,82 +14,13 @@ _SYSTEM = (
 )
 
 
-def _get_adapter_dir() -> Optional[Path]:
-    """어댑터 디렉터리 반환. 루트에 없으면 최신 checkpoint-* 사용."""
-    base = _ADAPTER_BASE
-    if not base.exists():
-        return None
-    if (base / "adapter_config.json").exists():
-        return base
-    checkpoints = [d for d in base.iterdir() if d.is_dir() and d.name.startswith("checkpoint-")]
-    if not checkpoints:
-        return None
-    def _num(p: Path) -> int:
-        try:
-            return int(p.name.replace("checkpoint-", ""))
-        except ValueError:
-            return -1
-    latest = max(checkpoints, key=_num)
-    if (latest / "adapter_config.json").exists():
-        return latest
-    return None
-
-
-_BASE_LLAMA_ID = "unsloth/Llama-3.2-3B-Instruct"
-
-
-def _load_model_once():
-    """HF 캐시 베이스 + (있으면) 로컬 어댑터 로드 (lazy, 싱글톤)."""
-    if _load_model_once._model is not None:
-        return _load_model_once._model, _load_model_once._tokenizer
-
-    try:
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-        device_map = "cuda:0" if torch.cuda.is_available() else "auto"
-        tokenizer = AutoTokenizer.from_pretrained(_BASE_LLAMA_ID, trust_remote_code=True)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            tokenizer.pad_token_id = tokenizer.eos_token_id
-
-        bnb = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
-        base = AutoModelForCausalLM.from_pretrained(
-            _BASE_LLAMA_ID,
-            quantization_config=bnb,
-            device_map=device_map,
-            trust_remote_code=True,
-        )
-
-        adapter_dir = _get_adapter_dir()
-        if adapter_dir is not None:
-            from peft import PeftModel
-            base = PeftModel.from_pretrained(base, str(adapter_dir))
-        base.eval()
-
-        _load_model_once._model = base
-        _load_model_once._tokenizer = tokenizer
-        return base, tokenizer
-    except Exception:
-        _load_model_once._model = None
-        _load_model_once._tokenizer = None
-        return None, None
-
-
-_load_model_once._model = None  # type: ignore
-_load_model_once._tokenizer = None  # type: ignore
-
-
 def classify(user_message: str) -> str:
     """사용자 메시지를 분류합니다. ChatPolicy.*.value 반환."""
+    from core.resource_manager.llama_manager import get_llama_manager  # type: ignore
     from domain.models.enums import ChatPolicy  # type: ignore
 
-    model, tokenizer = _load_model_once()
+    manager = get_llama_manager()
+    model, tokenizer = manager.get_semantic_model()
     if model is None or tokenizer is None:
         return ChatPolicy.POLICY_BASED.value
 
@@ -159,4 +84,6 @@ def classify(user_message: str) -> str:
 
 def is_classifier_available() -> bool:
     """학습된 어댑터가 있어 분류기가 사용 가능한지 여부."""
-    return _get_adapter_dir() is not None
+    from core.resource_manager.llama_manager import get_llama_manager  # type: ignore
+
+    return get_llama_manager().is_semantic_available()

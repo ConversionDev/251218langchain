@@ -41,6 +41,7 @@ class DisclosureCheckRequest(BaseModel):
     department: str = Field("", description="부서")
     email: Optional[str] = Field(None, description="이메일")
     gender: Optional[str] = Field(None, description="성별")
+    age: Optional[int] = Field(None, description="연령(만 나이)")
     age_band: Optional[str] = Field(None, description="연령대")
     employment_type: Optional[str] = Field(None, description="고용 형태")
     training_hours: Optional[int] = Field(None, description="연간 교육시간")
@@ -73,7 +74,9 @@ def _run_disclosure_check(payload: DisclosureCheckRequest) -> DisclosureCheckRes
             employee_summary += f" 이메일 {payload.email}."
         if payload.gender:
             employee_summary += f" 성별 {payload.gender}."
-        if payload.age_band:
+        if payload.age is not None:
+            employee_summary += f" 연령 {payload.age}세."
+        elif payload.age_band:
             employee_summary += f" 연령대 {payload.age_band}."
         if payload.employment_type:
             employee_summary += f" 고용형태 {payload.employment_type}."

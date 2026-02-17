@@ -1,7 +1,7 @@
 """
 FastExtract 전략 — PyMuPDF(fitz).
 
-공시(disclosures) 대량 텍스트화에 최적. pdf_strategy.md §2 FastExtract.
+공시(disclosures) 대량 텍스트화에 최적. docs/extraction-and-data.md §2 FastExtract.
 의존성: pymupdf==1.25.1 (requirements.txt).
 """
 

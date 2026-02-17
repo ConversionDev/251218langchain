@@ -1,5 +1,5 @@
 """
-Competency prepared JSONL 검증: 행 수(1~2000), 필수 필드(content, source) 존재.
+Competency prepared JSONL 검증: 필수 필드(content, source) 존재. 행 수 제한 없음.
 """
 
 import json
@@ -11,10 +11,11 @@ from training.shared.competency_extract import get_competency_prepared_dir  # ty
 
 def verify_competency_prepared(
     prepared_dir: Optional[Path] = None,
-    max_rows: int = 2000,
+    max_rows: Optional[int] = None,
 ) -> Tuple[bool, str]:
     """
     prepared/competency_rows.jsonl 검증.
+    max_rows 가 None 이면 행 수 제한 없음.
 
     Returns:
         (성공 여부, 실패 시 메시지)
@@ -30,7 +31,7 @@ def verify_competency_prepared(
             if not line:
                 continue
             count += 1
-            if count > max_rows:
+            if max_rows is not None and count > max_rows:
                 return False, f"행 수 초과: {max_rows} 초과"
             try:
                 row = json.loads(line)

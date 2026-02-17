@@ -53,6 +53,14 @@ def get_faiss_dir() -> Path:
     return d
 
 
+def get_clustering_dir() -> Path:
+    """K-Means 클러스터링 결과 저장 디렉토리. artifacts/clustering/.
+    cluster_assignments, centroids, 요약 등 저장."""
+    d = get_artifacts_dir() / "clustering"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_data_dir() -> Path:
     """데이터 디렉토리 경로 반환.
 
