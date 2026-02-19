@@ -32,8 +32,11 @@ _RESUME_SYSTEM_PROMPT = """당신은 직무역량 전문가입니다. 군집 데
   "department": "부서",
   "email": "이메일",
   "joinedAt": "YYYY-MM-DD",
+  "birthDate": "YYYY-MM-DD",
   "gender": "male|female|other|undisclosed",
   "age": 0,
+  "employmentType": "new_hire|regular|contract|part_time|intern",
+  "trainingHours": 0,
   "resume": {
     "education": [{"school": "", "degree": "", "field": "", "startDate": "", "endDate": ""}],
     "experience": [{"company": "", "role": "", "startDate": "", "endDate": "", "description": ""}],
@@ -50,7 +53,10 @@ _RESUME_SYSTEM_PROMPT = """당신은 직무역량 전문가입니다. 군집 데
 }
 
 - gender: 이력서에 성별이 명시되면 male(남)/female(여)/other(기타), 없으면 undisclosed.
-- age: 이력서에 나이 또는 생년이 있으면 만 나이(정수)로 넣고, 없으면 0.
+- birthDate: 이력서에 생년월일이 있으면 YYYY-MM-DD로 반드시 기입, 없으면 빈 문자열 또는 생략.
+- age: 만 나이(정수). 생년월일(birthDate)이 있으면 오늘 기준 만 나이로 계산: (현재연도 - 출생연도)에서 올해 생일이 아직 안 지났으면 1 빼기. 예: 1990년 3월 15일 → 2025년 2월 기준 34세. 나이만 있고 생년월일 없으면 그대로 사용, 둘 다 없으면 0.
+- employmentType: 이력서에 고용형태(정규직·계약직·인턴 등)가 있으면 해당 값(regular|contract|part_time|intern), 신입/미기재면 new_hire.
+- trainingHours: 이력서에 연간 교육·연수 시간이 있으면 시간(정수), 없으면 0.
 Success DNA는 리더십, 기술력, 창의성, 협업, 적응력 5대 역량을 0-100 점수로 평가하세요. 군집 데이터와 직무역량 기준에 맞춰 객관적으로 산정하세요."""
 
 
@@ -87,6 +93,29 @@ def _extract_json_from_response(text: str) -> Optional[Dict[str, Any]]:
     except json.JSONDecodeError:
         pass
     return None
+
+
+def _age_from_birth_date(birth_str: Optional[str]) -> Optional[int]:
+    """생년월일(YYYY-MM-DD 또는 YYYY/MM/DD)을 오늘 기준 만 나이로 변환."""
+    if not birth_str or not isinstance(birth_str, str):
+        return None
+    birth_str = birth_str.strip()[:10].replace("/", "-")
+    if len(birth_str) < 10:
+        return None
+    try:
+        from datetime import date
+        parts = birth_str.split("-")
+        if len(parts) != 3:
+            return None
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+        birth = date(y, m, d)
+        today = date.today()
+        age = today.year - birth.year
+        if (today.month, today.day) < (birth.month, birth.day):
+            age -= 1
+        return max(0, min(120, age))
+    except (ValueError, TypeError):
+        return None
 
 
 def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -132,11 +161,24 @@ def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     _VALID_GENDER = {"male", "female", "other", "undisclosed"}
     gender_raw = str(raw.get("gender") or "undisclosed").strip().lower()
     gender = gender_raw if gender_raw in _VALID_GENDER else "undisclosed"
+    # 생년월일이 있으면 만 나이를 서버에서 재계산(LLM 오차 보정)
+    age = _age_from_birth_date(raw.get("birthDate") or raw.get("birth_date"))
+    if age is None:
+        try:
+            age_val = int(raw.get("age") or 0)
+            age = max(0, min(120, age_val)) if age_val else None
+        except (TypeError, ValueError):
+            age = None
+
+    _VALID_EMPLOYMENT = {"new_hire", "regular", "contract", "part_time", "intern"}
+    employment_raw = str(raw.get("employmentType") or "new_hire").strip().lower()
+    employment_type = employment_raw if employment_raw in _VALID_EMPLOYMENT else "new_hire"
+
     try:
-        age_val = int(raw.get("age") or 0)
-        age = max(0, min(120, age_val)) if age_val else None
+        th_val = int(raw.get("trainingHours") or 0)
+        training_hours = max(0, min(9999, th_val))
     except (TypeError, ValueError):
-        age = None
+        training_hours = 0
 
     return {
         "name": str(raw.get("name") or "").strip() or "신규",
@@ -146,6 +188,8 @@ def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
         "joinedAt": joined_at[:10] if len(joined_at) >= 10 else joined_at,
         "gender": gender,
         "age": age,
+        "employmentType": employment_type,
+        "trainingHours": training_hours,
         "resume": {
             "education": education,
             "experience": experience,

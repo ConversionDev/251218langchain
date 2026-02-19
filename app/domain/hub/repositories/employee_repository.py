@@ -25,14 +25,14 @@ _AGE_BAND_BY_AGE = (
 )
 
 
-def _age_band_from_row(row: Employee) -> Optional[str]:
-    """age가 있으면 연령대로 변환, 없으면 age_band 컬럼 값."""
-    if row.age is not None:
-        for limit, band in _AGE_BAND_BY_AGE:
-            if row.age < limit:
-                return band
-        return "60over"
-    return row.age_band
+def _age_band_from_age(age: Optional[int]) -> Optional[str]:
+    """age(만 나이) → 연령대. age만 저장하고 연령대는 파생."""
+    if age is None:
+        return None
+    for limit, band in _AGE_BAND_BY_AGE:
+        if age < limit:
+            return band
+    return "60over"
 
 
 def _row_to_dict(row: Employee) -> Dict[str, Any]:
@@ -43,6 +43,7 @@ def _row_to_dict(row: Employee) -> Dict[str, Any]:
         "jobTitle": row.job_title or "",
         "department": row.department or "",
         "email": row.email,
+        "applicationDate": getattr(row, "application_date", None),
         "joinedAt": row.joined_at,
         "successDna": row.success_dna,
         "behavioralDna": row.behavioral_dna,
@@ -51,10 +52,11 @@ def _row_to_dict(row: Employee) -> Dict[str, Any]:
         "disclosureMetrics": row.disclosure_metrics,
         "gender": row.gender,
         "age": row.age,
-        "ageBand": _age_band_from_row(row),
+        "ageBand": _age_band_from_age(row.age),
         "employmentType": row.employment_type,
         "trainingHours": row.training_hours,
         "resume": row.resume,
+        "resumeFileHash": row.resume_file_hash,
         "matchedDepartment": row.matched_department,
     }
 
@@ -66,6 +68,7 @@ def _apply_payload(row: Employee, data: Dict[str, Any]) -> None:
         ("jobTitle", "job_title"),
         ("department", "department"),
         ("email", "email"),
+        ("applicationDate", "application_date"),
         ("joinedAt", "joined_at"),
         ("successDna", "success_dna"),
         ("behavioralDna", "behavioral_dna"),
@@ -74,33 +77,38 @@ def _apply_payload(row: Employee, data: Dict[str, Any]) -> None:
         ("disclosureMetrics", "disclosure_metrics"),
         ("gender", "gender"),
         ("age", "age"),
-        ("ageBand", "age_band"),
         ("employmentType", "employment_type"),
         ("trainingHours", "training_hours"),
         ("resume", "resume"),
+        ("resumeFileHash", "resume_file_hash"),
         ("matchedDepartment", "matched_department"),
     )
     for key, attr in mapping:
         if key in data:
             setattr(row, attr, data[key])
-    if "age" in data and data.get("age") is not None:
-        a = int(data["age"])
-        for limit, band in _AGE_BAND_BY_AGE:
-            if a < limit:
-                row.age_band = band
-                break
-        else:
-            row.age_band = "60over"
+
+
+def find_by_resume_hash(db: Session, resume_hash: str) -> Optional[Dict[str, Any]]:
+    """이력서 파일 해시로 직원 조회 (동일 이력서 중복 등록 방지)."""
+    if not (resume_hash and resume_hash.strip()):
+        return None
+    row = db.query(Employee).filter(Employee.resume_file_hash == resume_hash.strip()).first()
+    return _row_to_dict(row) if row else None
 
 
 def create(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
-    """직원 생성. data에 id 필수."""
+    """직원 생성. data에 id 필수. 동일 이력서(resumeFileHash)가 이미 있으면 DB 추가하지 않음(409)."""
     eid = data.get("id")
     if not eid:
         raise ValueError("id is required")
-    existing = db.query(Employee).filter(Employee.id == eid).first()
-    if existing:
+    existing_by_id = db.query(Employee).filter(Employee.id == eid).first()
+    if existing_by_id:
         raise ValueError(f"Employee id already exists: {eid}")
+    resume_hash = (data.get("resumeFileHash") or "").strip()
+    if resume_hash:
+        existing_by_hash = db.query(Employee).filter(Employee.resume_file_hash == resume_hash).first()
+        if existing_by_hash:
+            raise ValueError("ALREADY_EXISTS")
     row = Employee(id=eid, name=data.get("name", ""), job_title=data.get("jobTitle", ""), department=data.get("department", ""))
     _apply_payload(row, data)
     db.add(row)

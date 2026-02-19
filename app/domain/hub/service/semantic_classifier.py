@@ -40,6 +40,7 @@ def classify(user_message: str) -> str:
             tokenize=False,
             add_generation_prompt=True,
         )
+        # max_length: 입력 truncation 전용. 생성 제어는 max_new_tokens만 사용 (HF 권장)
         inputs = tokenizer(
             prompt,
             return_tensors="pt",

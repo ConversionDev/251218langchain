@@ -31,7 +31,7 @@ class _ExaoneWrapper:
         max_new_tokens: int = 256,
         temperature: float = 0.3,
     ) -> str:
-        """프롬프트로 텍스트 생성."""
+        """프롬프트로 텍스트 생성. 생성 길이 제어는 max_new_tokens만 사용 (HF 권장)."""
         from langchain_core.messages import HumanMessage  # type: ignore
 
         llm = self._get_llm()

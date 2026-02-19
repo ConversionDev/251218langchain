@@ -103,6 +103,7 @@ websockets==16.0
 fastmcp>=2.14.0,<3
 
 # ===============================
+
 # PDF / Excel / Word / HWP (전략: domain/shared, document_extract)
 # PDF: pymupdf, pdfplumber. Excel: openpyxl. Word: python-docx. HWP: pyhwp(.hwp v5).
 # ===============================

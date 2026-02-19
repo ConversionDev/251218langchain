@@ -105,12 +105,39 @@ def define(term: str) -> str:
     return _hub_result_to_str(result)
 
 
+@tool
+def get_hr_summary() -> str:
+    """등록된 임직원 수와 RAG 적재 상태(공시·역량 anchor)를 반환합니다. '전체 직원 수', '공시 완성도', 'RAG에 어떤 문서가 있나요', '적재 상태' 등 질문에 사용합니다."""
+    try:
+        from core.database import SessionLocal  # type: ignore
+        from domain.hub.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
+        from domain.hub.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
+        from domain.hub.repositories.employee_repository import list_all as repo_list_all  # type: ignore
+
+        db = SessionLocal()
+        try:
+            employees = repo_list_all(db)
+            employee_count = len(employees) if employees else 0
+            disclosure_count = get_disclosure_doc_count(db)
+            anchor_count = get_anchor_doc_count(db)
+            return (
+                f"등록 임직원 수: {employee_count}명. "
+                f"공시(disclosure) RAG 문서 청크: {disclosure_count}건. "
+                f"역량(competency_anchors) RAG 문서: {anchor_count}건."
+            )
+        finally:
+            db.close()
+    except Exception as e:
+        return f"HR 요약 조회 실패: {str(e)}"
+
+
 TOOLS = [
     analyze_with_exaone,
     search_documents,
     get_current_time,
     calculate,
     define,
+    get_hr_summary,
 ]
 TOOL_MAP: Dict[str, Any] = {t.name: t for t in TOOLS}
 

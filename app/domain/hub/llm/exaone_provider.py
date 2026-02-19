@@ -47,7 +47,7 @@ class LLMProvider:
         Args:
             provider: LLM 제공자 (기본: exaone)
             temperature: 생성 온도
-            max_tokens: 최대 토큰 수
+            max_tokens: 생성 시 최대 토큰 수 (HF max_new_tokens와 동일, max_length와 혼용 금지)
             **kwargs: 추가 인자
 
         Returns:

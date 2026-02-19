@@ -62,6 +62,7 @@ class LLaMAClassifier:
             raise ValueError("먼저 load_model()을 호출하세요.")
 
         text = format_email_text(email_metadata)
+        # max_length: 입력 truncation 전용 (생성 제어는 generate 시 max_new_tokens만 사용)
         inputs = self._tokenizer(
             text, return_tensors="pt", truncation=True, max_length=512, padding=True
         )

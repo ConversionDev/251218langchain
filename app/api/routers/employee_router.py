@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
@@ -21,6 +22,7 @@ from domain.hub.repositories.employee_repository import (  # type: ignore
     create as repo_create,
     delete as repo_delete,
     fill_embeddings_for_employees,
+    find_by_resume_hash as repo_find_by_resume_hash,
     get_by_id as repo_get_by_id,
     list_all as repo_list_all,
     update as repo_update,
@@ -40,7 +42,8 @@ class EmployeePayload(BaseModel):
     jobTitle: str = Field("", description="직급")
     department: str = Field("", description="부서")
     email: str | None = None
-    joinedAt: str | None = None
+    applicationDate: str | None = Field(None, description="지원일 YYYY-MM-DD (지원서 제출일)")
+    joinedAt: str | None = Field(None, description="입사일 YYYY-MM-DD (입사 확정 후 설정)")
     successDna: Dict[str, Any] | None = None
     behavioralDna: Dict[str, Any] | None = None
     behavioralSource: str | None = None
@@ -48,10 +51,10 @@ class EmployeePayload(BaseModel):
     disclosureMetrics: Dict[str, Any] | None = None
     gender: str | None = None
     age: int | None = None
-    ageBand: str | None = None
     employmentType: str | None = None
     trainingHours: int | None = None
     resume: Dict[str, Any] | None = None
+    resumeFileHash: str | None = Field(None, description="이력서 파일 SHA-256, 동일 이력서 중복 방지")
     matchedDepartment: str | None = None
 
     model_config = {"extra": "allow"}
@@ -108,11 +111,18 @@ def get_employee(employee_id: str, db: Session = Depends(get_db)) -> Dict[str, A
 
 @router.post("", response_model=Dict[str, Any], status_code=201)
 def create_employee(payload: EmployeePayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """직원 생성."""
+    """직원 생성. 동일 이력서(resumeFileHash)가 이미 있으면 409(추가하지 않음)."""
     try:
         data = payload.model_dump(exclude_unset=False)
         return repo_create(db, data)
     except ValueError as e:
+        if str(e) == "ALREADY_EXISTS":
+            resume_hash = (payload.resumeFileHash or "").strip()
+            existing = repo_find_by_resume_hash(db, resume_hash) if resume_hash else None
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "동일한 이력서가 이미 등록되어 있습니다", "existing": existing or {}},
+            )
         raise HTTPException(status_code=400, detail=str(e))
 
 

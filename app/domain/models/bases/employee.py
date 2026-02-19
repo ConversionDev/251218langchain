@@ -23,7 +23,8 @@ class Employee(Base):  # type: ignore[misc]
     job_title = Column(String(256), nullable=False, server_default="", comment="직급")
     department = Column(String(256), nullable=False, server_default="", comment="부서")
     email = Column(String(512), nullable=True, comment="이메일")
-    joined_at = Column(String(32), nullable=True, comment="입사일 YYYY-MM-DD")
+    application_date = Column(String(32), nullable=True, comment="지원일 YYYY-MM-DD (입사지원서 제출일)")
+    joined_at = Column(String(32), nullable=True, comment="입사일 YYYY-MM-DD (입사 확정 후 설정)")
     success_dna = Column(JSONB(), nullable=True, comment="Success DNA 5대 역량")
     behavioral_dna = Column(JSONB(), nullable=True, comment="비정형 분석 기반 역량")
     behavioral_source = Column(Text(), nullable=True, comment="behavioralDna 출처 요약")
@@ -32,11 +33,11 @@ class Employee(Base):  # type: ignore[misc]
         JSONB(), nullable=True, comment="공시 지표(다중 표준). IFRS/ISO 30414 등. docs/disclosure-metrics-design.md"
     )
     gender = Column(String(32), nullable=True, comment="성별 (남/여/미기입)")
-    age = Column(Integer(), nullable=True, comment="연령(만 나이)")
-    age_band = Column(String(32), nullable=True, comment="연령대, age에서 파생 가능")
+    age = Column(Integer(), nullable=True, comment="연령(만 나이). 연령대는 age로 파생.")
     employment_type = Column(String(32), nullable=True, comment="고용 형태")
     training_hours = Column(Integer(), nullable=True, comment="연간 교육훈련 시간")
     resume = Column(JSONB(), nullable=True, comment="이력서 학력·경력·스킬·자격증")
+    resume_file_hash = Column(String(64), nullable=True, comment="이력서 파일 SHA-256, 동일 이력서 중복 방지")
     matched_department = Column(String(256), nullable=True, comment="추천 부서")
     embedding_content = Column(Text(), nullable=True, comment="RAG 임베딩용 텍스트")
     embedding = Column(pgvector.sqlalchemy.Vector(BGE_M3_DENSE_DIM), nullable=True, comment="BGE-m3 1024차원, RAG 검색용")  # type: ignore[var-annotated]

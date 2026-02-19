@@ -367,7 +367,7 @@ class TrainingDataLoader:
             remove_columns=dataset.column_names,
         )
 
-        # 토크나이징
+        # 토크나이징 (max_length: 입력 시퀀스 truncation 전용. 생성 시에는 max_new_tokens만 사용)
         def tokenize_function(examples: Dict[str, List[str]]) -> Dict[str, Any]:
             """텍스트를 토큰화."""
             if self.tokenizer is None:

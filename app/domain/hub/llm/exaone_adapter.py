@@ -23,7 +23,7 @@ def generate_text(
 
     Args:
         prompt: 입력 프롬프트.
-        max_tokens: 최대 생성 토큰 수.
+        max_tokens: 생성 시 최대 토큰 수 (max_new_tokens와 동일, max_length 혼용 금지).
         temperature: 생성 온도.
 
     Returns:

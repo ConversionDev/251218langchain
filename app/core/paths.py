@@ -70,6 +70,27 @@ def get_data_dir() -> Path:
     return get_app_root() / "data"
 
 
+def get_resume_data_dir() -> Path:
+    """입사지원서/이력서 관련 데이터. templates, samples 등. app/data/resume/"""
+    d = get_data_dir() / "resume"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_resume_templates_dir() -> Path:
+    """입사지원서 템플릿 디렉터리. app/data/resume/templates/"""
+    d = get_resume_data_dir() / "templates"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_resume_samples_dir() -> Path:
+    """생성된 신입 샘플(JSONL 등) 저장. app/data/resume/samples/"""
+    d = get_resume_data_dir() / "samples"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_output_dir() -> Path:
     """출력 디렉토리 경로 반환.
 
