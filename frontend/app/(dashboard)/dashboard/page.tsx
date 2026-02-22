@@ -1,18 +1,20 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Users, Brain, TrendingUp, ShieldCheck, ArrowRight } from "lucide-react";
-import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { getIfrsMetricsView } from "@/modules/shared/utils/disclosureMetrics";
 import { getAggregatePerformanceMetrics } from "@/modules/performance/services";
+import { fetchEmployeesPaginated } from "@/modules/core/services";
+import type { Employee } from "@/modules/shared/types";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DashboardVisualization } from "@/modules/overview/components/DashboardVisualization";
 
 const isoFields = ["gender", "ageBand", "employmentType", "trainingHours"] as const;
 
-function useDashboardSummary() {
-  const employees = useStore((s) => s.employees);
+function useDashboardSummary(employees: Employee[]) {
   const total = employees.length;
   let filled = 0;
   employees.forEach((e) => {
@@ -29,7 +31,10 @@ function useDashboardSummary() {
   const avgTransitionScore =
     total
       ? Math.round(
-          (employees.reduce((s, e) => s + (e.ifrsMetrics?.transitionReadyScore ?? 0), 0) / total)
+          (employees.reduce(
+            (s, e) => s + (getIfrsMetricsView(e.disclosureMetrics)?.transitionReadyScore ?? 0),
+            0
+          ) / total)
         )
       : 0;
   const perf = getAggregatePerformanceMetrics(employees);
@@ -39,6 +44,7 @@ function useDashboardSummary() {
     avgTrainingHours,
     avgTransitionScore,
     humanCapitalROI: perf?.humanCapitalROI ?? 0,
+    sustainabilityImpact: perf?.sustainabilityImpact ?? 0,
     performanceIndex: perf?.performanceIndex ?? 0,
   };
 }
@@ -58,7 +64,16 @@ const item = {
 
 export default function DashboardPage() {
   const hydrated = useHydrated();
-  const summary = useDashboardSummary();
+  const [regularEmployees, setRegularEmployees] = useState<Employee[]>([]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    fetchEmployeesPaginated({ page: 1, pageSize: 500, employmentType: "regular" })
+      .then(({ items }) => setRegularEmployees(items ?? []))
+      .catch(() => setRegularEmployees([]));
+  }, [hydrated]);
+
+  const summary = useDashboardSummary(regularEmployees);
 
   if (!hydrated) {
     return (
@@ -75,7 +90,7 @@ export default function DashboardPage() {
 
   const widgets = [
     {
-      title: "Core HR",
+      title: "핵심 인사",
       description: "ISO 30414 준수 현황",
       icon: Users,
       href: "/core",
@@ -84,11 +99,11 @@ export default function DashboardPage() {
       values: [
         { label: "총 임직원", value: `${summary.totalCount}명` },
         { label: "공시 완성도", value: `${summary.completeness}%` },
-        { label: "평균 교육시간", value: `${summary.avgTrainingHours}h` },
+        { label: "평균 교육 이수 시간", value: `${summary.avgTrainingHours}h` },
       ],
     },
     {
-      title: "Talent Intelligence",
+      title: "역량 진단",
       description: "IFRS S2 전환 준비도",
       icon: Brain,
       href: "/intelligence",
@@ -100,19 +115,20 @@ export default function DashboardPage() {
       ],
     },
     {
-      title: "Performance",
+      title: "성과·가치",
       description: "인적 자본 가치",
       icon: TrendingUp,
       href: "/performance",
       color: "text-amber-400",
       bg: "bg-amber-500/10",
       values: [
-        { label: "Human Capital ROI", value: summary.humanCapitalROI.toFixed(2) },
-        { label: "Performance Index", value: `${summary.performanceIndex}점` },
+        { label: "인적자본 투자수익률", value: summary.humanCapitalROI.toFixed(2) },
+        { label: "지속가능 기여도", value: `${summary.sustainabilityImpact}점` },
+        { label: "성과 지수", value: `${summary.performanceIndex}점` },
       ],
     },
     {
-      title: "Verified Credential",
+      title: "자격 검증",
       description: "블록체인 무결성",
       icon: ShieldCheck,
       href: "/credential",
@@ -128,9 +144,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">대시보드</h1>
+        <h1 className="text-2xl font-bold text-foreground">전사 현황</h1>
         <p className="mt-1 text-muted-foreground">
-          Core, Intelligence, Performance 핵심 수치를 한눈에 확인하세요.
+          핵심 인사, 역량 진단, 성과·가치 수치를 한눈에 확인하세요.
         </p>
       </div>
 
@@ -174,7 +190,7 @@ export default function DashboardPage() {
         })}
       </motion.div>
 
-      <DashboardVisualization />
+      <DashboardVisualization employees={regularEmployees} />
     </div>
   );
 }

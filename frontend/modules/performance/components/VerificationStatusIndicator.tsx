@@ -25,7 +25,7 @@ export function VerificationStatusIndicator({ employee }: VerificationStatusIndi
       const payload = {
         employeeId: employee.id,
         successDna: employee.successDna ?? undefined,
-        ifrsMetrics: employee.ifrsMetrics ?? undefined,
+        disclosureMetrics: employee.disclosureMetrics ?? undefined,
         verifiedAt: new Date().toISOString(),
       };
       const h = generateAnalysisHash(payload);
@@ -33,7 +33,7 @@ export function VerificationStatusIndicator({ employee }: VerificationStatusIndi
       setStatus("verified");
     }, 900);
     return () => clearTimeout(t);
-  }, [employee?.id, employee?.successDna, employee?.ifrsMetrics]);
+  }, [employee?.id, employee?.successDna, employee?.disclosureMetrics]);
 
   if (!employee) {
     return (

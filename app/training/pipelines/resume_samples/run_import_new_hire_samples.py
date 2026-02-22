@@ -18,6 +18,7 @@
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 app_dir = Path(__file__).resolve().parent.parent.parent.parent
@@ -29,7 +30,7 @@ from core.paths import get_resume_samples_dir  # type: ignore
 from domain.hub.repositories.employee_repository import create as repo_create  # type: ignore
 
 _REQUIRED_KEYS = {"id", "name", "jobTitle", "department"}
-_OPTIONAL_BUT_EXPECTED = {"successDna", "resume", "employmentType", "applicationDate", "joinedAt", "gender", "age", "trainingHours"}
+_OPTIONAL_BUT_EXPECTED = {"successDna", "resume", "employmentType", "applicationDate", "joinedAt", "gender", "age", "trainingHours", "status"}
 
 
 def load_and_validate_jsonl(path: Path) -> tuple[list[dict], list[str]]:
@@ -122,8 +123,12 @@ def main() -> None:
         print("[INFO] --dry-run: DB 적재 생략")
         return
 
-    print("[INFO] DB 적재 중...")
+    started = datetime.now()
+    print(f"[INFO] DB 적재 시작: {started.strftime('%Y-%m-%d %H:%M:%S')}")
     ok, skip = import_to_db(rows, skip_existing=not args.no_skip)
+    finished = datetime.now()
+    elapsed = finished - started
+    print(f"[INFO] DB 적재 종료: {finished.strftime('%Y-%m-%d %H:%M:%S')} (소요 {elapsed.total_seconds():.1f}초)")
     print(f"[INFO] 적재 완료: 성공 {ok}건, 스킵(이미 존재) {skip}건")
 
 

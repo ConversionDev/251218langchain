@@ -1,4 +1,4 @@
-import type { SuccessDNA, IfrsMetrics } from "@/modules/shared/types";
+import type { SuccessDNA, DisclosureMetricsPayload } from "@/modules/shared/types";
 import type { AnalysisPayload, BlockchainTransaction, VerificationResult } from "./types";
 
 /**
@@ -8,7 +8,7 @@ function canonicalize(payload: AnalysisPayload): string {
   return JSON.stringify({
     employeeId: payload.employeeId,
     successDna: payload.successDna ?? null,
-    ifrsMetrics: payload.ifrsMetrics ?? null,
+    disclosureMetrics: payload.disclosureMetrics ?? null,
     verifiedAt: payload.verifiedAt,
   });
 }
@@ -85,13 +85,13 @@ function createMockTransactions(
 export function getVerificationResult(
   employeeId: string,
   successDna?: SuccessDNA,
-  ifrsMetrics?: IfrsMetrics
+  disclosureMetrics?: DisclosureMetricsPayload
 ): VerificationResult {
   const verifiedAt = new Date().toISOString();
   const payload: AnalysisPayload = {
     employeeId,
     successDna,
-    ifrsMetrics,
+    disclosureMetrics,
     verifiedAt,
   };
   const dataHash = generateAnalysisHash(payload);

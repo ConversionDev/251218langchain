@@ -19,9 +19,10 @@ from domain.shared.document_extract import extract_text_from_document  # type: i
 
 logger = logging.getLogger(__name__)
 
-# 동일 파일 재업로드 시 즉시 반환 (최대 50건, FIFO)
+# 동일 파일/텍스트 재요청 시 즉시 반환 (최대 50건, FIFO)
 _RESUME_CACHE_MAX = 50
 _resume_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+_text_resume_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
 
 _RESUME_SYSTEM_PROMPT = """당신은 직무역량 전문가입니다. 군집 데이터에 기반하여 이력서를 분석하세요.
 아래 이력서 원문을 분석하여 **반드시 아래 JSON 형식으로만** 응답하세요. 다른 텍스트, 설명, 코드 블록 없이 JSON만 출력하세요.
@@ -49,7 +50,8 @@ _RESUME_SYSTEM_PROMPT = """당신은 직무역량 전문가입니다. 군집 데
     "creativity": 0,
     "collaboration": 0,
     "adaptability": 0
-  }
+  },
+  "successDnaReason": "각 역량별로 왜 이 점수를 줬는지 한 줄씩 요약. 예: 리더십 85: 동아리 회장·팀 리드 경험. 기술력 60: Python 중급, 실무 일부."
 }
 
 - gender: 이력서에 성별이 명시되면 male(남)/female(여)/other(기타), 없으면 undisclosed.
@@ -57,7 +59,25 @@ _RESUME_SYSTEM_PROMPT = """당신은 직무역량 전문가입니다. 군집 데
 - age: 만 나이(정수). 생년월일(birthDate)이 있으면 오늘 기준 만 나이로 계산: (현재연도 - 출생연도)에서 올해 생일이 아직 안 지났으면 1 빼기. 예: 1990년 3월 15일 → 2025년 2월 기준 34세. 나이만 있고 생년월일 없으면 그대로 사용, 둘 다 없으면 0.
 - employmentType: 이력서에 고용형태(정규직·계약직·인턴 등)가 있으면 해당 값(regular|contract|part_time|intern), 신입/미기재면 new_hire.
 - trainingHours: 이력서에 연간 교육·연수 시간이 있으면 시간(정수), 없으면 0.
-Success DNA는 리더십, 기술력, 창의성, 협업, 적응력 5대 역량을 0-100 점수로 평가하세요. 군집 데이터와 직무역량 기준에 맞춰 객관적으로 산정하세요."""
+Success DNA는 리더십, 기술력, 창의성, 협업, 적응력 5대 역량을 0-100 점수로 평가하세요. 군집 데이터와 직무역량 기준에 맞춰 객관적으로 산정하세요.
+- successDnaReason: 위 5개 역량 각각에 대해, 이력서의 어떤 근거로 그 점수를 부여했는지 한 문장 내외로 요약하세요. 관리자가 '왜 이렇게 평가했는지' 알 수 있도록 구체적으로 작성하세요."""
+
+# ATS [AI 분석] 전용: 출력을 successDna + successDnaReason만 요청해 토큰·지연 감소
+_RESUME_ATS_SYSTEM_PROMPT = """당신은 직무역량 전문가입니다. 아래 이력서 원문을 분석하여 **반드시 아래 JSON 형식으로만** 응답하세요. 다른 텍스트, 설명, 코드 블록 없이 JSON만 출력하세요.
+
+{
+  "successDna": {
+    "leadership": 0,
+    "technical": 0,
+    "creativity": 0,
+    "collaboration": 0,
+    "adaptability": 0
+  },
+  "successDnaReason": "각 역량별로 왜 이 점수를 줬는지 한 줄씩 요약. 예: 리더십 85: 동아리 회장·팀 리드 경험. 기술력 60: Python 중급, 실무 일부."
+}
+
+Success DNA는 리더십, 기술력, 창의성, 협업, 적응력 5대 역량을 0-100 점수로 평가하세요.
+successDnaReason은 위 5개 역량 각각에 대해, 이력서의 어떤 근거로 그 점수를 부여했는지 한 문장 내외로 요약하세요."""
 
 
 def _extract_text_from_resume_file(data: bytes, filename: str) -> str:
@@ -65,33 +85,77 @@ def _extract_text_from_resume_file(data: bytes, filename: str) -> str:
     return extract_text_from_document(data=data, filename=filename)
 
 
+def _fix_json_candidates(raw: str) -> List[str]:
+    """파싱 실패 시 trailing comma 등 흔한 비표준 JSON을 고쳐서 후보 리스트 반환."""
+    candidates = [raw]
+    t1 = re.sub(r",\s*}", "}", raw)
+    t2 = re.sub(r",\s*]", "]", raw)
+    if t1 != raw:
+        candidates.append(t1)
+    if t2 != raw:
+        candidates.append(t2)
+    if t1 != raw and t2 != raw:
+        candidates.append(re.sub(r",\s*]", "]", t1))  # 둘 다 적용
+    return candidates
+
+
 def _extract_json_from_response(text: str) -> Optional[Dict[str, Any]]:
-    """응답에서 JSON 추출."""
+    """응답에서 JSON 추출. 코드 블록/앞뒤 문장/ trailing comma 등 허용."""
+    if not text or not isinstance(text, str):
+        return None
     text = text.strip()
 
-    # 코드 블록 내 JSON 추출
-    json_block_pattern = r"```(?:json)?\s*([\s\S]*?)```"
-    matches = re.findall(json_block_pattern, text)
-    if matches:
-        for match in matches:
+    def try_parse(s: str) -> Optional[Dict[str, Any]]:
+        if not s or not s.strip():
+            return None
+        s = s.strip()
+        for candidate in _fix_json_candidates(s):
             try:
-                return json.loads(match.strip())
+                return json.loads(candidate)
             except json.JSONDecodeError:
                 continue
+        return None
 
-    # 직접 JSON 파싱 시도
+    # 1) 코드 블록 내 JSON
+    json_block_pattern = r"```(?:json)?\s*([\s\S]*?)```"
+    for match in re.findall(json_block_pattern, text):
+        parsed = try_parse(match)
+        if parsed:
+            return parsed
+
+    # 2) 첫 번째 { ... } 블록 (가능하면 가장 바깥쪽 한 덩어리)
+    brace = text.find("{")
+    if brace >= 0:
+        depth = 0
+        end = -1
+        for i in range(brace, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end > brace:
+            block = text[brace : end + 1]
+            parsed = try_parse(block)
+            if parsed:
+                return parsed
+
+    # 3) 정규식으로 임의의 { ... } (마지막 } 까지 가져오기 — 잘린 응답 대비)
     json_pattern = r"\{[\s\S]*\}"
     match = re.search(json_pattern, text)
     if match:
-        try:
-            return json.loads(match.group())
-        except json.JSONDecodeError:
-            pass
+        parsed = try_parse(match.group())
+        if parsed:
+            return parsed
 
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
+    # 4) 전체 텍스트
+    parsed = try_parse(text)
+    if parsed:
+        return parsed
+
+    logger.warning("LLM JSON 파싱 실패. 응답 앞 600자: %s", text[:600])
     return None
 
 
@@ -180,6 +244,15 @@ def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     except (TypeError, ValueError):
         training_hours = 0
 
+    # successDnaReason: LLM이 문자열이 아닌 값(객체/배열)을 주면 파싱 오류 방지
+    reason_raw = raw.get("successDnaReason")
+    if reason_raw is None:
+        success_dna_reason = None
+    elif isinstance(reason_raw, str):
+        success_dna_reason = reason_raw.strip() or None
+    else:
+        success_dna_reason = str(reason_raw).strip() or None
+
     return {
         "name": str(raw.get("name") or "").strip() or "신규",
         "jobTitle": str(raw.get("jobTitle") or "").strip() or "사원",
@@ -197,13 +270,133 @@ def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
             "certifications": certs,
         },
         "successDna": dna,
+        "successDnaReason": success_dna_reason,
     }
 
 
 # 이력서 분석용 생성 설정 (속도·일관성)
-_RESUME_MAX_TOKENS = 1024
+_RESUME_MAX_TOKENS = 1024  # 파일 업로드 전체 분석용
+_RESUME_ATS_MAX_TOKENS = 512  # ATS successDna+Reason 전용
 _RESUME_TEMPERATURE = 0.3
 _RESUME_TEXT_LIMIT = 10_000  # 문자 수 제한으로 토큰 절감
+
+
+def _resume_dict_to_text(resume: Dict[str, Any]) -> str:
+    """resume(학력·경력·스킬·자격증) dict → LLM에 넘길 한 덩어리 텍스트. 항목 수 제한으로 토큰 절감."""
+    if not resume or not isinstance(resume, dict):
+        return ""
+    parts = []
+    for edu in (resume.get("education") or [])[:3]:
+        if isinstance(edu, dict):
+            parts.append(
+                f"학력: {(edu.get('school') or '')} {(edu.get('degree') or '')} {(edu.get('field') or '')} "
+                f"{(edu.get('startDate') or '')}~{(edu.get('endDate') or '')}"
+            )
+    for exp in (resume.get("experience") or [])[:5]:
+        if isinstance(exp, dict):
+            desc = (exp.get("description") or "")[:200]
+            parts.append(
+                f"경력: {(exp.get('company') or '')} {(exp.get('role') or '')} "
+                f"{(exp.get('startDate') or '')}~{(exp.get('endDate') or '')} {desc}"
+            )
+    for s in (resume.get("skills") or [])[:10]:
+        if isinstance(s, dict):
+            parts.append(f"기술: {(s.get('name') or '')} ({(s.get('level') or '')})")
+        else:
+            parts.append(f"기술: {s}")
+    for c in (resume.get("certifications") or [])[:5]:
+        if isinstance(c, dict):
+            parts.append(f"자격: {(c.get('name') or '')} ({(c.get('issuer') or '')})")
+    return "\n".join(parts).strip() or ""
+
+
+def _normalize_ats_result(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """ATS 전용: 파싱된 JSON에서 successDna + successDnaReason만 정규화해 반환."""
+
+    def clamp(val: Any, lo: int, hi: int) -> int:
+        try:
+            v = int(val)
+            return max(lo, min(hi, v))
+        except (TypeError, ValueError):
+            return (lo + hi) // 2
+
+    success_dna = raw.get("successDna") or {}
+    dna = {
+        "leadership": clamp(success_dna.get("leadership"), 0, 100),
+        "technical": clamp(success_dna.get("technical"), 0, 100),
+        "creativity": clamp(success_dna.get("creativity"), 0, 100),
+        "collaboration": clamp(success_dna.get("collaboration"), 0, 100),
+        "adaptability": clamp(success_dna.get("adaptability"), 0, 100),
+    }
+
+    reason_raw = raw.get("successDnaReason")
+    if reason_raw is None:
+        success_dna_reason = None
+    elif isinstance(reason_raw, str):
+        success_dna_reason = reason_raw.strip() or None
+    else:
+        success_dna_reason = str(reason_raw).strip() or None
+
+    return {"successDna": dna, "successDnaReason": success_dna_reason}
+
+
+def analyze_resume_text(text: str, ats_only: bool = False) -> Dict[str, Any]:
+    """이력서 텍스트 → ExaOne 분석.
+    ats_only=True: ATS [AI 분석]용 — successDna+successDnaReason만 반환, 텍스트 해시 캐시 사용, 경량 프롬프트.
+    ats_only=False: 파일 업로드용 — 전체 정보 반환."""
+    if not text or len(text.strip()) < 10:
+        raise ValueError("이력서 텍스트가 너무 짧습니다.")
+    from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
+
+    from domain.hub.llm import get_llm  # type: ignore
+
+    if ats_only:
+        cache_key = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if cache_key in _text_resume_cache:
+            _text_resume_cache.move_to_end(cache_key)
+            logger.debug("이력서 텍스트 캐시 히트: %s", cache_key[:8])
+            return dict(_text_resume_cache[cache_key])
+
+        llm = get_llm(
+            provider="exaone",
+            temperature=_RESUME_TEMPERATURE,
+            max_tokens=_RESUME_ATS_MAX_TOKENS,
+        )
+        messages = [
+            SystemMessage(content=_RESUME_ATS_SYSTEM_PROMPT),
+            HumanMessage(content=f"[이력서 원문]\n{text[:_RESUME_TEXT_LIMIT]}"),
+        ]
+        out = llm.invoke(messages)
+        response_str = getattr(out, "content", None) or getattr(out, "text", None)
+        if not isinstance(response_str, str):
+            response_str = str(out) if out is not None else ""
+        parsed = _extract_json_from_response(response_str)
+        if not parsed:
+            raise ValueError(f"LLM 응답에서 JSON을 파싱하지 못했습니다. raw: {response_str[:500]}")
+        result = _normalize_ats_result(parsed)
+        _text_resume_cache[cache_key] = result
+        if len(_text_resume_cache) > _RESUME_CACHE_MAX:
+            _text_resume_cache.popitem(last=False)
+        return result
+
+    user_message = f"[이력서 원문]\n{text[:_RESUME_TEXT_LIMIT]}"
+    llm = get_llm(
+        provider="exaone",
+        temperature=_RESUME_TEMPERATURE,
+        max_tokens=_RESUME_MAX_TOKENS,
+    )
+    messages = [
+        SystemMessage(content=_RESUME_SYSTEM_PROMPT),
+        HumanMessage(content=user_message),
+    ]
+    out = llm.invoke(messages)
+    response_str = getattr(out, "content", None) or getattr(out, "text", None)
+    if not isinstance(response_str, str):
+        response_str = str(out) if out is not None else ""
+    parsed = _extract_json_from_response(response_str)
+    if not parsed:
+        raise ValueError(f"LLM 응답에서 JSON을 파싱하지 못했습니다. raw: {response_str[:500]}")
+    return _normalize_resume_parse_result(parsed)
 
 
 def analyze_resume_file(data: bytes, filename: str) -> Dict[str, Any]:
@@ -218,30 +411,7 @@ def analyze_resume_file(data: bytes, filename: str) -> Dict[str, Any]:
     if not text or len(text.strip()) < 10:
         raise ValueError("이력서에서 추출된 텍스트가 너무 짧습니다.")
 
-    user_message = f"[이력서 원문]\n{text[:_RESUME_TEXT_LIMIT]}"
-
-    # RAG 그래프(rag_node → model_node) 대신 ExaOne만 직접 호출 → BGE 임베딩 미로드, GPU 절감
-    from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
-
-    from domain.hub.llm import get_llm  # type: ignore
-
-    llm = get_llm(
-        provider="exaone",
-        temperature=_RESUME_TEMPERATURE,
-        max_tokens=_RESUME_MAX_TOKENS,
-    )
-    messages = [
-        SystemMessage(content=_RESUME_SYSTEM_PROMPT),
-        HumanMessage(content=user_message),
-    ]
-    out = llm.invoke(messages)
-    response_str = getattr(out, "content", None) or str(out)
-
-    parsed = _extract_json_from_response(response_str)
-    if not parsed:
-        raise ValueError(f"LLM 응답에서 JSON을 파싱하지 못했습니다. raw: {response_str[:500]}")
-
-    result = _normalize_resume_parse_result(parsed)
+    result = analyze_resume_text(text)
     _resume_cache[cache_key] = result
     if len(_resume_cache) > _RESUME_CACHE_MAX:
         _resume_cache.popitem(last=False)

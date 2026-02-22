@@ -1,3 +1,4 @@
+import { getIfrsMetricsView } from "@/modules/shared/utils/disclosureMetrics";
 import type { Employee, SuccessDNA } from "@/modules/shared/types";
 import type { PerformanceMetrics, ImpactDataPoint, DisclosureSummary } from "./types";
 
@@ -26,20 +27,11 @@ export function getAggregatePerformanceMetrics(employees: Employee[]): Performan
   };
 }
 
-/** 전체 임직원 평균 시계열: Q1~Q4 실제(막대), Q5~Q6 예측(라인) */
+/** 전체 임직원 평균 시계열. 직원이 없거나 데이터 없으면 빈 배열 (실제 DB 기준) */
 export function getAggregateImpactChartData(employees: Employee[]): ImpactDataPoint[] {
-  if (employees.length === 0) {
-    const periods = ["Q1", "Q2", "Q3", "Q4", "Q5(예측)", "Q6(예측)"];
-    const past = [58, 62, 68, 72];
-    const future = [72, 76, 78];
-    return periods.map((p, i) => ({
-      period: p,
-      pastPerformance: i < 4 ? past[i] : 0,
-      futureValue: i < 4 ? past[i] : future[i - 4],
-    }));
-  }
+  if (employees.length === 0) return [];
   const allPoints = employees.map((e) => getImpactChartData(e)).filter((arr) => arr.length > 0);
-  if (allPoints.length === 0) return getAggregateImpactChartData([]);
+  if (allPoints.length === 0) return [];
   const periods = allPoints[0].map((_, i) => allPoints[0][i].period);
   const pastPerformance = periods.map((_, i) => {
     const vals = allPoints.map((arr) => arr[i]?.pastPerformance ?? 0).filter((v) => v > 0);
@@ -62,7 +54,7 @@ export function getAggregateDisclosureSummary(employees: Employee[]): Disclosure
   const m = getAggregatePerformanceMetrics(employees);
   if (!m) return null;
   return {
-    narrative: `전체 ${employees.length}명 임직원 평균: Performance Index ${m.performanceIndex}점, Sustainability Impact ${m.sustainabilityImpact}점으로 산출되었으며, IFRS S1/S2 공시 요건에 부합하는 지표를 확보하였습니다.`,
+    narrative: `전체 ${employees.length}명 임직원 평균: 성과 지수 ${m.performanceIndex}점, 지속가능 기여도 ${m.sustainabilityImpact}점으로 산출되었으며, IFRS S1/S2 공시 요건에 부합하는 지표를 확보하였습니다.`,
     ifrsS1Summary:
       "본 인적 자본 공시는 IFRS S1 '지속가능성 관련 재무정보 공시'에 따른 일반 목적 재무제표 보완 정보로, 인력 구성·교육·성과 지표를 포함합니다.",
     ifrsS2Summary:
@@ -105,7 +97,7 @@ function calcHumanCapitalROI(
  */
 function calcSustainabilityImpact(employee: Employee): number {
   const adaptability = employee.successDna?.adaptability ?? 0;
-  const transitionScore = employee.ifrsMetrics?.transitionReadyScore ?? 0;
+  const transitionScore = getIfrsMetricsView(employee.disclosureMetrics)?.transitionReadyScore ?? 0;
   const contribution = (adaptability * 0.6 + transitionScore * 0.4);
   return Math.min(100, Math.round(contribution));
 }
@@ -115,7 +107,7 @@ function calcSustainabilityImpact(employee: Employee): number {
  * KPI 성과 60% + 미래 역량 40% 가중 합산 (0~100)
  */
 function calcPerformanceIndex(employee: Employee): number {
-  const ifrs = employee.ifrsMetrics;
+  const ifrs = getIfrsMetricsView(employee.disclosureMetrics);
   const kpi = (ifrs?.humanCapitalROI ?? 0) * 20 + (100 - (ifrs?.skillGap ?? 50)) * 0.5;
   const kpiNorm = Math.max(0, Math.min(100, kpi));
   const future = ifrs?.transitionReadyScore ?? 0;
@@ -145,7 +137,7 @@ export function getPerformanceMetrics(employee: Employee | null): PerformanceMet
  */
 export function getImpactChartData(employee: Employee | null): ImpactDataPoint[] {
   if (!employee) return [];
-  const transitionScore = employee.ifrsMetrics?.transitionReadyScore ?? 50;
+  const transitionScore = getIfrsMetricsView(employee.disclosureMetrics)?.transitionReadyScore ?? 50;
   const performanceIndex = calcPerformanceIndex(employee);
 
   const periods = ["Q1", "Q2", "Q3", "Q4", "Q5(예측)", "Q6(예측)"];
@@ -184,7 +176,7 @@ export function getDisclosureSummary(employee: Employee | null): DisclosureSumma
   const impact = metrics?.sustainabilityImpact ?? 0;
 
   return {
-    narrative: `${name} 직원의 인적 자본 가치는 Performance Index ${idx}점, Sustainability Impact ${impact}점으로 산출되었으며, IFRS S1/S2 공시 요건에 부합하는 지표를 확보하였습니다.`,
+    narrative: `${name} 직원의 인적 자본 가치는 성과 지수 ${idx}점, 지속가능 기여도 ${impact}점으로 산출되었으며, IFRS S1/S2 공시 요건에 부합하는 지표를 확보하였습니다.`,
     ifrsS1Summary:
       "본 인적 자본 공시는 IFRS S1 '지속가능성 관련 재무정보 공시'에 따른 일반 목적 재무제표 보완 정보로, 인력 구성·교육·성과 지표를 포함합니다.",
     ifrsS2Summary:

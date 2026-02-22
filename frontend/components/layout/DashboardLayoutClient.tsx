@@ -10,11 +10,11 @@ export function DashboardLayoutClient({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative min-h-screen bg-background">
+    <div className="relative min-h-screen bg-gradient-to-br from-sky-100/90 via-teal-50/70 to-emerald-100/80 dark:from-[#0a0a0a] dark:via-[#0f0f0f] dark:to-[#0a0a0a]">
       <Sidebar />
-      <main className="pl-64">
+      <main className="pl-56">
         <Header />
-        <div className="p-8">{children}</div>
+        <div className="pl-8 pr-3 py-8">{children}</div>
       </main>
     </div>
   );

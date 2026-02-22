@@ -11,8 +11,13 @@ import {
   RadialBarChart,
   RadialBar,
 } from "recharts";
-import { FileEdit, User, Sparkles } from "lucide-react";
+import { FileEdit, User, Sparkles, FileText, Calendar } from "lucide-react";
 import type { Employee, SuccessDNA, Resume } from "@/modules/shared/types";
+import {
+  fetchActivitiesByEmployee,
+  getTextTypeLabel,
+  type ActivityRecord,
+} from "@/modules/performance/services/activityServices";
 import { DNA_DIMENSION_COLORS } from "@/modules/shared/constants/dnaColors";
 import { hasResumeData } from "../services";
 import { getDepartmentMatches } from "../services/matchService";
@@ -81,6 +86,8 @@ export function ProfileSheet({
   /** 업로드 파싱 결과 또는 직접 입력/수정 시 편집 중인 이력서. null이면 업로드 영역 표시 */
   const [editingResume, setEditingResume] = useState<Resume | null>(null);
   const [uploadError, setUploadError] = useState("");
+  const [activities, setActivities] = useState<ActivityRecord[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
 
   // 직원이 바뀌거나 시트를 열 때 입력 폼 플래그·편집 상태 초기화
   useEffect(() => {
@@ -90,6 +97,19 @@ export function ProfileSheet({
       setUploadError("");
     }
   }, [employee?.id, open]);
+
+  // 성과 활동 로드 (회의록·보고서·이메일 통합)
+  useEffect(() => {
+    if (!open || !employee?.id) {
+      setActivities([]);
+      return;
+    }
+    setActivitiesLoading(true);
+    fetchActivitiesByEmployee(employee.id, { limit: 20 })
+      .then(setActivities)
+      .catch(() => setActivities([]))
+      .finally(() => setActivitiesLoading(false));
+  }, [open, employee?.id]);
 
   const resume = employee?.resume;
   const hasData = resume && hasResumeData(resume);
@@ -243,6 +263,14 @@ export function ProfileSheet({
                     <TabsList className="w-full">
                       <TabsTrigger value="education">학력</TabsTrigger>
                       <TabsTrigger value="experience">경력</TabsTrigger>
+                      <TabsTrigger value="activities" className="relative">
+                        활동기록
+                        {activities.length > 0 && (
+                          <span className="ml-1 rounded-full bg-primary/20 px-1.5 text-[10px] font-medium text-primary">
+                            {activities.length}
+                          </span>
+                        )}
+                      </TabsTrigger>
                     </TabsList>
                     <Button
                       type="button"
@@ -297,6 +325,48 @@ export function ProfileSheet({
                           </ul>
                         ) : (
                           <p className="text-sm text-muted-foreground">등록된 경력이 없습니다.</p>
+                        )}
+                      </>
+                    )}
+                    {activeTab === "activities" && (
+                      <>
+                        {activitiesLoading ? (
+                          <div className="space-y-3">
+                            <div className="h-16 animate-pulse rounded-lg bg-muted/50" />
+                            <div className="h-16 animate-pulse rounded-lg bg-muted/50" />
+                          </div>
+                        ) : activities.length > 0 ? (
+                          <ul className="space-y-3">
+                            {activities.map((a) => (
+                              <li key={a.id} className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                                <div className="flex items-start gap-2">
+                                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                        {getTextTypeLabel(a.textType)}
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground">{a.period}</span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground line-clamp-3">
+                                      {a.content}
+                                    </p>
+                                    {a.tags && a.tags.length > 0 && (
+                                      <div className="mt-1.5 flex flex-wrap gap-1">
+                                        {a.tags.slice(0, 3).map((tag, i) => (
+                                          <span key={i} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">등록된 성과 활동이 없습니다.</p>
                         )}
                       </>
                     )}

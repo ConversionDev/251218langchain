@@ -13,7 +13,6 @@ import {
 } from "recharts";
 import type { SuccessDNA } from "@/modules/shared/types";
 import { DNA_DIMENSION_COLORS } from "@/modules/shared/constants/dnaColors";
-import { HIGH_PERFORMER_AVERAGE } from "../services";
 
 const DIMENSION_LABELS: Record<keyof SuccessDNA, string> = {
   leadership: "리더십",
@@ -56,23 +55,23 @@ function getRadarAIInsight(
   if (dimensionKey === "leadership" && pct < 0) {
     return "리더십 수치가 벤치마크 대비 낮아, 전환 공정의 팀 리드보다는 전문 기술 위원(SME) 배치가 유리할 수 있음.";
   }
-  if (pct > 0) return `전사 고성과자 평균 대비 ${pct}% 높게 산출됨.`;
-  if (pct < 0) return `전사 고성과자 평균 대비 ${Math.abs(pct)}% 낮게 산출됨.`;
-  return "전사 고성과자 평균과 유사한 수준입니다.";
+  if (pct > 0) return `조직 평균 대비 ${pct}% 높게 산출됨.`;
+  if (pct < 0) return `조직 평균 대비 ${Math.abs(pct)}% 낮게 산출됨.`;
+  return "조직 평균과 유사한 수준입니다.";
 }
 
-function toChartData(self: SuccessDNA, highPerformer: SuccessDNA) {
+function toChartData(self: SuccessDNA, highPerformer?: SuccessDNA) {
   return dimensions.map((key) => ({
     dimension: DIMENSION_LABELS[key],
     self: self[key],
-    전사고성과자평균: highPerformer[key],
+    전사고성과자평균: highPerformer?.[key],
   }));
 }
 
 interface DNARadarChartProps {
   /** 본인 Success DNA */
   data: SuccessDNA;
-  /** 전사 고성과자 평균 (미제공 시 서비스 기본값 사용) */
+  /** 비교 기준 평균 (실데이터 기반). 미제공 시 본인만 표시 */
   highPerformerAverage?: SuccessDNA;
   /** 교육 이수 시간 (AI 인사이트 툴팁용) */
   trainingHours?: number;
@@ -98,9 +97,9 @@ function RadarTooltipContent({
   const selfPayload = payload.find((p) => p.dataKey === "self");
   const avgPayload = payload.find((p) => p.dataKey === "전사고성과자평균");
   const selfValue = selfPayload?.value ?? 0;
-  const avgValue = avgPayload?.value ?? 0;
+  const avgValue = avgPayload?.value;
   const dimensionKey = LABEL_TO_KEY[labelStr as keyof typeof LABEL_TO_KEY];
-  const insight = dimensionKey
+  const insight = dimensionKey && typeof avgValue === "number"
     ? getRadarAIInsight(dimensionKey, selfValue, avgValue, trainingHours)
     : "";
 
@@ -114,12 +113,14 @@ function RadarTooltipContent({
     >
       <p className="font-medium text-foreground">{labelStr}</p>
       <p className="mt-1 text-sm text-muted-foreground">
-        본인 <strong className="text-foreground">{selfValue}</strong>점 · 전사 고성과자 평균{" "}
-        <strong className="text-foreground">{avgValue}</strong>점
-        {avgValue > 0 && (
+        본인 <strong className="text-foreground">{selfValue}</strong>점
+        {typeof avgValue === "number" && (
+          <>
+            {" "}· 조직 평균 <strong className="text-foreground">{avgValue}</strong>점
           <span className="ml-1">
             (갭 {selfValue - avgValue >= 0 ? "+" : ""}{selfValue - avgValue}점)
           </span>
+          </>
         )}
       </p>
       {insight && (
@@ -144,7 +145,7 @@ export function DNARadarChart({
     setMounted(true);
   }, []);
 
-  const chartData = toChartData(data, highPerformerAverage ?? HIGH_PERFORMER_AVERAGE);
+  const chartData = toChartData(data, highPerformerAverage);
 
   if (!mounted) {
     return (
@@ -216,15 +217,17 @@ export function DNARadarChart({
           fillOpacity={0.28}
           strokeWidth={2}
         />
-        <Radar
-          name="전사 고성과자 평균"
-          dataKey="전사고성과자평균"
-          stroke="hsl(var(--muted-foreground))"
-          fill="hsl(var(--muted-foreground))"
-          fillOpacity={0.12}
-          strokeWidth={1.5}
-          strokeDasharray="4 4"
-        />
+        {highPerformerAverage && (
+          <Radar
+            name="조직 평균"
+            dataKey="전사고성과자평균"
+            stroke="hsl(var(--muted-foreground))"
+            fill="hsl(var(--muted-foreground))"
+            fillOpacity={0.12}
+            strokeWidth={1.5}
+            strokeDasharray="4 4"
+          />
+        )}
         <Tooltip
           content={({ active, payload, label }) => (
             <RadarTooltipContent

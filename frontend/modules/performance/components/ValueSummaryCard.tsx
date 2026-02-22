@@ -57,44 +57,45 @@ export function ValueSummaryCard({
 
   const base = metrics;
   const showDelta = Boolean(displayMetrics);
+  const eff = effective ?? base;
 
   const items = [
     {
       key: "roi",
-      label: isDisclosureMode ? "IFRS S1 Value Creation Index" : "Human Capital ROI",
-      value: effective.humanCapitalROI,
+      label: isDisclosureMode ? "인적자본 가치 창출 지수 (IFRS S1)" : "인적자본 투자수익률",
+      value: eff.humanCapitalROI,
       unit: "",
       format: (v: number) => v.toFixed(2),
       delta: showDelta && base.humanCapitalROI
-        ? ((effective.humanCapitalROI - base.humanCapitalROI) / base.humanCapitalROI) * 100
+        ? ((eff.humanCapitalROI - base.humanCapitalROI) / base.humanCapitalROI) * 100
         : null,
       deltaFormat: (d: number) => (d >= 0 ? `+${d.toFixed(1)}% 상승` : `${d.toFixed(1)}% 하락`),
     },
     {
       key: "sustainability",
-      label: isDisclosureMode ? "IFRS S2 Transition Contribution" : "Sustainability Impact",
-      value: effective.sustainabilityImpact,
+      label: isDisclosureMode ? "전환 기여도 (IFRS S2)" : "지속가능 기여도",
+      value: eff.sustainabilityImpact,
       unit: "점",
       format: (v: number) => String(Math.round(v)),
-      delta: showDelta ? effective.sustainabilityImpact - base.sustainabilityImpact : null,
+      delta: showDelta ? eff.sustainabilityImpact - base.sustainabilityImpact : null,
       deltaFormat: (d: number) => (d >= 0 ? `+${d}점 상승` : `${d}점 하락`),
     },
     {
       key: "performance",
-      label: isDisclosureMode ? "Integrated Capability Index" : "Performance Index",
-      value: effective.performanceIndex,
+      label: isDisclosureMode ? "통합 역량 지수" : "성과 지수",
+      value: eff.performanceIndex,
       unit: "점",
       format: (v: number) => String(Math.round(v)),
-      delta: showDelta ? effective.performanceIndex - base.performanceIndex : null,
+      delta: showDelta ? eff.performanceIndex - base.performanceIndex : null,
       deltaFormat: (d: number) => (d >= 0 ? `+${d}점 상승` : `${d}점 하락`),
     },
     {
       key: "training",
-      label: isDisclosureMode ? "Training Hours (ISO 30414)" : "교육 이수 시간",
-      value: effective.trainingHours,
+      label: isDisclosureMode ? "교육 이수 시간 (ISO 30414)" : "교육 이수 시간",
+      value: eff.trainingHours,
       unit: "h",
       format: (v: number) => String(Math.round(v * 10) / 10),
-      delta: showDelta ? effective.trainingHours - base.trainingHours : null,
+      delta: showDelta ? eff.trainingHours - base.trainingHours : null,
       deltaFormat: (d: number) => (d >= 0 ? `+${d}h 상승` : `${d}h 하락`),
     },
   ];
@@ -111,7 +112,7 @@ export function ValueSummaryCard({
           aria-label="블록체인 검증 완료"
         >
           <ShieldCheck className="h-4 w-4 shrink-0" />
-          <span>Verified by Blockchain</span>
+          <span>블록체인 검증 완료</span>
         </div>
       </div>
       <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">

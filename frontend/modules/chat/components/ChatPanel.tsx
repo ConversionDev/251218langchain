@@ -1,17 +1,33 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Square, X, Plus, Paperclip, FileText } from "lucide-react";
+import { Send, Loader2, Square, X, Plus, Paperclip, FileText, Sparkles } from "lucide-react";
+import { useStore } from "@/store/useStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { sendChatMessageStream, uploadChatFiles } from "../services";
+import { DOCUMENT_ACCEPT } from "@/lib/documentExtensions";
+import { sendChatMessageStream, uploadChatFiles, type SourceItem } from "../services";
 import type { MessageItem } from "../types";
+
+/** 개발/테스트용 추천 질문 (RAG·직원·공시·이력서 등) */
+const RECOMMENDED_QUESTIONS = [
+  "어떤 직원이 SAP FI 경험이 있나요?",
+  "ISO 30414의 다양성 지표는 무엇인가요?",
+  "IFRS S2 전환 준비도가 뭔가요?",
+  "최근 입사한 직원들의 평균 연령은?",
+  "전체 임직원 수와 공시 완성도 알려줘",
+  "이 이력서를 분석해 주세요",
+  "RAG에 어떤 문서가 등록되어 있나요?",
+  "교육훈련 시간을 공시 지표로 어떻게 집계하나요?",
+];
 
 type AttachmentItem =
   | { id: string; type: "image"; data: string; name: string }
-  | { id: string; type: "file"; name: string };
+  | { id: string; type: "file"; name: string; file: File };
 type DisplayMessage = MessageItem & {
   contextPreview?: string;
+  /** RAG 출처 목록 (참고 문서 전부 표시) */
+  sources?: SourceItem[] | null;
   /** 사용자 메시지에 첨부된 이미지(data URL) — 말풍선에 표시용 */
   attachmentImages?: string[];
   /** 사용자 메시지에 첨부된 파일(문서) 이름 — 말풍선에 이미지와 같은 형태로 표시 */
@@ -22,7 +38,16 @@ function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return fetch(dataUrl).then((r) => r.blob());
 }
 
+/** 선택된 직원이 있을 때 채팅 컨텍스트용 시스템 프롬프트 문구 생성 */
+function buildSelectedEmployeeContext(employee: { id: string; name?: string | null; department?: string | null; jobTitle?: string | null }): string {
+  const parts = [`현재 선택된 직원: ${employee.name ?? "이름 없음"}`, `ID: ${employee.id}`];
+  if (employee.department) parts.push(`부서: ${employee.department}`);
+  if (employee.jobTitle) parts.push(`직무: ${employee.jobTitle}`);
+  return `${parts.join(", ")}. 사용자 질문이 이 직원에 관한 경우 해당 직원 정보를 활용해 답변하세요.`;
+}
+
 export function ChatPanel() {
+  const selectedEmployee = useStore((s) => s.selectedEmployee);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
@@ -87,7 +112,7 @@ export function ChatPanel() {
       } else {
         setAttachments((prev) => [
           ...prev,
-          { id: crypto.randomUUID(), type: "file", name: file.name || "파일" },
+          { id: crypto.randomUUID(), type: "file", name: file.name || "파일", file },
         ]);
       }
     }
@@ -120,16 +145,20 @@ export function ChatPanel() {
     if (!hasContent || loading) return;
 
     const imageAttachments = attachments.filter((a): a is AttachmentItem & { type: "image" } => a.type === "image");
+    const fileAttachments = attachments.filter((a): a is AttachmentItem & { type: "file" } => a.type === "file");
     const hadAttachments = attachments.length > 0;
-    const filesToSend: Blob[] =
-      imageAttachments.length > 0
-        ? await Promise.all(imageAttachments.map((a) => dataUrlToBlob(a.data)))
-        : [];
+    const filesToSend: (Blob | File)[] = [
+      ...(imageAttachments.length > 0 ? await Promise.all(imageAttachments.map((a) => dataUrlToBlob(a.data))) : []),
+      ...fileAttachments.map((a) => a.file),
+    ];
+    const fileNamesForUpload: string[] = [
+      ...imageAttachments.map((_, i) => `image_${i}.png`),
+      ...fileAttachments.map((a) => a.file.name),
+    ];
 
     setInput("");
     setError(null);
     const attachmentDataUrls = imageAttachments.length > 0 ? imageAttachments.map((a) => a.data) : undefined;
-    const fileAttachments = attachments.filter((a): a is AttachmentItem & { type: "file" } => a.type === "file");
     const attachmentFileNames = fileAttachments.length > 0 ? fileAttachments.map((a) => ({ name: a.name })) : undefined;
     setAttachments([]);
     const userMessage: DisplayMessage = {
@@ -155,10 +184,15 @@ export function ChatPanel() {
     ]);
 
     let fileIds: string[] | undefined;
+    let fileNames: string[] | undefined;
     if (filesToSend.length > 0) {
       try {
-        const up = await uploadChatFiles(filesToSend, { signal: controller.signal });
+        const up = await uploadChatFiles(filesToSend, {
+          fileNames: fileNamesForUpload,
+          signal: controller.signal,
+        });
         fileIds = up.file_ids ?? [];
+        fileNames = fileNamesForUpload;
       } catch (err) {
         setError(err instanceof Error ? err.message : "업로드 실패");
         setLoading(false);
@@ -168,13 +202,18 @@ export function ChatPanel() {
       }
     }
 
+    const systemPrompt = selectedEmployee
+      ? buildSelectedEmployeeContext(selectedEmployee)
+      : undefined;
+
     try {
       await sendChatMessageStream(
         {
-          message: text || (hadAttachments ? "[이미지 첨부]" : ""),
+          message: text || (hadAttachments ? "[이미지·파일 첨부]" : ""),
           use_rag: true,
           chat_history: chatHistory.slice(0, -1),
-          ...(fileIds?.length ? { file_ids: fileIds } : {}),
+          ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
+          ...(fileIds?.length ? { file_ids: fileIds, file_names: fileNames } : {}),
         },
         {
           onChunk(content) {
@@ -192,6 +231,15 @@ export function ChatPanel() {
               const last = next[next.length - 1];
               if (last?.role === "assistant")
                 next[next.length - 1] = { ...last, contextPreview: preview ?? undefined };
+              return next;
+            });
+          },
+          onSources(sources) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant")
+                next[next.length - 1] = { ...last, sources: sources ?? undefined };
               return next;
             });
           },
@@ -228,25 +276,63 @@ export function ChatPanel() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] flex-col rounded-lg border border-border bg-card">
-      <div className="border-b border-border px-4 py-3">
-        <h2 className="font-semibold text-foreground">RAG 채팅</h2>
-        <p className="text-xs text-muted-foreground">
-          등록된 데이터를 검색해 답변합니다. 이미지 첨부 시 업로드 후 분석합니다.
-        </p>
+    <div
+      className="relative flex min-h-0 flex-1 flex-col rounded-xl border border-slate-200/60 bg-slate-50/80 dark:border-white/10 dark:bg-white/5"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-emerald-400 bg-white/95 text-center dark:bg-[#0f0f0f]/95">
+          <div>
+            <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">파일을 여기에 놓으세요</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">이미지·문서는 채팅에 첨부됩니다</p>
+          </div>
+        </div>
+      )}
+      <div className="flex items-center gap-2 border-b border-slate-200/60 px-4 py-3 dark:border-white/10">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-emerald-500 text-white">
+          <Sparkles className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">HRInsight AI</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {selectedEmployee
+              ? `선택 직원: ${selectedEmployee.name ?? "이름 없음"} — 질문 시 해당 직원 정보가 참고됩니다.`
+              : "이력서·공시·역량 데이터 검색 및 답변"}
+          </p>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 && (
+          <div className="mb-4 rounded-xl border border-slate-200/60 bg-white/60 p-4 dark:border-white/10 dark:bg-[#171717]/80">
+            <p className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-300">추천 질문</p>
+            <ul className="flex flex-wrap gap-2">
+              {RECOMMENDED_QUESTIONS.map((q) => (
+                <li key={q}>
+                  <button
+                    type="button"
+                    onClick={() => setInput(q)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 dark:border-white/10 dark:bg-[#171717] dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/40"
+                  >
+                    {q}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {messages.map((msg, i) => (
           <div
             key={i}
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+              className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm leading-relaxed ${
                 msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-foreground"
+                  ? "bg-gradient-to-r from-blue-600 to-emerald-600 text-white"
+                  : "bg-slate-100 text-slate-900 dark:bg-[#171717] dark:text-slate-100"
               }`}
             >
               {msg.role === "user" && (msg.attachmentImages?.length || msg.attachmentFiles?.length) ? (
@@ -271,12 +357,23 @@ export function ChatPanel() {
                 </div>
               ) : null}
               <div className="whitespace-pre-wrap">{msg.content || "…"}</div>
-              {msg.role === "assistant" && msg.contextPreview && (
-                <details className="mt-2 text-xs text-muted-foreground">
-                  <summary>참고 문서</summary>
-                  <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">
-                    {msg.contextPreview}
-                  </pre>
+              {msg.role === "assistant" && (msg.contextPreview || (msg.sources && msg.sources.length > 0)) && (
+                <details className="mt-2 text-xs text-muted-foreground" open>
+                  <summary>참고 문서 {msg.sources?.length ? `(${msg.sources.length}건)` : ""}</summary>
+                  {msg.sources && msg.sources.length > 0 ? (
+                    <ul className="mt-1 max-h-64 list-inside list-disc space-y-1 overflow-y-auto">
+                      {msg.sources.map((s, j) => (
+                        <li key={j} className="break-words">
+                          [출처: {[s.table && `table=${s.table}`, s.id != null && `id=${s.id}`, s.source && `source=${s.source}`, s.page != null && s.page !== "" && `page=${s.page}`, s.standard_type && `standard_type=${s.standard_type}`, s.unique_id && `unique_id=${s.unique_id}`].filter(Boolean).join(", ")}
+                          {s.section_title ? ` — ${String(s.section_title).slice(0, 80)}${String(s.section_title).length > 80 ? "…" : ""}` : ""}]
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">
+                      {msg.contextPreview}
+                    </pre>
+                  )}
                 </details>
               )}
             </div>
@@ -286,33 +383,19 @@ export function ChatPanel() {
       </div>
 
       {error && (
-        <div className="border-t border-border px-4 py-2 text-sm text-destructive">{error}</div>
+        <div className="border-t border-slate-200/60 px-4 py-2 text-sm text-red-600 dark:text-red-400">{error}</div>
       )}
 
       <form
         onSubmit={handleSubmit}
-        className={`relative border-t border-border p-3 transition-colors ${isDragging ? "bg-primary/5" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        className="relative border-t border-slate-200/60 p-4 dark:border-white/10"
       >
-        {messages.length === 0 && !isDragging && attachments.length === 0 && (
-          <p className="mb-2 text-center text-xs text-muted-foreground">
-            메시지를 입력하거나 이미지를 첨부해 전송하세요.
-          </p>
-        )}
-        {isDragging && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg border-2 border-dashed border-primary bg-background/95 py-6 text-center">
-            <p className="text-sm font-medium text-primary">파일을 여기에 놓으세요</p>
-            <p className="mt-1 text-xs text-muted-foreground">이미지는 채팅에 첨부됩니다</p>
-          </div>
-        )}
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2">
             {attachments.map((a) => (
               <div
                 key={a.id}
-                className="relative flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-2 py-2 pr-8 text-sm"
+                className="relative flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-2 py-2 pr-8 text-sm dark:border-white/10 dark:bg-[#171717]"
               >
                 {a.type === "image" ? (
                   <img
@@ -345,11 +428,11 @@ export function ChatPanel() {
           <input
             type="file"
             ref={fileInputRef}
-            accept="image/*"
+            accept={`image/*,${DOCUMENT_ACCEPT}`}
             className="hidden"
+            multiple
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) addImage(f);
+              addFiles(e.target.files);
               e.target.value = "";
             }}
           />
@@ -383,8 +466,8 @@ export function ChatPanel() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPaste={handlePaste}
-            placeholder="무엇이든 물어보세요"
-            className="min-w-0 flex-1"
+            placeholder="질문이나 요청 사항을 입력하세요... (Shift+Enter로 줄바꿈)"
+            className="min-w-0 flex-1 rounded-xl border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-[#171717]"
             disabled={loading}
           />
           {loading ? (

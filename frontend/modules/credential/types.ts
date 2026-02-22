@@ -1,10 +1,10 @@
-import type { SuccessDNA, IfrsMetrics } from "@/modules/shared/types";
+import type { SuccessDNA, DisclosureMetricsPayload } from "@/modules/shared/types";
 
 /** 검증용 분석 데이터 페이로드 */
 export interface AnalysisPayload {
   employeeId: string;
   successDna?: SuccessDNA;
-  ifrsMetrics?: IfrsMetrics;
+  disclosureMetrics?: DisclosureMetricsPayload;
   verifiedAt: string; // ISO string
 }
 

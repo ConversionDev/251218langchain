@@ -34,8 +34,8 @@ export function DNAGrowthChart({ data }: DNAGrowthChartProps) {
 
   const chartData = data.map((d) => ({
     name: d.label,
-    "1년 전": d.pastYear,
-    현재: d.current,
+    상반기: d.pastYear,
+    하반기: d.current,
     성장률: d.growthPct,
   }));
 
@@ -75,18 +75,19 @@ export function DNAGrowthChart({ data }: DNAGrowthChartProps) {
               borderRadius: "var(--radius)",
             }}
             cursor={{ fill: "hsl(var(--chart-cursor-fill) / var(--chart-cursor-opacity))" }}
-            formatter={(value: number, name: string) => [
-              `${value}점`,
-              name === "성장률" ? `성장률 ${value}%` : name,
-            ]}
+            formatter={(value: number | undefined, name: string | undefined) => {
+              const v = value ?? 0;
+              const n = name ?? "";
+              return [`${v}점`, n === "성장률" ? `성장률 ${v}%` : n];
+            }}
             labelFormatter={(label) => `역량: ${label}`}
           />
-          <Bar dataKey="1년 전" fill={PAST_COLOR} radius={[0, 2, 2, 0]} barSize={12} />
-          <Bar dataKey="현재" fill={BRAND_CHART_COLORS.secondary} radius={[0, 2, 2, 0]} barSize={12} />
+          <Bar dataKey="상반기" fill={PAST_COLOR} radius={[0, 2, 2, 0]} barSize={12} />
+          <Bar dataKey="하반기" fill={BRAND_CHART_COLORS.secondary} radius={[0, 2, 2, 0]} barSize={12} />
         </BarChart>
       </ResponsiveContainer>
       <p className="mt-2 text-xs text-muted-foreground">
-        1년 전 대비 현재 역량. 교육·경험을 통한 성장 서사를 반영합니다.
+        상반기 대비 하반기 역량 (반기 단위 성장). 교육·경험을 통한 성장 서사를 반영합니다.
       </p>
     </motion.div>
   );

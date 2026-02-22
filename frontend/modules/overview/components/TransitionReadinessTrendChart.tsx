@@ -3,30 +3,26 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { getIfrsMetricsView } from "@/modules/shared/utils/disclosureMetrics";
 import type { Employee } from "@/modules/shared/types";
 
 interface TransitionReadinessTrendChartProps {
   employees: Employee[];
 }
 
+/** 실제 DB의 전환 준비도만 사용. 목/합성 분기 데이터 없음 */
 function getQuarterlyTrend(employees: Employee[]): { quarter: string; score: number }[] {
-  if (employees.length === 0) {
-    return [
-      { quarter: "Q1", score: 68 },
-      { quarter: "Q2", score: 70 },
-      { quarter: "Q3", score: 72 },
-      { quarter: "Q4", score: 74 },
-    ];
-  }
-  const avg =
-    employees.reduce((s, e) => s + (e.ifrsMetrics?.transitionReadyScore ?? 0), 0) / employees.length;
-  const current = Math.round(avg);
-  return [
-    { quarter: "Q1", score: Math.max(0, current - 4) },
-    { quarter: "Q2", score: Math.max(0, current - 2) },
-    { quarter: "Q3", score: Math.max(0, current - 1) },
-    { quarter: "Q4", score: Math.min(100, current) },
-  ];
+  if (employees.length === 0) return [];
+  const withScore = employees.filter(
+    (e) => getIfrsMetricsView(e.disclosureMetrics)?.transitionReadyScore != null
+  );
+  if (withScore.length === 0) return [];
+  const sum = withScore.reduce(
+    (s, e) => s + (getIfrsMetricsView(e.disclosureMetrics)?.transitionReadyScore ?? 0),
+    0
+  );
+  const current = Math.round(sum / withScore.length);
+  return [{ quarter: "현재", score: Math.max(0, Math.min(100, current)) }];
 }
 
 export function TransitionReadinessTrendChart({ employees }: TransitionReadinessTrendChartProps) {
@@ -36,6 +32,14 @@ export function TransitionReadinessTrendChart({ employees }: TransitionReadiness
   const data = getQuarterlyTrend(employees);
 
   if (!mounted) return null;
+
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[280px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+        전환 준비도 데이터가 없습니다. (실제 DB 기준)
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -68,7 +72,7 @@ export function TransitionReadinessTrendChart({ employees }: TransitionReadiness
               border: "1px solid hsl(var(--border))",
               borderRadius: "var(--radius)",
             }}
-            formatter={(value: number) => [value, "전환 준비도"]}
+            formatter={(value: number | undefined) => [value ?? 0, "전환 준비도"]}
             labelFormatter={(label) => `분기: ${label}`}
           />
           <Area

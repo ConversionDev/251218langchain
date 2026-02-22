@@ -10,13 +10,20 @@ import json
 import logging
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from api.services.resume_analyzer import _normalize_resume_parse_result  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+# 부서 7개 (이력서·성과 샘플 공통, 균등 분포용)
+CANONICAL_DEPARTMENTS = [
+    "인사", "재무", "영업", "마케팅", "개발·IT", "경영지원", "전략·기획",
+]
+# 신입 직급 비율: 인턴 2 : 사원 3
+JOB_TITLES_NEW_HIRE = ["인턴", "인턴", "사원", "사원", "사원"]
 
 # Success DNA 정의 (프롬프트에 포함)
 SUCCESS_DNA_DEFINITIONS = """
@@ -310,6 +317,32 @@ def assign_ids(records: List[Dict[str, Any]], prefix: str = "E") -> List[Dict[st
     return out
 
 
+def apply_new_hire_metadata(
+    records: List[Dict[str, Any]],
+    application_date_start: str = "2025-01-01",
+    application_date_end: str = "2025-06-30",
+) -> None:
+    """
+    신입 샘플에 부서·직급·지원일을 골고루 분포시켜 덮어씀.
+    - 부서: 7개 부서 순환 (인사, 재무, 영업, 마케팅, 개발·IT, 경영지원, 전략·기획)
+    - 직급: 인턴/사원 비율에 따라 순환
+    - applicationDate: start~end 구간 내 균등 분포
+    """
+    start_d = datetime.strptime(application_date_start[:10], "%Y-%m-%d")
+    end_d = datetime.strptime(application_date_end[:10], "%Y-%m-%d")
+    n = len(records)
+    days_range = max(1, (end_d - start_d).days)
+    for i, r in enumerate(records):
+        r["department"] = CANONICAL_DEPARTMENTS[i % len(CANONICAL_DEPARTMENTS)]
+        r["jobTitle"] = JOB_TITLES_NEW_HIRE[i % len(JOB_TITLES_NEW_HIRE)]
+        # 지원일: start~end 구간에 균등 분포
+        day_offset = (i * days_range) // max(1, n) if n else 0
+        day_offset = min(day_offset, days_range - 1)
+        app_d = start_d + timedelta(days=day_offset)
+        r["applicationDate"] = app_d.strftime("%Y-%m-%d")
+        r["status"] = "pending"
+
+
 def save_samples_jsonl(records: List[Dict[str, Any]], path: Path) -> None:
     """EmployeePayload 호환 레코드 리스트를 JSONL로 저장."""
     path = Path(path)
@@ -341,6 +374,7 @@ def run_and_save(
         delay_seconds=delay_seconds,
     )
     records = assign_ids(records)
+    apply_new_hire_metadata(records)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     path = output_dir / f"{filename_prefix}_{timestamp}.jsonl"
     save_samples_jsonl(records, path)

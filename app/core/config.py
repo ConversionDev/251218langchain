@@ -131,6 +131,11 @@ class Settings(BaseSettings):
         description="스트리밍 디버그 로깅 활성화",
     )
 
+    cors_origins: Optional[str] = Field(
+        default=None,
+        description="CORS 허용 오리진. 쉼표 구분 (예: https://app.example.com,https://www.example.com). 비어 있으면 * (전체 허용).",
+    )
+
     # ===================
     # EXAONE 최적화 설정
     # ===================

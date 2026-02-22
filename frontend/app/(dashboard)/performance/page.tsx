@@ -23,6 +23,7 @@ import {
   getAggregateImpactChartData,
   getAggregateDisclosureSummary,
 } from "@/modules/performance/services";
+import { getRegularEmployees } from "@/modules/shared/utils/employeeAggregates";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -30,6 +31,7 @@ export default function PerformancePage() {
   const hydrated = useHydrated();
   const selectedEmployee = useStore((s) => s.selectedEmployee);
   const employees = useStore((s) => s.employees);
+  const regularEmployees = getRegularEmployees(employees);
   const isDisclosureMode = useStore((s) => s.isDisclosureMode);
   const [boardReportOpen, setBoardReportOpen] = useState(false);
   const [simulatedMetrics, setSimulatedMetrics] = useState<PerformanceMetrics | null>(null);
@@ -37,32 +39,32 @@ export default function PerformancePage() {
     setSimulatedMetrics(metrics);
   }, []);
 
-  const isAggregate = !selectedEmployee && employees.length > 0;
+  const isAggregate = !selectedEmployee && regularEmployees.length > 0;
   const metrics = useMemo(
     () =>
       selectedEmployee
         ? getPerformanceMetrics(selectedEmployee)
-        : getAggregatePerformanceMetrics(employees),
-    [selectedEmployee, employees]
+        : getAggregatePerformanceMetrics(regularEmployees),
+    [selectedEmployee, regularEmployees]
   );
   const chartData = useMemo(
     () =>
       selectedEmployee
         ? getImpactChartData(selectedEmployee)
-        : getAggregateImpactChartData(employees),
-    [selectedEmployee, employees]
+        : getAggregateImpactChartData(regularEmployees),
+    [selectedEmployee, regularEmployees]
   );
   const disclosureSummary = useMemo(
     () =>
       selectedEmployee
         ? getDisclosureSummary(selectedEmployee)
-        : getAggregateDisclosureSummary(employees),
-    [selectedEmployee, employees]
+        : getAggregateDisclosureSummary(regularEmployees),
+    [selectedEmployee, regularEmployees]
   );
 
-  /** 전체 평균 시뮬레이터용 평균 DNA */
+  /** 전체 평균 시뮬레이터용 평균 DNA (기존 직원만) */
   const aggregateDna = useMemo((): SuccessDNA | undefined => {
-    if (employees.length === 0) return undefined;
+    if (regularEmployees.length === 0) return undefined;
     const sum = {
       leadership: 0,
       technical: 0,
@@ -71,7 +73,7 @@ export default function PerformancePage() {
       adaptability: 0,
     };
     let count = 0;
-    employees.forEach((e) => {
+    regularEmployees.forEach((e) => {
       if (e.successDna) {
         (Object.keys(sum) as (keyof SuccessDNA)[]).forEach(
           (k) => (sum[k] += e.successDna![k] ?? 0)
@@ -87,7 +89,7 @@ export default function PerformancePage() {
       collaboration: Math.round(sum.collaboration / count),
       adaptability: Math.round(sum.adaptability / count),
     };
-  }, [employees]);
+  }, [regularEmployees]);
 
   if (!hydrated) {
     return (
@@ -102,7 +104,7 @@ export default function PerformancePage() {
     );
   }
 
-  if (!selectedEmployee && employees.length === 0) {
+  if (!selectedEmployee && regularEmployees.length === 0) {
     return (
       <div className="report-grid-bg flex min-h-[60vh] items-center justify-center rounded-xl p-8">
         <motion.div
@@ -120,12 +122,12 @@ export default function PerformancePage() {
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             인적 자본 가치 분석을 시작하려면 직원을 선택해주세요.
             <br />
-            Core에서 직원을 선택한 뒤 이 페이지에서 리포트를 확인할 수 있습니다.
+            기존 직원에서 직원을 선택한 뒤 이 페이지에서 리포트를 확인할 수 있습니다.
           </p>
-          <Link href="/core" className="mt-6">
+          <Link href="/core/employees" className="mt-6">
             <Button className="inline-flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Core에서 직원 선택하기
+              기존 직원에서 직원 선택하기
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
@@ -134,11 +136,11 @@ export default function PerformancePage() {
     );
   }
 
-  const reportTitle = isAggregate ? "Performance 리포트 (전체 임직원 평균)" : "Performance 리포트";
+  const reportTitle = isAggregate ? "성과·가치 리포트 (전체 임직원 평균)" : "성과·가치 리포트";
   const reportSubtitle = isAggregate
-    ? `${employees.length}명 기준 평균 인적 자본 가치 · 개인 분석은 Core에서 직원 선택`
-    : "Core · Intelligence · Credential 통합 인적 자본 가치";
-  const summaryName = isAggregate ? `전체 임직원 (${employees.length}명 평균)` : selectedEmployee!.name;
+    ? `${regularEmployees.length}명 기준 평균 인적 자본 가치 · 개인 분석은 기존 직원에서 직원 선택`
+    : "핵심 인사 · 역량 진단 · 자격 검증 통합 인적 자본 가치";
+  const summaryName = isAggregate ? `전체 임직원 (${regularEmployees.length}명 평균)` : selectedEmployee!.name;
 
   return (
     <div
@@ -154,7 +156,7 @@ export default function PerformancePage() {
           <div>
             <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
               <LineChart className="h-3.5 w-3.5 shrink-0" />
-              <span className="text-xs">Total Performance: 정형·비정형 데이터 통합 성과 리포트</span>
+              <span className="text-xs">성과·가치: 정형·비정형 데이터 통합 리포트</span>
             </div>
             <h1 className="text-2xl font-bold text-foreground">{reportTitle}</h1>
             <p className="mt-1 text-muted-foreground">{reportSubtitle}</p>

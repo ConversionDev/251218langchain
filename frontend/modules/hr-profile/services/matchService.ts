@@ -115,7 +115,7 @@ export function getDepartmentMatches(employee: Employee): DepartmentMatch[] {
   }
 
   // 적응력 DNA > 75 && 경력/기술 다양 → 전략기획팀
-  if (adaptability > 75 && (expText.length > 20 || resume?.experience?.length >= 2)) {
+  if (adaptability > 75 && (expText.length > 20 || (resume?.experience?.length ?? 0) >= 2)) {
     matches.push({
       department: "전략기획팀",
       score: Math.min(85, 60 + Math.floor(adaptability / 3)),

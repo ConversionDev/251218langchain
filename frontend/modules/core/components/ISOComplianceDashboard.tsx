@@ -19,13 +19,17 @@ import {
 } from "recharts";
 import { Users, FileCheck, Clock } from "lucide-react";
 import type { Employee } from "@/modules/shared/types";
-import { GENDER_CHART_COLORS, BRAND_CHART_COLORS } from "@/modules/shared/constants/chartColors";
+import {
+  GENDER_CHART_COLORS,
+  BRAND_CHART_COLORS,
+  AGE_GROUP_BAR_COLORS,
+  DEPARTMENT_BAR_COLORS,
+} from "@/modules/shared/constants/chartColors";
 import {
   getGenderDistribution,
   getAgeGroupDistribution,
   getDepartmentHeadcount,
 } from "@/modules/shared/utils/employeeAggregates";
-import { INITIAL_EMPLOYEES } from "../services";
 
 interface ISOComplianceDashboardProps {
   employees: Employee[];
@@ -40,10 +44,10 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
 
   const { genderData, ageBarData, headcountByDeptComposed, totalCount, completeness, avgTrainingHours } =
     useMemo(() => {
-      const source = employees.length > 0 ? employees : INITIAL_EMPLOYEES;
+      const source = employees ?? [];
       const total = source.length;
 
-      const isoFields: (keyof Employee)[] = ["gender", "ageBand", "employmentType", "trainingHours"];
+      const isoFields: (keyof Employee)[] = ["gender", "age", "employmentType", "trainingHours"];
       let filled = 0;
       source.forEach((e) => {
         filled += isoFields.filter((f) => {
@@ -59,7 +63,7 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
         genderData: getGenderDistribution(source),
         ageBarData: getAgeGroupDistribution(source),
         headcountByDeptComposed: getDepartmentHeadcount(source),
-        totalCount: source.length,
+        totalCount: total,
         completeness,
         avgTrainingHours,
       };
@@ -196,12 +200,15 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
                   />
                   <Bar
                     dataKey="인원"
-                    fill={BRAND_CHART_COLORS.primary}
                     barSize={38}
                     radius={[4, 4, 0, 0]}
                     animationBegin={0}
                     animationDuration={600}
-                  />
+                  >
+                    {ageBarData.map((_, i) => (
+                      <Cell key={i} fill={AGE_GROUP_BAR_COLORS[i % AGE_GROUP_BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -262,13 +269,16 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
                 <Bar
                   yAxisId="left"
                   dataKey="총인원"
-                  fill={BRAND_CHART_COLORS.primary}
                   barSize={30}
                   radius={[4, 4, 0, 0]}
                   name="총 인원"
                   animationBegin={0}
                   animationDuration={600}
-                />
+                >
+                  {headcountByDeptComposed.map((_, i) => (
+                    <Cell key={i} fill={DEPARTMENT_BAR_COLORS[i % DEPARTMENT_BAR_COLORS.length]} />
+                  ))}
+                </Bar>
                 <Line
                   yAxisId="right"
                   type="monotone"

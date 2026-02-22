@@ -91,6 +91,20 @@ def get_resume_samples_dir() -> Path:
     return d
 
 
+def get_performance_data_dir() -> Path:
+    """성과 관련 데이터. 회의록/보고서/이메일 샘플 등. app/data/performance/"""
+    d = get_data_dir() / "performance"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_performance_samples_dir() -> Path:
+    """성과 샘플(JSONL) 저장. app/data/performance/samples/"""
+    d = get_performance_data_dir() / "samples"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_output_dir() -> Path:
     """출력 디렉토리 경로 반환.
 

@@ -17,7 +17,7 @@ export interface SuccessDNA {
   adaptability: number;
 }
 
-/** IFRS S1/S2 공시용 인적 자본 지표 */
+/** IFRS S1/S2 공시용 인적 자본 지표 (UI/레거시 뷰) */
 export interface IfrsMetrics {
   /** S2 기후/산업 전환 준비도 (0–100) */
   transitionReadyScore: number;
@@ -27,6 +27,43 @@ export interface IfrsMetrics {
   humanCapitalROI: number;
 }
 
+/**
+ * 공시 지표 한 건 — 표준·코드·지표명·단위·검증·근거를 함께 저장.
+ * disclosure_metrics의 items[]에 이 구조 사용. (제안 구조: standard/code/name/value/unit/status/source_id)
+ */
+export interface DisclosureMetricItem {
+  /** 기준 표준 (예: "ISO 30414", "IFRS S1", "IFRS S2") */
+  standard: string;
+  /** 표준 내 항목 코드 (예: "4.7.1", "B14"). 하위 호환: categoryCode */
+  code?: string;
+  /** 지표명 (예: "Total training hours"). 하위 호환: description */
+  name?: string;
+  /** 수치 값 */
+  value: number;
+  /** 단위 (예: "hours", "percent", "ratio") */
+  unit: string;
+  /** 검증 상태 (예: "verified") */
+  status?: string;
+  /** 추출 근거(원문) — 파일명·문서 ID (예: survey_2025_01) */
+  source_id?: string;
+  /** 측정/기준일 (YYYY-MM-DD) */
+  measuredAt?: string;
+  /** @deprecated 하위 호환용. 신규는 code 사용 */
+  categoryCode?: string;
+  /** @deprecated 하위 호환용. 신규는 name 사용 */
+  description?: string;
+  /** @deprecated 하위 호환용. 신규는 source_id 사용 */
+  source?: string;
+}
+
+/**
+ * DB/API에 저장되는 공시 지표 — 레거시 flat 객체 또는 객체 배열.
+ * UI는 getIfrsMetricsView()로 IfrsMetrics 뷰를 쓰면 됨.
+ */
+export type DisclosureMetricsPayload =
+  | IfrsMetrics
+  | { items: DisclosureMetricItem[] };
+
 /** 성별 (ISO 30414) */
 export type Gender = "male" | "female" | "other" | "undisclosed";
 
@@ -34,7 +71,10 @@ export type Gender = "male" | "female" | "other" | "undisclosed";
 export type AgeBand = "under30" | "30-39" | "40-49" | "50-59" | "60over";
 
 /** 고용 형태 (ISO 30414) */
-export type EmploymentType = "regular" | "contract" | "part_time" | "intern";
+export type EmploymentType = "regular" | "contract" | "part_time" | "intern" | "new_hire";
+
+/** 채용 상태 (ATS) */
+export type RecruitStatus = "pending" | "screening" | "hired" | "rejected";
 
 /** 정형화된 이력 정보 (HR Profile / 이력서) */
 export interface Resume {
@@ -105,7 +145,9 @@ export interface Employee {
   department: string;
   /** 이메일 (선택) */
   email?: string;
-  /** 입사일 (선택) */
+  /** 지원일 YYYY-MM-DD (지원서 제출일). 입사지원 시 저장 */
+  applicationDate?: string;
+  /** 입사일 YYYY-MM-DD. 입사 확정 후 설정, 지원 시점에는 미설정 */
   joinedAt?: string;
   /** Success DNA 역량 점수 (선택) */
   successDna?: SuccessDNA;
@@ -115,11 +157,13 @@ export interface Employee {
   behavioralSource?: string;
   /** 분석에 사용된 원문 목록 — UI에서 회의록/이메일/슬랙 내용 직접 확인용 */
   behavioralSourceItems?: BehavioralSourceItem[];
-  /** IFRS 공시 지표 (선택) */
-  ifrsMetrics?: IfrsMetrics;
-  /** 성별 (ISO 30414) */
+  /** 공시 지표 (선택). IFRS/ISO 30414 등 다중 표준. 레거시 flat 또는 items[] */
+  disclosureMetrics?: DisclosureMetricsPayload;
+  /** 성별 (남/여/미기입) */
   gender?: Gender;
-  /** 연령대 (ISO 30414) */
+  /** 연령(만 나이). 연령대는 이 값으로 파생 */
+  age?: number;
+  /** 연령대. API 응답 시 age로부터 파생된 값 (저장 컬럼 없음) */
   ageBand?: AgeBand;
   /** 고용 형태 (ISO 30414) */
   employmentType?: EmploymentType;
@@ -127,8 +171,16 @@ export interface Employee {
   trainingHours?: number;
   /** 정형화된 이력 정보 (학력·경력·기술·자격증) */
   resume?: Resume;
+  /** 이력서 파일 SHA-256 (동일 이력서 중복 등록 방지, API 전송용) */
+  resumeFileHash?: string;
   /** 시스템 추천 부서 (매칭 결과) */
   matchedDepartment?: string;
+  /** 채용 상태 (ATS): pending(미검토)|screening(심사 중)|hired(합격)|rejected(탈락) */
+  status?: RecruitStatus | null;
+  /** AI 평가 근거 (Success DNA 점수 산정 이유, ATS 관리자 수동 수정 가능) */
+  successDnaReason?: string | null;
+  /** 탈락 사유 (ATS 관리자가 탈락 처리 시 입력) */
+  rejectionReason?: string | null;
 }
 
 /** 비정형 분석 출처 한 건 (회의록·이메일·슬랙 등 원문 노출용) */

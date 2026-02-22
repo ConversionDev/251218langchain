@@ -2,46 +2,35 @@
 
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
-import type { SuccessDNA } from "@/modules/shared/types";
+import type { Employee, SuccessDNA } from "@/modules/shared/types";
 import { CompanyDNARadarChart } from "./CompanyDNARadarChart";
 import { PeopleCompositionCharts } from "./PeopleCompositionCharts";
 import { TransitionReadinessTrendChart } from "./TransitionReadinessTrendChart";
 
-const DEFAULT_AVERAGE_DNA: SuccessDNA = {
-  leadership: 70,
-  technical: 72,
-  creativity: 68,
-  collaboration: 75,
-  adaptability: 74,
-};
-
-function useCompanyAverageDNA(): SuccessDNA {
-  const employees = useStore((s) => s.employees);
-  return useMemo(() => {
-    const withDna = employees.filter((e) => e.successDna);
-    if (withDna.length === 0) return DEFAULT_AVERAGE_DNA;
-    const sum: SuccessDNA = {
-      leadership: 0,
-      technical: 0,
-      creativity: 0,
-      collaboration: 0,
-      adaptability: 0,
-    };
-    withDna.forEach((e) => {
-      const d = e.successDna!;
-      (Object.keys(sum) as (keyof SuccessDNA)[]).forEach((k) => (sum[k] += d[k] ?? 0));
-    });
-    const n = withDna.length;
-    return {
-      leadership: Math.round(sum.leadership / n),
-      technical: Math.round(sum.technical / n),
-      creativity: Math.round(sum.creativity / n),
-      collaboration: Math.round(sum.collaboration / n),
-      adaptability: Math.round(sum.adaptability / n),
-    };
-  }, [employees]);
+/** 전사 평균 Success DNA. 역량 데이터가 한 건도 없으면 null (목 데이터 사용 안 함) */
+function getCompanyAverageDNA(employees: Employee[]): SuccessDNA | null {
+  const withDna = employees.filter((e) => e.successDna);
+  if (withDna.length === 0) return null;
+  const sum: SuccessDNA = {
+    leadership: 0,
+    technical: 0,
+    creativity: 0,
+    collaboration: 0,
+    adaptability: 0,
+  };
+  withDna.forEach((e) => {
+    const d = e.successDna!;
+    (Object.keys(sum) as (keyof SuccessDNA)[]).forEach((k) => (sum[k] += d[k] ?? 0));
+  });
+  const n = withDna.length;
+  return {
+    leadership: Math.round(sum.leadership / n),
+    technical: Math.round(sum.technical / n),
+    creativity: Math.round(sum.creativity / n),
+    collaboration: Math.round(sum.collaboration / n),
+    adaptability: Math.round(sum.adaptability / n),
+  };
 }
 
 function ChartSkeleton({ className }: { className?: string }) {
@@ -50,10 +39,16 @@ function ChartSkeleton({ className }: { className?: string }) {
   );
 }
 
-export function DashboardVisualization() {
+interface DashboardVisualizationProps {
+  employees: Employee[];
+}
+
+export function DashboardVisualization({ employees }: DashboardVisualizationProps) {
   const hydrated = useHydrated();
-  const employees = useStore((s) => s.employees);
-  const companyAverageDNA = useCompanyAverageDNA();
+  const companyAverageDNA = useMemo(
+    () => getCompanyAverageDNA(employees),
+    [employees]
+  );
 
   if (!hydrated) {
     return (
@@ -104,11 +99,17 @@ export function DashboardVisualization() {
         <CardHeader>
           <h2 className="text-lg font-semibold text-foreground">전사 평균 역량 DNA</h2>
           <p className="text-sm text-muted-foreground">
-            전체 직원의 Success DNA 5대 역량 평균을 레이더로 표시합니다.
+            전체 직원의 Success DNA 5대 역량 평균을 레이더로 표시합니다. (실제 DB 기준)
           </p>
         </CardHeader>
         <CardContent>
-          <CompanyDNARadarChart data={companyAverageDNA} />
+          {companyAverageDNA ? (
+            <CompanyDNARadarChart data={companyAverageDNA} />
+          ) : (
+            <div className="flex h-[320px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+              역량 데이터가 없습니다. 직원에 AI 분석을 적용하면 차트가 표시됩니다.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -116,7 +117,7 @@ export function DashboardVisualization() {
         <CardHeader>
           <h2 className="text-lg font-semibold text-foreground">인적 자본 구성</h2>
           <p className="text-sm text-muted-foreground">
-            성별·고용 형태 분포와 부서별 인원 현황입니다.
+            성별·고용 형태 분포와 부서별 인원 현황입니다. (실제 DB 기준)
           </p>
         </CardHeader>
         <CardContent>
@@ -128,7 +129,7 @@ export function DashboardVisualization() {
         <CardHeader>
           <h2 className="text-lg font-semibold text-foreground">조직 역량 성장 추이</h2>
           <p className="text-sm text-muted-foreground">
-            분기별 전사 평균 전환 준비도(Transition Readiness) 추이입니다.
+            전사 평균 전환 준비도. (실제 DB 기준)
           </p>
         </CardHeader>
         <CardContent>

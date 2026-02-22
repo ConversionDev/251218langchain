@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Moon, Sun } from "lucide-react";
+import { BriefcaseBusiness, Moon, Sun } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
@@ -49,7 +50,7 @@ function DisclosureModeSwitch() {
     toast.success(
       isDisclosureMode
         ? "일반 보기 모드로 전환되었습니다."
-        : "공식 공시 모드(Official Mode)로 전환되었습니다. 지표가 IFRS 표준 용어로 표기됩니다."
+        : "공식 공시 모드로 전환되었습니다. 지표가 IFRS 표준 용어로 표기됩니다."
     );
   };
 
@@ -78,25 +79,44 @@ function DisclosureModeSwitch() {
 export function Header() {
   const hydrated = useHydrated();
   const selectedEmployee = useStore((s) => s.selectedEmployee);
+  const setSelectedEmployee = useStore((s) => s.setSelectedEmployee);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/20 bg-white/60 px-8 backdrop-blur-md dark:border-white/10 dark:bg-[#0f0f0f]/90">
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-semibold text-foreground">Success DNA</h1>
         {hydrated && selectedEmployee !== null && (
-          <span className="text-sm text-muted-foreground">
-            조회 중: <strong className="text-foreground">{selectedEmployee.name}</strong>
-            {selectedEmployee.department && (
-              <span className="ml-1">({selectedEmployee.department})</span>
-            )}
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              선택 직원: <strong className="text-foreground">{selectedEmployee.name}</strong>
+              {selectedEmployee.department && (
+                <span className="ml-1">({selectedEmployee.department})</span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedEmployee(null)}
+              className="rounded px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="선택 해제"
+            >
+              선택 해제
+            </button>
           </span>
         )}
       </div>
       {hydrated && (
         <div className="flex items-center gap-3">
+          <Link
+            href="/workspace"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+            title="직원 업무 서비스로 이동"
+          >
+            <BriefcaseBusiness className="h-4 w-4" />
+            직원 서비스
+          </Link>
           <ThemeToggle />
           <span className="text-sm font-medium text-muted-foreground">
-            공시 모드 (Disclosure Mode)
+            공시 모드
           </span>
           <DisclosureModeSwitch />
         </div>

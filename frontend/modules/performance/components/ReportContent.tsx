@@ -40,15 +40,15 @@ export function ReportContent({
               </h2>
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <div className="rounded-lg bg-slate-50 p-3">
-                  <p className="text-[10px] text-slate-500">Human Capital ROI</p>
+                  <p className="text-[10px] text-slate-500">인적자본 투자수익률</p>
                   <p className="text-lg font-bold text-slate-900">{metrics.humanCapitalROI.toFixed(2)}</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-3">
-                  <p className="text-[10px] text-slate-500">Sustainability Impact</p>
+                  <p className="text-[10px] text-slate-500">지속가능 기여도</p>
                   <p className="text-lg font-bold text-slate-900">{metrics.sustainabilityImpact}점</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-3">
-                  <p className="text-[10px] text-slate-500">Performance Index</p>
+                  <p className="text-[10px] text-slate-500">성과 지수</p>
                   <p className="text-lg font-bold text-slate-900">{metrics.performanceIndex}점</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-3">

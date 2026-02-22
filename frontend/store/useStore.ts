@@ -16,9 +16,12 @@ export interface AppState {
   isDisclosureMode: boolean;
   /** 직원 목록 (Core CRUD) */
   employees: Employee[];
+  /** ATS AI 분석 중인 직원 ID (다른 탭 갔다 와도 분석 중 표시 유지) */
+  analyzingEmployeeId: string | null;
 }
 
 export interface AppActions {
+  setAnalyzingEmployeeId: (id: string | null) => void;
   setSelectedEmployee: (employee: Employee | null) => void;
   setDisclosureMode: (value: boolean) => void;
   toggleDisclosureMode: () => void;
@@ -34,12 +37,14 @@ const initialState: AppState = {
   selectedEmployee: null,
   isDisclosureMode: false,
   employees: [],
+  analyzingEmployeeId: null,
 };
 
 export const useStore = create<AppStore>()(
   persist(
     (set) => ({
       ...initialState,
+      setAnalyzingEmployeeId: (id) => set({ analyzingEmployeeId: id }),
       setSelectedEmployee: (employee) => set({ selectedEmployee: employee }),
       setDisclosureMode: (value) => set({ isDisclosureMode: value }),
       toggleDisclosureMode: () =>

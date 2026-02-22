@@ -1,32 +1,82 @@
-# Cursor AI 인덱싱에서 제외할 파일/디렉토리
-# 이 파일은 Cursor의 자동 완성 및 프롬프트 성능을 최적화하기 위한 것입니다.
+# Cursor AI 인덱싱 제외 — 대용량·캐시·빌드 전부 제외 (실행/빌드에는 영향 없음)
+# Git 제외는 .gitignore 참고
+# 사용법: 이 내용을 .cursorignore 에 덮어쓰거나, 터미널에서: copy cursorignore.txt .cursorignore
 
-# 대용량 데이터 파일
-app/data/*.csv
-app/data/*.jsonl
-app/data/sft_dataset/
-
-# 로그 파일
-*.log
-
-# IDE 설정
-.vscode/
-.idea/
-
-# 이미 .gitignore에 있는 항목들도 명시적으로 추가 (Cursor 인덱싱 최적화)
+# ——— 의존성·패키지 ———
 node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+.yarn/
+.pnpm-store/
+
+# ——— Python ———
 __pycache__/
-*.pyc
+**/__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+**/.venv/
+**/venv/
+*.egg-info/
+.eggs/
+.ruff_cache/
+.mypy_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# ——— 프론트엔드 빌드·캐시 ———
 .next/
+**/.next/
+out/
+**/out/
 dist/
+**/dist/
 build/
+**/build/
+.vercel/
+.turbo/
+.swc/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+storybook-static/
+coverage/
+.nyc_output/
+
+# ——— 앱·학습 아티팩트·캐시 ———
 app/artifacts/
 app/unsloth_compiled_cache/
 app/core/resource_manager/unsloth_compiled_cache/
+libs/
 
-# Flutter 빌드/캐시 (인덱싱 제외 시 서버·IDE 부하 감소)
-flutter/build/
+# ——— 대용량 데이터 (로컬/생성물) ———
+app/data/*.csv
+app/data/*.jsonl
+app/data/sft_dataset/
+app/data/disclosure/
+app/data/competency_anchors/prepared/
+app/data/competency_anchors/sft/
+
+# ——— 로그·임시 ———
+*.log
+*.tmp
+*.temp
+*.bak
+
+# ——— IDE·OS ———
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ——— Flutter ———
 flutter/.dart_tool/
+flutter/.packages
+flutter/pub.dartlang.org/
+flutter/build/
 flutter/android/build/
 flutter/ios/build/
 flutter/.idea/
+flutter/**/xcuserdata/

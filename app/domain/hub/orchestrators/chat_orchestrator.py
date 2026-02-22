@@ -67,11 +67,18 @@ def run_agent(
             user_text = caption
             logger.info("[이미지→RAG] 캡션 추출 후 쿼리 사용: %s", (caption[:80] + "…") if len(caption) > 80 else caption)
 
-    messages_list: List[BaseMessage] = []
-    base_prompt = system_prompt or (
+    _DEFAULT_SYSTEM = (
         "당신은 도움이 되는 AI 어시스턴트입니다. "
         "답변은 일반 텍스트(문단)로만 작성하고, ```json 또는 불필요한 코드 블록을 사용하지 마세요."
     )
+    _HR_TOOLS_GUIDE = (
+        "HR 관련 질문 시 반드시 아래 도구를 사용하세요: "
+        "직원 수·등록 인원·공시/RAG 적재 상태 질문 → get_hr_summary 도구 호출. "
+        "특정 직원(이름) 정보·설명 질문 → get_employee_info(이름) 도구 호출. "
+        "문서/용어 검색 → RAG로 제공된 컨텍스트 또는 search_documents·define 활용."
+    )
+    messages_list: List[BaseMessage] = []
+    base_prompt = _DEFAULT_SYSTEM + "\n\n" + _HR_TOOLS_GUIDE + ("\n\n" + system_prompt if system_prompt else "")
     if semantic_action and semantic_action in _SEMANTIC_LABELS:
         label = _SEMANTIC_LABELS[semantic_action]
         base_prompt = base_prompt + "\n\n" + _SEMANTIC_PROMPT.format(label=label)
@@ -131,11 +138,18 @@ async def run_agent_stream(
             user_text = caption
             logger.info("[이미지→RAG] 캡션 추출 후 쿼리 사용: %s", (caption[:80] + "…") if len(caption) > 80 else caption)
 
-    messages: List[BaseMessage] = []
-    base_prompt = system_prompt or (
+    _DEFAULT_SYSTEM = (
         "당신은 도움이 되는 AI 어시스턴트입니다. "
         "답변은 일반 텍스트(문단)로만 작성하고, ```json 또는 불필요한 코드 블록을 사용하지 마세요."
     )
+    _HR_TOOLS_GUIDE = (
+        "HR 관련 질문 시 반드시 아래 도구를 사용하세요: "
+        "직원 수·등록 인원·공시/RAG 적재 상태 질문 → get_hr_summary 도구 호출. "
+        "특정 직원(이름) 정보·설명 질문 → get_employee_info(이름) 도구 호출. "
+        "문서/용어 검색 → RAG로 제공된 컨텍스트 또는 search_documents·define 활용."
+    )
+    messages: List[BaseMessage] = []
+    base_prompt = _DEFAULT_SYSTEM + "\n\n" + _HR_TOOLS_GUIDE + ("\n\n" + system_prompt if system_prompt else "")
     if semantic_action and semantic_action in _SEMANTIC_LABELS:
         label = _SEMANTIC_LABELS[semantic_action]
         base_prompt = base_prompt + "\n\n" + _SEMANTIC_PROMPT.format(label=label)

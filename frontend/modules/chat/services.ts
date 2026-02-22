@@ -10,22 +10,35 @@ const API_BASE =
     ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
     : "http://localhost:8000";
 
+export interface SourceItem {
+  table?: string;
+  id?: number;
+  source?: string;
+  page?: string | number;
+  standard_type?: string;
+  section_title?: string;
+  unique_id?: string;
+}
+
 export interface StreamEvent {
   content?: string;
   context_preview?: string | null;
+  sources?: SourceItem[] | null;
   semantic_action?: string | null;
   error?: string;
 }
 
-/** 채팅 첨부용 파일 업로드. POST /api/agent/upload → file_ids */
+/** 채팅 첨부용 파일 업로드 (이미지 + 문서). POST /api/agent/upload → file_ids */
 export async function uploadChatFiles(
-  files: Blob[],
-  options?: { signal?: AbortSignal }
+  files: (Blob | File)[],
+  options?: { fileNames?: string[]; signal?: AbortSignal }
 ): Promise<{ file_ids: string[] }> {
   const form = new FormData();
-  files.forEach((blob, i) => {
-    const ext = blob.type?.startsWith("image/png") ? "png" : "jpg";
-    form.append("files", blob, `image_${i}.${ext}`);
+  const names = options?.fileNames;
+  files.forEach((file, i) => {
+    const name =
+      names?.[i] ?? (file instanceof File ? file.name : `image_${i}.${file.type?.startsWith("image/png") ? "png" : "jpg"}`);
+    form.append("files", file, name);
   });
   const res = await fetch(`${API_BASE}/api/agent/upload`, {
     method: "POST",
@@ -45,6 +58,7 @@ export async function sendChatMessageStream(
   callbacks: {
     onChunk: (content: string) => void;
     onContextPreview?: (preview: string | null) => void;
+    onSources?: (sources: SourceItem[] | null) => void;
     onDone?: () => void;
     onError?: (message: string) => void;
   },
@@ -102,6 +116,7 @@ export async function sendChatMessageStream(
             if (event?.content != null) callbacks.onChunk(event.content);
             if (event?.context_preview !== undefined)
               callbacks.onContextPreview?.(event.context_preview ?? null);
+            if (event?.sources !== undefined) callbacks.onSources?.(event.sources ?? null);
             if (event?.error) callbacks.onError?.(event.error);
           } catch {
             // ignore non-JSON
@@ -117,6 +132,7 @@ export async function sendChatMessageStream(
           if (event?.content != null) callbacks.onChunk(event.content);
           if (event?.context_preview !== undefined)
             callbacks.onContextPreview?.(event.context_preview ?? null);
+          if (event?.sources !== undefined) callbacks.onSources?.(event.sources ?? null);
           if (event?.error) callbacks.onError?.(event.error);
         } catch {
           // ignore

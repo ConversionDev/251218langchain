@@ -8,7 +8,7 @@
 - /static/clustering: 클러스터 시각화 HTML (데이터 지도)
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
@@ -17,6 +17,8 @@ def register_routes(
     app: FastAPI,
     mcp_app,
     *,
+    activity_router,
+    audit_router,
     chat_router,
     disclosure_router,
     document_router,
@@ -38,6 +40,8 @@ def register_routes(
     app.mount("/internal/mcp/chat-spoke", get_chat_spoke_http_app())
 
     # 통합 API: prefix /api 로 일원화
+    app.include_router(activity_router, prefix="/api")  # /api/activity-records (성과 활동 통합)
+    app.include_router(audit_router, prefix="/api")  # /api/audit/logs
     app.include_router(chat_router, prefix="/api")  # /api/agent/...
     app.include_router(disclosure_router, prefix="/api")  # /api/disclosure/...
     app.include_router(document_router, prefix="/api")  # /api/document/...
@@ -58,12 +62,62 @@ def register_routes(
     clustering_dir = get_clustering_dir()
     map_path = clustering_dir / "competency_map.html"
 
+    def _apply_dark_theme_to_map_html(html: str) -> str:
+        """Plotly 정적 HTML에 다크모드 스타일/relayout 스크립트 주입."""
+        dark_style = """
+<style>
+  html, body { margin: 0; background: #0f1115 !important; color: #e5e7eb !important; }
+  .plot-container, .plotly, .js-plotly-plot { background: #0f1115 !important; }
+</style>
+"""
+        dark_script = """
+<script>
+  (function () {
+    function apply() {
+      if (!window.Plotly) return;
+      var plots = document.querySelectorAll('.js-plotly-plot');
+      plots.forEach(function (p) {
+        try {
+          window.Plotly.relayout(p, {
+            paper_bgcolor: '#0f1115',
+            plot_bgcolor: '#0f1115',
+            font: { color: '#e5e7eb' },
+            legend: { font: { color: '#e5e7eb' } },
+            xaxis: { gridcolor: 'rgba(148,163,184,0.18)', zerolinecolor: 'rgba(148,163,184,0.22)' },
+            yaxis: { gridcolor: 'rgba(148,163,184,0.18)', zerolinecolor: 'rgba(148,163,184,0.22)' },
+          });
+        } catch (_) {}
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', apply);
+    } else {
+      apply();
+    }
+    window.addEventListener('load', apply);
+  })();
+</script>
+"""
+        out = html
+        if "</head>" in out:
+            out = out.replace("</head>", dark_style + "\n</head>", 1)
+        else:
+            out = dark_style + out
+        if "</body>" in out:
+            out = out.replace("</body>", dark_script + "\n</body>", 1)
+        else:
+            out = out + dark_script
+        return out
+
     @app.get("/api/clustering/map")
-    async def serve_clustering_map():
+    async def serve_clustering_map(theme: str | None = Query(None, description="light|dark")):
         """데이터 지도 HTML. iframe에서 보이도록 frame-ancestors 허용."""
         if not map_path.exists():
             raise HTTPException(status_code=404, detail="competency_map.html not found. Run run_competency_visualization first.")
         body = map_path.read_bytes()
+        if (theme or "").strip().lower() == "dark":
+            text = body.decode("utf-8", errors="ignore")
+            body = _apply_dark_theme_to_map_html(text).encode("utf-8")
         return Response(
             content=body,
             media_type="text/html; charset=utf-8",

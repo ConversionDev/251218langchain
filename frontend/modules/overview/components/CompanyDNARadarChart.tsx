@@ -62,12 +62,12 @@ export function CompanyDNARadarChart({ data }: CompanyDNARadarChartProps) {
         <PolarGrid stroke="hsl(var(--border))" />
         <PolarAngleAxis
           dataKey="dimension"
-          tick={({ payload, x, y }: { payload?: { value?: string }; x: number; y: number }) => {
+          tick={({ payload, x, y }: { payload?: { value?: string }; x?: string | number; y?: string | number }) => {
             const label = payload?.value ?? "";
             const key = LABEL_TO_KEY[label];
             const fill = key ? DNA_DIMENSION_COLORS[key] : "hsl(var(--foreground))";
             return (
-              <g transform={`translate(${x},${y})`}>
+              <g transform={`translate(${Number(x ?? 0)},${Number(y ?? 0)})`}>
                 <text textAnchor="middle" fill={fill} fontSize={12} fontWeight={500}>
                   {label}
                 </text>
@@ -94,7 +94,7 @@ export function CompanyDNARadarChart({ data }: CompanyDNARadarChartProps) {
             border: "1px solid hsl(var(--border))",
             borderRadius: "var(--radius)",
           }}
-          formatter={(value: number) => [`${value}점`, "전사 평균"]}
+          formatter={(value: number | undefined) => [`${value ?? 0}점`, "전사 평균"]}
           labelFormatter={(label) => `역량: ${label}`}
         />
       </RadarChart>

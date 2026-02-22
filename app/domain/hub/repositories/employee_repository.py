@@ -6,7 +6,7 @@
 RAG: embedding_content·embedding·FAISS/pgvector 검색 지원.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.documents import Document
@@ -35,6 +35,34 @@ def _age_band_from_age(age: Optional[int]) -> Optional[str]:
     return "60over"
 
 
+def _application_date_to_api(val: Any) -> Optional[str]:
+    """DB application_date(datetime | None) → API용 ISO 문자열."""
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return str(val) if val else None
+
+
+def _parse_application_date(val: Any) -> Optional[datetime]:
+    """API/JSONL의 applicationDate(문자열 또는 datetime) → DB 저장용 datetime."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+    if not isinstance(val, str) or not val.strip():
+        return None
+    s = val.strip()
+    try:
+        if "T" in s or " " in s:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        else:
+            dt = datetime.strptime(s[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
 def _row_to_dict(row: Employee) -> Dict[str, Any]:
     """ORM 행 → 프론트 호환 camelCase dict."""
     return {
@@ -43,9 +71,11 @@ def _row_to_dict(row: Employee) -> Dict[str, Any]:
         "jobTitle": row.job_title or "",
         "department": row.department or "",
         "email": row.email,
-        "applicationDate": getattr(row, "application_date", None),
+        "applicationDate": _application_date_to_api(getattr(row, "application_date", None)),
         "joinedAt": row.joined_at,
         "successDna": row.success_dna,
+        "successDnaReason": getattr(row, "success_dna_reason", None),
+        "rejectionReason": getattr(row, "rejection_reason", None),
         "behavioralDna": row.behavioral_dna,
         "behavioralSource": row.behavioral_source,
         "behavioralSourceItems": row.behavioral_source_items,
@@ -58,6 +88,7 @@ def _row_to_dict(row: Employee) -> Dict[str, Any]:
         "resume": row.resume,
         "resumeFileHash": row.resume_file_hash,
         "matchedDepartment": row.matched_department,
+        "status": getattr(row, "status", None),
     }
 
 
@@ -71,6 +102,8 @@ def _apply_payload(row: Employee, data: Dict[str, Any]) -> None:
         ("applicationDate", "application_date"),
         ("joinedAt", "joined_at"),
         ("successDna", "success_dna"),
+        ("successDnaReason", "success_dna_reason"),
+        ("rejectionReason", "rejection_reason"),
         ("behavioralDna", "behavioral_dna"),
         ("behavioralSource", "behavioral_source"),
         ("behavioralSourceItems", "behavioral_source_items"),
@@ -82,10 +115,15 @@ def _apply_payload(row: Employee, data: Dict[str, Any]) -> None:
         ("resume", "resume"),
         ("resumeFileHash", "resume_file_hash"),
         ("matchedDepartment", "matched_department"),
+        ("status", "status"),
     )
     for key, attr in mapping:
-        if key in data:
-            setattr(row, attr, data[key])
+        if key not in data:
+            continue
+        val = data[key]
+        if key == "applicationDate" and attr == "application_date":
+            val = _parse_application_date(val) if val is not None else None
+        setattr(row, attr, val)
 
 
 def find_by_resume_hash(db: Session, resume_hash: str) -> Optional[Dict[str, Any]]:
@@ -109,6 +147,9 @@ def create(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         existing_by_hash = db.query(Employee).filter(Employee.resume_file_hash == resume_hash).first()
         if existing_by_hash:
             raise ValueError("ALREADY_EXISTS")
+    # 지원 접수(신입) 시 상태는 항상 미검토. AI 분석 API에서만 screening으로 변경.
+    if (data.get("employmentType") or "").strip().lower() == "new_hire":
+        data = {**data, "status": "pending"}
     row = Employee(id=eid, name=data.get("name", ""), job_title=data.get("jobTitle", ""), department=data.get("department", ""))
     _apply_payload(row, data)
     db.add(row)
@@ -123,10 +164,81 @@ def get_by_id(db: Session, eid: str) -> Optional[Dict[str, Any]]:
     return _row_to_dict(row) if row else None
 
 
+def find_by_name(db: Session, name_part: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """이름에 name_part가 포함된 직원 목록 조회 (부분 일치). 채팅/도구에서 개별 직원 질문 시 사용."""
+    if not (name_part and name_part.strip()):
+        return []
+    pattern = f"%{name_part.strip()}%"
+    rows = (
+        db.query(Employee)
+        .filter(Employee.name.ilike(pattern))
+        .order_by(Employee.id)
+        .limit(limit)
+        .all()
+    )
+    return [_row_to_dict(r) for r in rows]
+
+
 def list_all(db: Session) -> List[Dict[str, Any]]:
     """직원 목록 전체 (Neon 데이터만)."""
     rows = db.query(Employee).order_by(Employee.id).all()
     return [_row_to_dict(r) for r in rows]
+
+
+def list_paginated(
+    db: Session,
+    page: int = 1,
+    page_size: int = 20,
+    employment_type: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """직원 목록 페이징. employment_type: None(전체), 'regular'(기존직원), 'new_hire'(신입).
+    신입: employment_type='new_hire' 이거나 status가 ATS 상태(pending/screening/hired/rejected)인 경우(과거 적재 데이터 호환).
+    반환: (해당 페이지 항목 리스트, 전체 개수)."""
+    q = db.query(Employee)
+    if employment_type == "new_hire":
+        q = q.filter(
+            (Employee.employment_type == "new_hire")
+            | (Employee.status.in_(["pending", "screening", "hired", "rejected"]))
+        )
+    elif employment_type == "regular":
+        # 기존 직원: employment_type이 new_hire가 아닌 경우 (NULL·빈값·regular 등)
+        q = q.filter(
+            (Employee.employment_type.is_(None))
+            | (Employee.employment_type == "")
+            | (Employee.employment_type == "regular")
+        )
+        # ATS 지원자만 제외: pending/screening/rejected. hired(입사 확정)는 기존 직원으로 포함.
+        q = q.filter(
+            (Employee.status.is_(None))
+            | (Employee.status == "")
+            | (~Employee.status.in_(["pending", "screening", "rejected"]))
+        )
+    total = q.count()
+    rows = (
+        q.order_by(Employee.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return [_row_to_dict(r) for r in rows], total
+
+
+def get_next_id(db: Session) -> str:
+    """직원 ID 중 숫자 부분 최대값+1로 다음 ID 제안 (예: E001, E002 → E003)."""
+    row = (
+        db.query(Employee.id)
+        .order_by(Employee.id.desc())
+        .limit(1)
+        .first()
+    )
+    if not row or not row[0]:
+        return "E001"
+    s = str(row[0])
+    num = 0
+    for c in s:
+        if c.isdigit():
+            num = num * 10 + int(c)
+    return f"E{num + 1:03d}"
 
 
 def update(db: Session, eid: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

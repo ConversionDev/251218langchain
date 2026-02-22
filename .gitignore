@@ -70,11 +70,20 @@ app/core/resource_manager/unsloth_compiled_cache/
 app/data/disclosure/*.pdf
 app/data/disclosure/*_alter.txt
 
+# 대용량 생성 데이터 (로컬 학습/파이프라인 결과물)
+app/data/competency_anchors/prepared/
+app/data/competency_anchors/sft/
+app/data/sft_dataset/
+
 # Python 가상환경·캐시
 .venv/
 venv/
 *.egg-info/
 .eggs/
+.ruff_cache/
+.mypy_cache/
+**/.ruff_cache/
+**/.mypy_cache/
 
 # 임베딩/모델 캐시 (선택)
 # app/cache/

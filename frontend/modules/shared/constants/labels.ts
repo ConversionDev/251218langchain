@@ -6,7 +6,7 @@ export const GENDER_LABELS: Record<string, string> = {
   male: "남",
   female: "여",
   other: "기타",
-  undisclosed: "미공개",
+  undisclosed: "미기입",
 };
 
 export const EMPLOYMENT_LABELS: Record<string, string> = {
@@ -14,6 +14,7 @@ export const EMPLOYMENT_LABELS: Record<string, string> = {
   contract: "계약직",
   part_time: "파트타임",
   intern: "인턴",
+  new_hire: "신입",
 };
 
 /** 연령대 원본값 → 상세 라벨 (표 등) */
@@ -34,5 +35,13 @@ export function toAgeGroup(ageBand: string): AgeGroupLabel {
   if (ageBand === "under30") return "20대";
   if (ageBand === "30-39") return "30대";
   if (ageBand === "40-49") return "40대";
+  return "50대 이상";
+}
+
+/** 연령(만 나이) → 20대/30대/40대/50대 이상 */
+export function toAgeGroupFromAge(age: number): AgeGroupLabel {
+  if (age < 30) return "20대";
+  if (age < 40) return "30대";
+  if (age < 50) return "40대";
   return "50대 이상";
 }

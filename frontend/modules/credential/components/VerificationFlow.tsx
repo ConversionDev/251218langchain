@@ -18,7 +18,7 @@ import type { AnalysisPayload } from "../types";
 const HASH_INCLUDED_DATA_LIST = [
   "직원 ID",
   "5대 역량 점수(Success DNA)",
-  "IFRS 지표(전환 준비도·스킬 갭·Human Capital ROI)",
+  "IFRS 지표(전환 준비도·역량 격차·인적자본 투자수익률)",
   "검증 타임스탬프",
 ] as const;
 
@@ -26,19 +26,19 @@ const steps = [
   {
     key: "extract",
     label: "원본 데이터 해시 추출",
-    sublabel: "Extracting Hash",
+    sublabel: "해시 추출",
     icon: Hash,
   },
   {
     key: "compare",
     label: "블록체인 원장 대조",
-    sublabel: "Comparing with Ledger",
+    sublabel: "원장 대조",
     icon: BookOpen,
   },
   {
     key: "verified",
     label: "무결성 확인 완료",
-    sublabel: "Integrity Verified",
+    sublabel: "무결성 확인",
     icon: ShieldCheck,
   },
 ] as const;
@@ -74,7 +74,7 @@ export function VerificationFlow({
   useEffect(() => {
     if (currentStep === steps.length - 1 && !hasToasted.current) {
       hasToasted.current = true;
-      toast.success("무결성 검증 성공. Performance 리포트의 신뢰도 배지가 활성화되었습니다.");
+      toast.success("무결성 검증 성공. 성과·가치 리포트의 신뢰도 배지가 활성화되었습니다.");
     }
   }, [currentStep]);
 

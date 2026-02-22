@@ -16,10 +16,12 @@ import type { DNATrajectoryPoint } from "../types";
 import type { SuccessDNA } from "@/modules/shared/types";
 import { DNA_DIMENSION_COLORS } from "@/modules/shared/constants/dnaColors";
 
-/** month "2023-01" → "23.01" */
-function formatMonthShort(month: string): string {
-  const [y, m] = String(month).split("-");
-  return y && m ? `${y.slice(-2)}.${m}` : month;
+/** 반기 라벨 그대로 사용 (예: "2025 상반기") 또는 month "2025-06" → "25 상반기" */
+function formatPeriodLabel(monthOrLabel: string): string {
+  if (monthOrLabel.includes("상반기") || monthOrLabel.includes("하반기")) return monthOrLabel;
+  const [y, m] = String(monthOrLabel).split("-");
+  if (!y || !m) return monthOrLabel;
+  return Number(m) <= 6 ? `${y.slice(-2)} 상반기` : `${y.slice(-2)} 하반기`;
 }
 
 /** 커스텀 툴팁: 달 + 역량별 점수 */
@@ -33,7 +35,7 @@ function CustomTrajectoryTooltip({
   label?: string;
 }) {
   if (!active || !payload?.length || label == null) return null;
-  const monthShort = formatMonthShort(String(label));
+  const periodLabel = formatPeriodLabel(String(label));
   return (
     <div
       className="rounded-lg border px-3 py-2 shadow-lg"
@@ -42,7 +44,7 @@ function CustomTrajectoryTooltip({
         borderColor: "hsl(var(--chart-tooltip-border))",
       }}
     >
-      <p className="text-xs font-medium text-muted-foreground">{monthShort}</p>
+      <p className="text-xs font-medium text-muted-foreground">{periodLabel}</p>
       {payload.map((entry) => (
         <p key={entry.name} className="mt-0.5 text-sm font-medium" style={{ color: entry.color }}>
           {entry.name}: <span className="text-foreground">{entry.value}점</span>
@@ -76,27 +78,6 @@ const LABEL_TO_KEY: Record<string, keyof SuccessDNA> = {
   적응력: "adaptability",
 };
 
-/** 데이터가 없을 때 차트가 항상 보이도록 12개월 목데이터 */
-function getDefaultTrajectoryMock(): DNATrajectoryPoint[] {
-  const base = { leadership: 62, technical: 68, creativity: 70, collaboration: 78, adaptability: 76 };
-  return Array.from({ length: 12 }, (_, i) => {
-    const t = i / 11;
-    const month = `2023-${String(i + 1).padStart(2, "0")}`;
-    const monthLabel = `2023년 ${i + 1}월`;
-    return {
-      month,
-      monthLabel,
-      leadership: Math.round(52 + (base.leadership - 52) * t),
-      technical: Math.round(58 + (base.technical - 58) * t),
-      creativity: Math.round(60 + (base.creativity - 60) * t),
-      collaboration: Math.round(70 + (base.collaboration - 70) * t),
-      adaptability: Math.round(64 + (base.adaptability - 64) * t),
-    };
-  });
-}
-
-const DEFAULT_TRAJECTORY_MOCK = getDefaultTrajectoryMock();
-
 interface DNAGrowthTrajectoryChartProps {
   data: DNATrajectoryPoint[];
   /** 부모에서 제어하는 강조 역량 (레이더 차트 클릭과 연동) */
@@ -105,7 +86,7 @@ interface DNAGrowthTrajectoryChartProps {
   onHighlightChange?: (dimension: keyof SuccessDNA | null) => void;
 }
 
-/** 선택 역량의 전년 대비 성장률 계산 (첫 월 vs 마지막 월) */
+/** 선택 역량의 상반기 대비 하반기 성장률 (첫 시점 vs 마지막 시점) */
 function getGrowthPct(data: DNATrajectoryPoint[], dimension: keyof SuccessDNA): number {
   if (!data.length) return 0;
   const first = data[0][dimension] ?? 0;
@@ -132,15 +113,23 @@ export function DNAGrowthTrajectoryChart({
     setMounted(true);
   }, []);
 
-  const effectiveData = data.length > 0 ? data : DEFAULT_TRAJECTORY_MOCK;
+  const effectiveData = data;
 
   if (!mounted) {
     return (
       <div className="flex min-h-[320px] w-full flex-col gap-2">
         <p className="mb-2 text-xs text-muted-foreground">
-          역량을 클릭하면 해당 역량의 1년 성장 궤적이 강조됩니다. (좌측 레이더 축 클릭 가능)
+          역량을 클릭하면 해당 역량의 반기 단위 성장 궤적이 강조됩니다. (좌측 레이더 축 클릭 가능)
         </p>
         <div className="min-h-[280px] w-full flex-1 animate-pulse rounded-lg border border-border/50 bg-muted/50" />
+      </div>
+    );
+  }
+
+  if (!effectiveData.length) {
+    return (
+      <div className="flex min-h-[280px] w-full items-center justify-center rounded-lg border border-border/50 bg-muted/20 text-sm text-muted-foreground">
+        DNA 성장 궤적 데이터가 없습니다.
       </div>
     );
   }
@@ -148,7 +137,7 @@ export function DNAGrowthTrajectoryChart({
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col min-w-0">
       <p className="mb-2 text-xs text-muted-foreground">
-        역량을 클릭하면 해당 역량의 1년 성장 궤적이 강조됩니다. (좌측 레이더 축 클릭 가능)
+        역량을 클릭하면 해당 역량의 반기 단위 성장 궤적이 강조됩니다. (좌측 레이더 축 클릭 가능)
       </p>
       <AnimatePresence initial={false} mode="wait">
         <motion.div
@@ -188,9 +177,9 @@ export function DNAGrowthTrajectoryChart({
                 vertical={false}
               />
               <XAxis
-                dataKey="month"
+                dataKey="monthLabel"
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                tickFormatter={formatMonthShort}
+                tickFormatter={formatPeriodLabel}
                 interval="preserveStartEnd"
               />
               <YAxis
@@ -264,7 +253,7 @@ export function DNAGrowthTrajectoryChart({
             >
               <p className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">성장 서사:</span>{" "}
-                {DIMENSION_LABELS[highlightDimension]} DNA가 전년 대비{" "}
+                {DIMENSION_LABELS[highlightDimension]} DNA가 상반기 대비 하반기{" "}
                 <strong className="text-primary">
                   {pct >= 0 ? "+" : ""}{pct}%
                 </strong>{" "}

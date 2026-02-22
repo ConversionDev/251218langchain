@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronUp, ChevronDown, Pencil, Trash2, FileText } from "lucide-react";
+import { ChevronUp, ChevronDown, Pencil, Trash2, FileText, Sparkles } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import type { Employee } from "@/modules/shared/types";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,14 @@ const EMPLOYMENT_LABELS: Record<string, string> = {
   contract: "계약직",
   part_time: "파트타임",
   intern: "인턴",
+  new_hire: "신입",
 };
 
 const GENDER_LABELS: Record<string, string> = {
   male: "남",
   female: "여",
   other: "기타",
-  undisclosed: "미공개",
+  undisclosed: "미기입",
 };
 
 type SortKey = "name" | "department" | "jobTitle" | "trainingHours" | "employmentType";
@@ -39,9 +40,10 @@ interface EmployeeListTableProps {
   onEdit?: (emp: Employee) => void;
   onDelete?: (id: string) => void;
   onOpenProfile?: (emp: Employee) => void;
+  onAnalyze?: (emp: Employee) => void;
 }
 
-export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }: EmployeeListTableProps) {
+export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, onAnalyze }: EmployeeListTableProps) {
   const setSelectedEmployee = useStore((s) => s.setSelectedEmployee);
   const [filterDept, setFilterDept] = useState("");
   const [filterName, setFilterName] = useState("");
@@ -81,7 +83,7 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
       onOpenProfile(emp);
     } else {
       const go = window.confirm(
-        `${emp.name} 님을 선택했습니다. Talent Intelligence 페이지로 이동할까요?`
+        `${emp.name} 님을 선택했습니다. 역량 진단 페이지로 이동할까요?`
       );
       if (go) window.location.href = "/intelligence";
     }
@@ -120,8 +122,8 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
           />
         </div>
       </div>
-      <div className="overflow-hidden rounded-lg border border-border">
-        <Table>
+      <div className="w-full overflow-hidden rounded-lg border border-border">
+        <Table className="w-full">
           <TableHeader>
             <TableRow>
               <TableHead>
@@ -140,6 +142,7 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
                 </button>
               </TableHead>
               <TableHead>성별</TableHead>
+              <TableHead>연령</TableHead>
               <TableHead>
                 <button type="button" onClick={() => handleSort("employmentType")} className="font-medium">
                   고용형태 <SortIcon column="employmentType" />
@@ -150,7 +153,9 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
                   교육시간 <SortIcon column="trainingHours" />
                 </button>
               </TableHead>
-              {(onEdit || onDelete || onOpenProfile) && <TableHead className="w-32">작업</TableHead>}
+              {(onEdit || onDelete || onOpenProfile || onAnalyze) && (
+                <TableHead className="w-[6.75rem] whitespace-nowrap px-1.5">작업</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -160,7 +165,14 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => handleRowClick(emp)}
               >
-                <TableCell className="font-medium">
+                <TableCell
+                  className="font-medium cursor-default"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedEmployee(emp);
+                  }}
+                  title="이름 클릭은 선택만 됩니다. 이력 상세는 행의 다른 영역을 클릭하세요."
+                >
                   <span className="inline-flex items-center gap-2">
                     {emp.name}
                     <DNABadge
@@ -174,15 +186,32 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
                 <TableCell>{emp.jobTitle}</TableCell>
                 <TableCell>{emp.department}</TableCell>
                 <TableCell>{GENDER_LABELS[emp.gender ?? "undisclosed"] ?? emp.gender}</TableCell>
+                <TableCell>{emp.age != null && emp.age > 0 ? `${emp.age}세` : "—"}</TableCell>
                 <TableCell>{EMPLOYMENT_LABELS[emp.employmentType ?? "regular"] ?? emp.employmentType}</TableCell>
                 <TableCell>{emp.trainingHours ?? 0}h</TableCell>
-                {(onEdit || onDelete || onOpenProfile) && (
-                  <TableCell onClick={(e) => e.stopPropagation()} className="space-x-1">
+                {(onEdit || onDelete || onOpenProfile || onAnalyze) && (
+                  <TableCell
+                    onClick={(e) => e.stopPropagation()}
+                    className="whitespace-nowrap px-1.5"
+                  >
+                    <span className="inline-flex flex-nowrap items-center gap-0.5">
+                    {onAnalyze && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 p-0"
+                        onClick={() => onAnalyze(emp)}
+                        aria-label="AI 분석"
+                        title="AI 분석"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </Button>
+                    )}
                     {onOpenProfile && (
                       <Button
                         type="button"
                         variant="ghost"
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8 shrink-0 p-0"
                         onClick={() => onOpenProfile(emp)}
                         aria-label="상세"
                         title="이력 상세"
@@ -194,7 +223,7 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
                       <Button
                         type="button"
                         variant="ghost"
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8 shrink-0 p-0"
                         onClick={() => onEdit(emp)}
                         aria-label="수정"
                       >
@@ -205,13 +234,14 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile }
                       <Button
                         type="button"
                         variant="ghost"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
                         onClick={() => onDelete(emp.id)}
                         aria-label="삭제"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
+                    </span>
                   </TableCell>
                 )}
               </TableRow>

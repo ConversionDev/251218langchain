@@ -14,6 +14,8 @@ export interface AgentRequest {
   thread_id?: string;
   /** 업로드 API로 받은 file_id 목록 (BP: 2단계) */
   file_ids?: string[];
+  /** file_ids와 같은 순서의 파일명 (이미지/문서 구분·문서 확장자용) */
+  file_names?: string[];
 }
 
 export interface AgentResponse {

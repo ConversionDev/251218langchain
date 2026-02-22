@@ -59,7 +59,7 @@ export function SimulatorSection({
         jobTitle: "",
         department: "",
         successDna: fallbackDna,
-        ifrsMetrics: { transitionReadyScore: 70, skillGap: 25, humanCapitalROI: 1.8 },
+        disclosureMetrics: { transitionReadyScore: 70, skillGap: 25, humanCapitalROI: 1.8 },
         trainingHours: 30,
       } as Employee),
     [employee, fallbackDna]

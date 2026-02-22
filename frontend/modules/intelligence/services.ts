@@ -1,5 +1,57 @@
-import type { Employee, SuccessDNA, IfrsMetrics } from "@/modules/shared/types";
-import type { IntelligenceEmployee, TransitionTrendPoint, HighPerformerAverage, DNAGrowthPoint, DNATrajectoryPoint } from "./types";
+import type { Employee, SuccessDNA } from "@/modules/shared/types";
+import { getIfrsMetricsView } from "@/modules/shared/utils/disclosureMetrics";
+import type { IntelligenceEmployee, DNAGrowthPoint, DNATrajectoryPoint } from "./types";
+
+/** 엑사원 직무 전환 분석 요청용: 직원 데이터를 담은 메시지와 시스템 프롬프트 */
+export function buildTransitionAnalysisPrompt(employee: Employee): {
+  message: string;
+  system_prompt: string;
+} {
+  const dna = employee.successDna;
+  const ifrs = getIfrsMetricsView(employee.disclosureMetrics);
+  const parts = [
+    `직원: ${employee.name ?? "(이름 없음)"}`,
+    `부서: ${employee.department ?? "-"}`,
+    `직급: ${employee.jobTitle ?? "-"}`,
+  ];
+  if (dna) {
+    parts.push(
+      `Success DNA(0-100): 리더십 ${dna.leadership ?? 0}, 기술력 ${dna.technical ?? 0}, 창의성 ${dna.creativity ?? 0}, 협업 ${dna.collaboration ?? 0}, 적응력 ${dna.adaptability ?? 0}`
+    );
+  }
+  if (ifrs) {
+    parts.push(
+      `전환 준비도(IFRS S2): ${ifrs.transitionReadyScore}점, 스킬 갭: ${ifrs.skillGap}점, 인적자본 ROI: ${ifrs.humanCapitalROI}`
+    );
+  }
+  if (employee.trainingHours != null) {
+    parts.push(`연간 교육훈련 시간: ${employee.trainingHours}시간`);
+  }
+  const dataBlock = parts.join("\n");
+  const message = `다음 직원에 대한 직무 전환(산업·역할 전환) 분석을 요청합니다.\n\n${dataBlock}\n\n위 데이터를 바탕으로 직무 전환 분석을 한국어로 작성해 주세요.`;
+  const system_prompt =
+    "당신은 HR 인사이트 분석가입니다. 주어진 직원 데이터(Success DNA, 전환 준비도, 스킬 갭 등)만을 근거로 직무 전환 분석을 작성합니다. " +
+    "다음 세 가지를 반드시 포함해 주세요: 1) 현재 상태 요약 2) 전환 제언 3) 배치 시 고려사항. " +
+    "각 항목을 '1)', '2)', '3)'로 구분해 주세요. 추측이나 일반론이 아닌, 제공된 수치와 지표에 기반한 분석만 작성하세요.";
+  return { message, system_prompt };
+}
+
+/** 엑사원 응답에서 1) 2) 3) 구간을 파싱. 없으면 전체를 currentState로 */
+export function parseTransitionAnalysisResponse(text: string): {
+  currentState: string;
+  transitionRecommendation: string;
+  riskNotice: string;
+} {
+  const t = text.trim();
+  const one = /1\)\s*([\s\S]*?)(?=2\)|$)/i.exec(t);
+  const two = /2\)\s*([\s\S]*?)(?=3\)|$)/i.exec(t);
+  const three = /3\)\s*([\s\S]*?)$/i.exec(t);
+  return {
+    currentState: one?.[1]?.trim() ?? t,
+    transitionRecommendation: two?.[1]?.trim() ?? "",
+    riskNotice: three?.[1]?.trim() ?? "",
+  };
+}
 
 const DIMENSION_LABELS: Record<keyof SuccessDNA, string> = {
   leadership: "리더십",
@@ -9,245 +61,129 @@ const DIMENSION_LABELS: Record<keyof SuccessDNA, string> = {
   adaptability: "적응력",
 };
 
-/** 전환 준비도 추이: 최근 12개월 (과거 → 현재) */
-function buildTransitionTrend(
-  startScore: number,
-  endScore: number,
-  endYear: number,
-  endMonth: number
-): TransitionTrendPoint[] {
-  const monthLabels = [
-    "1월", "2월", "3월", "4월", "5월", "6월",
-    "7월", "8월", "9월", "10월", "11월", "12월",
-  ];
-  const points: TransitionTrendPoint[] = [];
-  for (let i = 0; i < 12; i++) {
-    let m = endMonth - 11 + i;
-    let y = endYear;
-    while (m < 1) {
-      m += 12;
-      y -= 1;
-    }
-    const t = i / 11;
-    const score = Math.round(startScore + (endScore - startScore) * t);
-    points.push({
-      month: `${y}-${String(m).padStart(2, "0")}`,
-      year: y,
-      monthLabel: `${y}년 ${monthLabels[m - 1]}`,
-      transitionReadyScore: Math.max(0, Math.min(100, score)),
-    });
-  }
-  return points;
-}
+const DIMENSION_KEYS: (keyof SuccessDNA)[] = [
+  "leadership",
+  "technical",
+  "creativity",
+  "collaboration",
+  "adaptability",
+];
 
-/** 전사 고성과자 평균 Success DNA (비교용) */
-export const HIGH_PERFORMER_AVERAGE: HighPerformerAverage = {
-  leadership: 82,
-  technical: 78,
-  creativity: 80,
-  collaboration: 85,
-  adaptability: 84,
-};
-
-/** 현재 조회 대상 직원 1명 + 전환 추이 (Mock) */
-const currentEmployeeSuccessDNA: SuccessDNA = {
-  leadership: 72,
-  technical: 75,
-  creativity: 78,
-  collaboration: 88,
-  adaptability: 86,
-};
-
-const currentEmployeeIfrs: IfrsMetrics = {
-  transitionReadyScore: 82,
-  skillGap: 18,
-  humanCapitalROI: 2.2,
-};
-
-const transitionTrendData = buildTransitionTrend(58, 82, 2024, 2);
-
-const currentEmployeeBase: Employee = {
-  id: "E001",
-  name: "김민준",
-  jobTitle: "선임 연구원",
-  department: "R&D",
-  email: "minjun.kim@company.com",
-  joinedAt: "2020-03-01",
-  successDna: currentEmployeeSuccessDNA,
-  ifrsMetrics: currentEmployeeIfrs,
-};
-
-/** 1년 전 DNA (성장 서사용). 현재 대비 낮은 값으로 설정해 성장률 서사 시각화 */
-function getPastYearDNA(current: SuccessDNA, employeeId: string): SuccessDNA {
-  const seed = employeeId.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+/** 5대 역량 요약: 종합 점수, 강점 Top2, 보완 1개. 역량 진단 UI용 */
+export function getCapabilitySummary(dna: SuccessDNA | undefined): {
+  overallScore: number;
+  topDimensions: { key: keyof SuccessDNA; label: string; score: number }[];
+  improveDimension: { key: keyof SuccessDNA; label: string; score: number } | null;
+} | null {
+  if (!dna) return null;
+  const entries = DIMENSION_KEYS.map((key) => ({
+    key,
+    label: DIMENSION_LABELS[key],
+    score: (dna[key] as number) ?? 0,
+  }));
+  const sorted = [...entries].sort((a, b) => b.score - a.score);
+  const sum = entries.reduce((s, e) => s + e.score, 0);
+  const overallScore = Math.round(sum / DIMENSION_KEYS.length);
   return {
-    leadership: Math.max(0, (current.leadership ?? 0) - 10 - (seed % 12)),
-    technical: Math.max(0, (current.technical ?? 0) - 8 - (seed % 5)),
-    creativity: Math.max(0, (current.creativity ?? 0) - 6 - (seed % 7)),
-    collaboration: Math.max(0, (current.collaboration ?? 0) - 4 - (seed % 4)),
-    adaptability: Math.max(0, (current.adaptability ?? 0) - 12 - (seed % 6)),
+    overallScore,
+    topDimensions: sorted.slice(0, 2),
+    improveDimension: sorted.length > 0 ? sorted[sorted.length - 1]! : null,
   };
 }
 
-/** DNA 성장 이력 (1년 전 vs 현재, 성장률 %) */
+/** DNA 성장 이력: 현재 스키마에는 이력 데이터가 없어 빈 배열 반환 */
 export function getDNAGrowthHistory(employee: Employee): DNAGrowthPoint[] {
-  const dna = employee.successDna;
-  if (!dna) return [];
-  const past = getPastYearDNA(dna, employee.id);
-  const dimensions = (["leadership", "technical", "creativity", "collaboration", "adaptability"] as const);
-  return dimensions.map((dim) => {
-    const cur = dna[dim] ?? 0;
-    const p = past[dim] ?? 0;
-    const growthPct = p > 0 ? Math.round(((cur - p) / p) * 100) : (cur > 0 ? 100 : 0);
-    return {
-      dimension: dim,
-      label: DIMENSION_LABELS[dim],
-      pastYear: p,
-      current: cur,
-      growthPct,
-    };
-  });
+  void employee;
+  return [];
 }
 
-const MONTH_LABELS = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
-
-/** 지난 12개월 역량 궤적 (월별 보간). Line Chart에서 '성장 궤적' 시각화용 */
+/** DNA 성장 궤적: 현재 스키마에는 시계열 점수가 없어 빈 배열 반환 */
 export function getDNAGrowthTrajectory(employee: Employee): DNATrajectoryPoint[] {
-  const dna = employee.successDna;
-  if (!dna) return [];
-  const past = getPastYearDNA(dna, employee.id);
-  const dimensions = (["leadership", "technical", "creativity", "collaboration", "adaptability"] as const);
-  const points: DNATrajectoryPoint[] = [];
-  for (let i = 0; i < 12; i++) {
-    const t = i / 11; // 0 → 1 (과거 → 현재)
-    const monthIdx = i; // 0~11 → 1월~12월
-    const year = 2023;
-    const month = `${year}-${String(monthIdx + 1).padStart(2, "0")}`;
-    const monthLabel = `${year}년 ${MONTH_LABELS[monthIdx]}`;
-    const point: DNATrajectoryPoint = {
-      month,
-      monthLabel,
-      leadership: 0,
-      technical: 0,
-      creativity: 0,
-      collaboration: 0,
-      adaptability: 0,
-    };
-    dimensions.forEach((dim) => {
-      const pVal = past[dim] ?? 0;
-      const cVal = dna[dim] ?? 0;
-      point[dim] = Math.round(pVal + (cVal - pVal) * t);
-    });
-    points.push(point);
-  }
-  return points;
+  void employee;
+  return [];
 }
 
-/** successDna만 있을 때 사용하는 12개월 궤적 (보간). 직원 id 없이도 차트 표시용 */
+/** 하위호환: 기존 호출부 유지용. 더 이상 합성 데이터를 만들지 않음. */
 export function getDNAGrowthTrajectoryFromDNA(dna: SuccessDNA): DNATrajectoryPoint[] {
-  const dimensions = (["leadership", "technical", "creativity", "collaboration", "adaptability"] as const);
-  const past: SuccessDNA = {
-    leadership: Math.max(0, (dna.leadership ?? 0) - 12),
-    technical: Math.max(0, (dna.technical ?? 0) - 10),
-    creativity: Math.max(0, (dna.creativity ?? 0) - 8),
-    collaboration: Math.max(0, (dna.collaboration ?? 0) - 6),
-    adaptability: Math.max(0, (dna.adaptability ?? 0) - 14),
-  };
-  const points: DNATrajectoryPoint[] = [];
-  for (let i = 0; i < 12; i++) {
-    const t = i / 11;
-    const monthIdx = i;
-    const year = 2023;
-    const month = `${year}-${String(monthIdx + 1).padStart(2, "0")}`;
-    const monthLabel = `${year}년 ${MONTH_LABELS[monthIdx]}`;
-    const point: DNATrajectoryPoint = {
-      month,
-      monthLabel,
-      leadership: 0,
-      technical: 0,
-      creativity: 0,
-      collaboration: 0,
-      adaptability: 0,
-    };
-    dimensions.forEach((dim) => {
-      const pVal = past[dim] ?? 0;
-      const cVal = dna[dim] ?? 0;
-      point[dim] = Math.round(pVal + (cVal - pVal) * t);
-    });
-    points.push(point);
-  }
-  return points;
+  void dna;
+  return [];
 }
 
-/** Intelligence 페이지용 직원 상세 Mock (전환 추이 포함) */
-export function getIntelligenceEmployee(): IntelligenceEmployee {
+/** 직원 데이터로 IntelligenceEmployee 구성 (실데이터만 사용, 합성 추이 미생성) */
+export function toIntelligenceEmployee(employee: Employee): IntelligenceEmployee {
   return {
-    ...currentEmployeeBase,
-    transitionTrend: transitionTrendData,
+    ...employee,
+    transitionTrend: [],
   };
 }
 
-/** 여러 직원 목록 (드롭다운 등용). 현재는 1명 반환 */
-export function getIntelligenceEmployeeList(): IntelligenceEmployee[] {
-  const trend2 = buildTransitionTrend(62, 78, 2024, 2);
-  const list: IntelligenceEmployee[] = [
-    {
-      ...currentEmployeeBase,
-      transitionTrend: transitionTrendData,
-    },
-    {
-      id: "E002",
-      name: "이서연",
-      jobTitle: "마케팅 매니저",
-      department: "마케팅",
-      email: "seoyeon.lee@company.com",
-      joinedAt: "2019-07-01",
-      successDna: {
-        leadership: 80,
-        technical: 65,
-        creativity: 88,
-        collaboration: 82,
-        adaptability: 72,
-      },
-      ifrsMetrics: {
-        transitionReadyScore: 78,
-        skillGap: 22,
-        humanCapitalROI: 1.9,
-      },
-      transitionTrend: trend2,
-    },
-  ];
-  return list;
-}
-
-/** AI 전환 가능성 리포트 요약 (Mock) */
+/** AI 전환 가능성 리포트 요약. Success DNA + 공시 지표(transitionReadyScore, skillGap) 연동. 실무 관점의 데이터 기반 문구만 사용. */
 export function getTransitionReadinessSummary(employee: Employee) {
   const dna = employee.successDna;
+  const ifrs = getIfrsMetricsView(employee.disclosureMetrics);
   const adaptability = dna?.adaptability ?? 0;
   const technical = dna?.technical ?? 0;
   const leadership = dna?.leadership ?? 0;
-  const probability = adaptability >= 80 ? 85 : Math.min(79, 50 + Math.round(adaptability * 0.4));
+  const collaboration = dna?.collaboration ?? 0;
+  const creativity = dna?.creativity ?? 0;
+
+  const transitionScore = ifrs?.transitionReadyScore ?? null;
+  const skillGap = ifrs?.skillGap ?? null;
+  const hasDisclosureMetrics = transitionScore != null || skillGap != null;
+
+  const probabilityFromDna = adaptability >= 80 ? 85 : Math.min(79, 50 + Math.round(adaptability * 0.4));
+  const transitionProbability = hasDisclosureMetrics && transitionScore != null
+    ? Math.round((transitionScore * 0.6 + probabilityFromDna * 0.4))
+    : probabilityFromDna;
   const strengthDimension: keyof SuccessDNA = "adaptability";
 
-  const currentState =
-    "대상자는 Adaptability(적응력) DNA가 상위 10% 고성과자 그룹과 유사한 패턴을 보임.";
+  // 현재 상태: 보유 데이터만으로 서술. 역할·점수·지표만 언급.
+  const role = [employee.jobTitle, employee.department].filter(Boolean).join(" · ") || "역할 미지정";
+  const dnaParts: string[] = [];
+  if (adaptability > 0) dnaParts.push(`적응력 ${adaptability}점`);
+  if (technical > 0) dnaParts.push(`기술력 ${technical}점`);
+  if (leadership > 0) dnaParts.push(`리더십 ${leadership}점`);
+  if (collaboration > 0) dnaParts.push(`협업 ${collaboration}점`);
+  if (creativity > 0) dnaParts.push(`창의성 ${creativity}점`);
+  const dnaSummary = dnaParts.length > 0 ? dnaParts.join(", ") : "역량 데이터 없음";
 
-  const transitionRecommendation =
-    "IFRS S2 산업 전환 가이드라인에 비추어 볼 때, 현재의 Technical 역량을 Green Tech 분야로 전이(Transfer)할 경우 Skill Gap을 최단기간 내에 해소 가능할 것으로 예측됨.";
+  let currentState: string;
+  if (hasDisclosureMetrics && transitionScore != null) {
+    currentState = `${role}. 전환 준비도 ${transitionScore}점, 스킬 갭 ${skillGap ?? 0}점. 역량: ${dnaSummary}. 전환 가능성 산출에 활용된 수치입니다.`;
+  } else if (dnaParts.length > 0) {
+    currentState = `${role}. 역량: ${dnaSummary}. 전환 준비도·스킬 갭 등 공시 지표가 있으면 전환 가능성이 더 정교하게 산출됩니다.`;
+  } else {
+    currentState = "역량·전환 준비도 데이터가 없어 전환 가능성만 단순 산출된 상태입니다. 역량 진단 또는 공시 지표 입력 후 「직무 전환 분석 요청」을 권장합니다.";
+  }
 
+  // 전환 제언: 스킬 갭·강점 역량 기반으로만 짧게. 특정 산업/직무 하드코딩 없음.
+  let transitionRecommendation: string;
+  if (skillGap != null && skillGap > 0) {
+    transitionRecommendation = `스킬 갭 ${skillGap}점. 전환 시 보완 교육·OJT 계획 수립을 권장합니다.`;
+  } else if (technical >= 70 && adaptability >= 70) {
+    transitionRecommendation = "기술력·적응력이 양호해 신규 역할 전환 시 이수 기간 단축이 기대됩니다. 구체적 직무·산업 제언은 「직무 전환 분석 요청」으로 생성하세요.";
+  } else {
+    transitionRecommendation = "전환 방향·필요 역량은 직무·산업별로 상이합니다. 「직무 전환 분석 요청」을 실행하면 해당 직원 데이터 기반 맞춤 제언을 생성합니다.";
+  }
+
+  // 배치 시 고려사항: 리더십 수치만으로 팀 리드 vs SME 구분. 실무 용어로.
   const riskNotice =
     leadership >= 75
-      ? "Leadership 수치가 벤치마크 수준으로, 전환 후 팀 리드 또는 SME 역할 모두 고려 가능함."
-      : "단, Leadership 수치가 벤치마크 대비 낮아, 전환 공정의 팀 리드보다는 전문 기술 위원(Subject Matter Expert)으로서의 배치가 유리함.";
+      ? `리더십 ${leadership}점. 전환 후 팀 리드 또는 전문가(SME) 역할 배치 모두 검토 가능합니다.`
+      : leadership > 0
+        ? `리더십 ${leadership}점. 전환 초기에는 팀 리드보다 전문가(SME) 역할로 배치한 뒤, 역량 확보 시 리드 역할을 검토하는 것을 권장합니다.`
+        : "리더십 데이터가 없습니다. 배치 검토 시 역량 평가 또는 「직무 전환 분석 요청」 결과를 참고하세요.";
 
   const narrative = [currentState, transitionRecommendation, riskNotice].join(" ");
 
   return {
-    transitionProbability: probability,
+    transitionProbability: Math.min(100, Math.max(0, transitionProbability)),
     strengthDimension,
     narrative,
     currentState,
     transitionRecommendation,
     riskNotice,
+    transitionReadyScore: transitionScore ?? undefined,
+    skillGap: skillGap ?? undefined,
   };
 }

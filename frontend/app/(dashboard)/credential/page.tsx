@@ -47,9 +47,9 @@ function CredentialContent() {
       getVerificationResult(
         employeeId,
         selectedEmployee?.successDna,
-        selectedEmployee?.ifrsMetrics
+        selectedEmployee?.disclosureMetrics
       ),
-    [employeeId, selectedEmployee?.successDna, selectedEmployee?.ifrsMetrics]
+    [employeeId, selectedEmployee?.successDna, selectedEmployee?.disclosureMetrics]
   );
 
   /** 해시 생성에 사용된 원본 페이로드 (VerificationFlow 상세 보기용) */
@@ -57,10 +57,10 @@ function CredentialContent() {
     () => ({
       employeeId: result.employeeId,
       successDna: selectedEmployee?.successDna ?? undefined,
-      ifrsMetrics: selectedEmployee?.ifrsMetrics ?? undefined,
+      disclosureMetrics: selectedEmployee?.disclosureMetrics ?? undefined,
       verifiedAt: result.verifiedAt,
     }),
-    [result.employeeId, result.verifiedAt, selectedEmployee?.successDna, selectedEmployee?.ifrsMetrics]
+    [result.employeeId, result.verifiedAt, selectedEmployee?.successDna, selectedEmployee?.disclosureMetrics]
   );
 
   const isVerified = result.status === "verified";
@@ -80,9 +80,9 @@ function CredentialContent() {
       <div>
         <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
           <Shield className="h-3.5 w-3.5 shrink-0" />
-          <span className="text-xs">Verified Trust: DID/VC 블록체인 무결성 증명 레이어</span>
+          <span className="text-xs">DID/VC 블록체인 무결성 증명</span>
         </div>
-        <h1 className="text-2xl font-bold text-foreground">Verified Credential (VC)</h1>
+        <h1 className="text-2xl font-bold text-foreground">자격 검증</h1>
         <p className="mt-1 text-muted-foreground">
           분석 데이터 무결성 검증 결과
         </p>
@@ -104,9 +104,9 @@ function CredentialContent() {
               }`}
             />
             <div>
-              <p className="text-sm font-medium opacity-90">Status</p>
+              <p className="text-sm font-medium opacity-90">상태</p>
               <p className="text-lg font-bold">
-                {isVerified ? "Integrity Verified" : result.status}
+                {isVerified ? "무결성 확인됨" : result.status}
               </p>
             </div>
           </div>
@@ -114,7 +114,7 @@ function CredentialContent() {
             <Link href="/performance">
               <Button className="inline-flex items-center gap-2">
                 <BarChart3 className="h-4 w-4" />
-                Performance 리포트 보기
+                성과·가치 리포트 보기
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>

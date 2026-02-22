@@ -32,7 +32,7 @@ async function readPdfFile(file: File): Promise<string> {
     for (let i = 1; i <= numPages; i++) {
       const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const text = content.items.map((it: { str?: string }) => (it as { str?: string }).str ?? "").join(" ");
+    const text = content.items.map((it) => ("str" in it ? (it.str ?? "") : "")).join(" ");
       parts.push(text);
     }
     return parts.join("\n\n");

@@ -1,221 +1,108 @@
 import type { Employee } from "@/modules/shared/types";
 
-/** Core 모듈 초기 10명 Mock (ISO 30414 필드 포함) */
-export const INITIAL_EMPLOYEES: Employee[] = [
-  {
-    id: "E001",
-    name: "김민준",
-    jobTitle: "선임 연구원",
-    department: "R&D",
-    email: "minjun.kim@company.com",
-    joinedAt: "2020-03-01",
-    gender: "male",
-    ageBand: "30-39",
-    employmentType: "regular",
-    trainingHours: 42,
-    successDna: { leadership: 72, technical: 75, creativity: 78, collaboration: 88, adaptability: 86 },
-    ifrsMetrics: { transitionReadyScore: 82, skillGap: 18, humanCapitalROI: 2.2 },
-  },
-  {
-    id: "E002",
-    name: "이서연",
-    jobTitle: "마케팅 매니저",
-    department: "마케팅",
-    email: "seoyeon.lee@company.com",
-    joinedAt: "2019-07-01",
-    gender: "female",
-    ageBand: "30-39",
-    employmentType: "regular",
-    trainingHours: 38,
-    successDna: { leadership: 80, technical: 65, creativity: 88, collaboration: 82, adaptability: 72 },
-    ifrsMetrics: { transitionReadyScore: 78, skillGap: 22, humanCapitalROI: 1.9 },
-  },
-  {
-    id: "E003",
-    name: "박지훈",
-    jobTitle: "생산 관리",
-    department: "생산/물류",
-    email: "jihoon.park@company.com",
-    joinedAt: "2021-01-15",
-    gender: "male",
-    ageBand: "40-49",
-    employmentType: "regular",
-    trainingHours: 24,
-    successDna: { leadership: 55, technical: 70, creativity: 52, collaboration: 65, adaptability: 48 },
-    ifrsMetrics: { transitionReadyScore: 48, skillGap: 42, humanCapitalROI: 1.4 },
-  },
-  {
-    id: "E004",
-    name: "정하은",
-    jobTitle: "시니어 개발자",
-    department: "개발",
-    email: "haeun.jung@company.com",
-    joinedAt: "2018-05-01",
-    gender: "female",
-    ageBand: "30-39",
-    employmentType: "regular",
-    trainingHours: 56,
-    successDna: { leadership: 82, technical: 95, creativity: 92, collaboration: 88, adaptability: 90 },
-    ifrsMetrics: { transitionReadyScore: 90, skillGap: 8, humanCapitalROI: 2.8 },
-    resume: {
-      education: [
-        { school: "서울대학교", degree: "석사", field: "컴퓨터공학", startDate: "2014-03", endDate: "2016-02" },
-        { school: "KAIST", degree: "학사", field: "소프트웨어", startDate: "2010-03", endDate: "2014-02" },
-      ],
-      experience: [
-        { company: "현재 회사", role: "시니어 개발자", startDate: "2018-05", endDate: undefined, description: "백엔드·인프라 개발 리드" },
-        { company: "A사", role: "소프트웨어 개발 엔지니어", startDate: "2016-03", endDate: "2018-04", description: "웹 서비스 개발" },
-      ],
-      skills: [
-        { name: "TypeScript", level: "고급" },
-        { name: "Node.js", level: "고급" },
-        { name: "AWS", level: "중급" },
-      ],
-      certifications: [
-        { name: "AWS Solutions Architect", issuer: "Amazon", date: "2021-06" },
-      ],
-    },
-  },
-  {
-    id: "E005",
-    name: "최준호",
-    jobTitle: "영업 대리",
-    department: "영업",
-    email: "junho.choi@company.com",
-    joinedAt: "2022-06-01",
-    gender: "male",
-    ageBand: "under30",
-    employmentType: "contract",
-    trainingHours: 20,
-    successDna: { leadership: 65, technical: 62, creativity: 70, collaboration: 75, adaptability: 58 },
-    ifrsMetrics: { transitionReadyScore: 58, skillGap: 32, humanCapitalROI: 1.6 },
-  },
-  {
-    id: "E006",
-    name: "한지우",
-    jobTitle: "인사 담당",
-    department: "인사",
-    email: "jiwoo.han@company.com",
-    joinedAt: "2019-11-01",
-    gender: "female",
-    ageBand: "30-39",
-    employmentType: "regular",
-    trainingHours: 45,
-    successDna: { leadership: 78, technical: 68, creativity: 72, collaboration: 90, adaptability: 80 },
-    ifrsMetrics: { transitionReadyScore: 76, skillGap: 20, humanCapitalROI: 2.0 },
-    resume: {
-      education: [
-        { school: "연세대학교", degree: "학사", field: "경영학", startDate: "2012-03", endDate: "2016-02" },
-      ],
-      experience: [
-        { company: "현재 회사", role: "인사 담당", startDate: "2019-11", description: "채용·교육·조직 문화 업무" },
-        { company: "B사", role: "인사 인턴", startDate: "2018-07", endDate: "2019-08" },
-      ],
-      skills: [
-        { name: "채용 관리", level: "고급" },
-        { name: "교육 기획", level: "중급" },
-      ],
-      certifications: [],
-    },
-  },
-  {
-    id: "E007",
-    name: "윤도현",
-    jobTitle: "재무 분석가",
-    department: "재무",
-    email: "dohyun.yoon@company.com",
-    joinedAt: "2020-09-01",
-    gender: "male",
-    ageBand: "30-39",
-    employmentType: "regular",
-    trainingHours: 35,
-    successDna: { leadership: 70, technical: 78, creativity: 65, collaboration: 72, adaptability: 74 },
-    ifrsMetrics: { transitionReadyScore: 72, skillGap: 24, humanCapitalROI: 1.85 },
-  },
-  {
-    id: "E008",
-    name: "강수아",
-    jobTitle: "인턴",
-    department: "마케팅",
-    email: "sua.kang@company.com",
-    joinedAt: "2024-02-01",
-    gender: "female",
-    ageBand: "under30",
-    employmentType: "intern",
-    trainingHours: 12,
-    successDna: { leadership: 50, technical: 55, creativity: 82, collaboration: 78, adaptability: 85 },
-    ifrsMetrics: { transitionReadyScore: 65, skillGap: 28, humanCapitalROI: 1.2 },
-    resume: {
-      education: [
-        { school: "홍익대학교", degree: "학사", field: "시각디자인", startDate: "2020-03", endDate: "2024-02" },
-      ],
-      experience: [
-        { company: "현재 회사", role: "마케팅 인턴", startDate: "2024-02", description: "브랜드·SNS 마케팅 보조" },
-      ],
-      skills: [
-        { name: "Figma", level: "중급" },
-        { name: "영상 편집", level: "초급" },
-      ],
-      certifications: [],
-    },
-  },
-  {
-    id: "E009",
-    name: "임현수",
-    jobTitle: "경영지원 팀장",
-    department: "경영지원",
-    email: "hyunsoo.lim@company.com",
-    joinedAt: "2017-04-01",
-    gender: "male",
-    ageBand: "40-49",
-    employmentType: "regular",
-    trainingHours: 40,
-    successDna: { leadership: 88, technical: 72, creativity: 68, collaboration: 85, adaptability: 75 },
-    ifrsMetrics: { transitionReadyScore: 80, skillGap: 16, humanCapitalROI: 2.3 },
-    resume: {
-      education: [
-        { school: "고려대학교", degree: "MBA", field: "경영학", startDate: "2012-03", endDate: "2014-02" },
-        { school: "서강대학교", degree: "학사", field: "경제학", startDate: "2004-03", endDate: "2008-02" },
-      ],
-      experience: [
-        { company: "현재 회사", role: "경영지원 팀장", startDate: "2017-04", description: "전사 경영 관리·예산 리드" },
-        { company: "C사", role: "경영관리 팀장", startDate: "2014-03", endDate: "2017-03", description: "경영 기획 및 관리" },
-      ],
-      skills: [
-        { name: "경영 기획", level: "고급" },
-        { name: "예산 관리", level: "고급" },
-      ],
-      certifications: [],
-    },
-  },
-  {
-    id: "E010",
-    name: "송미래",
-    jobTitle: "파트타임 디자이너",
-    department: "마케팅",
-    email: "mirae.song@company.com",
-    joinedAt: "2023-03-01",
-    gender: "female",
-    ageBand: "30-39",
-    employmentType: "part_time",
-    trainingHours: 18,
-    successDna: { leadership: 60, technical: 85, creativity: 90, collaboration: 70, adaptability: 72 },
-    ifrsMetrics: { transitionReadyScore: 74, skillGap: 20, humanCapitalROI: 1.7 },
-    resume: {
-      education: [
-        { school: "이화여대", degree: "학사", field: "시각디자인", startDate: "2014-03", endDate: "2018-02" },
-      ],
-      experience: [
-        { company: "현재 회사", role: "UX/UI 디자이너", startDate: "2023-03", description: "서비스 디자인·UI 디자인" },
-        { company: "디자인 에이전시", role: "그래픽 디자이너", startDate: "2018-03", endDate: "2022-12" },
-      ],
-      skills: [
-        { name: "UI/UX 디자인", level: "고급" },
-        { name: "Figma", level: "고급" },
-      ],
-      certifications: [
-        { name: "Adobe Certified", issuer: "Adobe", date: "2020-05" },
-      ],
-    },
-  },
-];
+const API_BASE = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000") : "http://localhost:8000";
+
+export interface EmployeesPaginatedResult {
+  items: Employee[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Neon 직원 목록 조회 (전체, 페이징 없음) */
+export async function fetchEmployees(): Promise<Employee[]> {
+  const res = await fetch(`${API_BASE}/api/employees`);
+  if (!res.ok) throw new Error(`Employees fetch failed: ${res.status}`);
+  return res.json();
+}
+
+/** 직원 목록 페이징 조회. employmentType: 'regular'(기존직원), 'new_hire'(신입) */
+export async function fetchEmployeesPaginated(params: {
+  page?: number;
+  pageSize?: number;
+  employmentType?: "regular" | "new_hire";
+}): Promise<EmployeesPaginatedResult> {
+  const { page = 1, pageSize = 20, employmentType } = params;
+  const url = new URL(`${API_BASE}/api/employees`);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("pageSize", String(pageSize));
+  if (employmentType) url.searchParams.set("employmentType", employmentType);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Employees fetch failed: ${res.status}`);
+  return res.json();
+}
+
+/** 다음 직원 ID 제안 (직원 추가 폼용) */
+export async function fetchNextEmployeeId(): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/employees/next-id`);
+  if (!res.ok) throw new Error(`Next ID fetch failed: ${res.status}`);
+  const data = (await res.json()) as { nextId?: string };
+  return data.nextId ?? "E001";
+}
+
+/** 직원 생성 (Neon). 동일 이름이 이미 있으면 409 에러(기존 데이터 반환). */
+export async function createEmployeeApi(payload: Employee): Promise<Employee> {
+  const res = await fetch(`${API_BASE}/api/employees`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 409) {
+    const msg = (body as { detail?: string }).detail ?? "이미 등록된 직원입니다";
+    const err = new Error(msg) as Error & { existing?: Employee };
+    err.existing = (body as { existing?: Employee }).existing;
+    throw err;
+  }
+  if (!res.ok) {
+    throw new Error((body as { detail?: string }).detail ?? `Create failed: ${res.status}`);
+  }
+  return body as Employee;
+}
+
+/** 직원 수정 (Neon) */
+export async function updateEmployeeApi(id: string, payload: Partial<Employee>): Promise<Employee> {
+  const res = await fetch(`${API_BASE}/api/employees/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, id }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Update failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** 직원 삭제 (Neon) */
+export async function deleteEmployeeApi(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/employees/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Delete failed: ${res.status}`);
+  }
+}
+
+/** 직원 이력서 AI 분석 (엑사원 Success DNA 생성 후 DB 반영, status → screening) */
+export async function analyzeEmployeeResumeApi(employeeId: string): Promise<Employee> {
+  const res = await fetch(`${API_BASE}/api/employees/${employeeId}/analyze`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `AI 분석 실패: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** 직원 임베딩 갱신 (embedding이 비어 있는 직원만 일괄 계산 후 DB 반영, RAG 검색용) */
+export async function refreshEmployeeEmbeddingsApi(): Promise<{ updated: number }> {
+  const res = await fetch(`${API_BASE}/api/employees/embedding`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `임베딩 갱신 실패: ${res.status}`);
+  }
+  return res.json();
+}

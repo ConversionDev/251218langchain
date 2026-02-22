@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Info, Upload } from "lucide-react";
 import {
@@ -12,25 +12,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseResumeToBaseline } from "@/modules/core/services/resumeToBaseline";
-import type { Employee, IfrsMetrics, Gender, AgeBand, EmploymentType } from "@/modules/shared/types";
+import { RESUME_ACCEPT } from "@/lib/documentExtensions";
+import type { ResumeParseResult } from "@/modules/core/services/resumeToBaseline";
+import {
+  computeResumeFileHash,
+  getCachedResumeResult,
+  parseResumeToBaseline,
+} from "@/modules/core/services/resumeToBaseline";
+import { getIfrsMetricsView } from "@/modules/shared/utils/disclosureMetrics";
+import type { Employee, IfrsMetrics, Gender, EmploymentType } from "@/modules/shared/types";
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "male", label: "남" },
   { value: "female", label: "여" },
+  { value: "undisclosed", label: "미기입" },
   { value: "other", label: "기타" },
-  { value: "undisclosed", label: "미공개" },
-];
-
-const AGE_OPTIONS: { value: AgeBand; label: string }[] = [
-  { value: "under30", label: "30세 미만" },
-  { value: "30-39", label: "30-39세" },
-  { value: "40-49", label: "40-49세" },
-  { value: "50-59", label: "50-59세" },
-  { value: "60over", label: "60세 이상" },
 ];
 
 const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
+  { value: "new_hire", label: "신입" },
   { value: "regular", label: "정규직" },
   { value: "contract", label: "계약직" },
   { value: "part_time", label: "파트타임" },
@@ -59,18 +59,21 @@ export function EmployeeFormModal({
     jobTitle: "",
     department: "",
     email: "",
+    applicationDate: undefined,
     joinedAt: "",
     gender: "undisclosed",
-    ageBand: "30-39",
-    employmentType: "regular",
+    age: undefined,
+    employmentType: "new_hire",
     trainingHours: 0,
-    ifrsMetrics: {
+    disclosureMetrics: {
       transitionReadyScore: 0,
       skillGap: 0,
       humanCapitalROI: 0,
     },
   });
   const [uploadLoading, setUploadLoading] = useState(false);
+  /** 체감 속도: 단계별 메시지 (파일 확인 → 추출 → AI 분석) */
+  const [uploadPhase, setUploadPhase] = useState<"idle" | "uploading" | "extracting" | "analyzing">("idle");
   const [disclosureStatus, setDisclosureStatus] = useState<{
     ingested: boolean;
     document_count: number;
@@ -82,6 +85,11 @@ export function EmployeeFormModal({
     suggestions: string[];
   } | null>(null);
   const [checkLoading, setCheckLoading] = useState(false);
+  /** 신입 연속 등록: 한 명 저장 후 nextId 갱신되면 폼 초기화 */
+  const [expectingNewNextId, setExpectingNewNextId] = useState(false);
+  const prevNextIdRef = useRef<string>(nextId);
+  /** 마지막 업로드한 이력서 파일 해시 (동일 이력서 중복 등록 방지) */
+  const [lastResumeFileHash, setLastResumeFileHash] = useState<string | null>(null);
 
   const apiBase = typeof window !== "undefined"
     ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
@@ -92,12 +100,14 @@ export function EmployeeFormModal({
       setForm({
         ...employee,
         successDna: employee.successDna,
-        ifrsMetrics: employee.ifrsMetrics ?? {
-          transitionReadyScore: 0,
-          skillGap: 0,
-          humanCapitalROI: 0,
-        },
+        disclosureMetrics:
+          getIfrsMetricsView(employee.disclosureMetrics) ?? {
+            transitionReadyScore: 0,
+            skillGap: 0,
+            humanCapitalROI: 0,
+          },
       });
+      prevNextIdRef.current = employee.id;
     } else {
       setForm({
         id: nextId,
@@ -105,16 +115,43 @@ export function EmployeeFormModal({
         jobTitle: "",
         department: "",
         email: "",
+        applicationDate: undefined,
         joinedAt: "",
         gender: "undisclosed",
-        ageBand: "30-39",
-        employmentType: "regular",
+        age: undefined,
+        employmentType: "new_hire",
         trainingHours: 0,
         successDna: undefined,
-        ifrsMetrics: { transitionReadyScore: 0, skillGap: 0, humanCapitalROI: 0 },
+        disclosureMetrics: { transitionReadyScore: 0, skillGap: 0, humanCapitalROI: 0 },
       });
+      prevNextIdRef.current = nextId;
+      setLastResumeFileHash(null);
     }
   }, [employee, nextId, open]);
+
+  /** 신입 연속 등록: 저장 후 부모가 nextId 갱신하면 폼만 초기화하고 모달은 유지 */
+  useEffect(() => {
+    if (!open || employee != null) return;
+    if (expectingNewNextId && nextId !== prevNextIdRef.current) {
+      prevNextIdRef.current = nextId;
+      setExpectingNewNextId(false);
+      setForm({
+        id: nextId,
+        name: "",
+        jobTitle: "",
+        department: "",
+        email: "",
+        applicationDate: undefined,
+        joinedAt: "",
+        gender: "undisclosed",
+        age: undefined,
+        employmentType: "new_hire",
+        trainingHours: 0,
+        successDna: undefined,
+        disclosureMetrics: { transitionReadyScore: 0, skillGap: 0, humanCapitalROI: 0 },
+      });
+    }
+  }, [open, employee, nextId, expectingNewNextId]);
 
   useEffect(() => {
     if (!open || isEdit) return;
@@ -142,7 +179,7 @@ export function EmployeeFormModal({
           department: form.department,
           email: form.email ?? undefined,
           gender: form.gender ?? undefined,
-          age_band: form.ageBand ?? undefined,
+          age: form.age ?? undefined,
           employment_type: form.employmentType ?? undefined,
           training_hours: form.trainingHours ?? undefined,
         }),
@@ -192,42 +229,73 @@ export function EmployeeFormModal({
     } finally {
       setCheckLoading(false);
     }
-  }, [apiBase, form.name, form.jobTitle, form.department, form.email, form.gender, form.ageBand, form.employmentType, form.trainingHours]);
+  }, [apiBase, form.name, form.jobTitle, form.department, form.email, form.gender, form.age, form.employmentType, form.trainingHours]);
 
+  const applyResumeResult = useCallback((result: ResumeParseResult) => {
+    setForm((prev) => ({
+      ...prev,
+      name: result.name,
+      jobTitle: result.jobTitle,
+      department: result.department,
+      email: result.email,
+      applicationDate: result.applicationDate,
+      joinedAt: result.joinedAt,
+      resume: result.resume,
+      successDna: result.successDna,
+      ...(result.gender != null && { gender: result.gender }),
+      ...(result.age != null && result.age > 0 && { age: result.age }),
+      ...(result.employmentType != null && { employmentType: result.employmentType }),
+      ...(result.trainingHours != null && result.trainingHours >= 0 && { trainingHours: result.trainingHours }),
+    }));
+  }, []);
+
+  /** 이력서 업로드 시 빈칸에만 채움. 등록은 사용자가 등록 버튼으로 함. 파일 해시 저장(동일 이력서 중복 방지). */
   const handleResumeFile = useCallback(
     async (file: File) => {
-      setUploadLoading(true);
       try {
-        const result = await parseResumeToBaseline(file);
-        setForm((prev) => ({
-          ...prev,
-          name: result.name,
-          jobTitle: result.jobTitle,
-          department: result.department,
-          email: result.email,
-          joinedAt: result.joinedAt,
-          resume: result.resume,
-          successDna: result.successDna,
-        }));
-        toast.success("이력서를 분석했습니다. 아래 내용을 확인한 뒤 등록해 주세요.");
+        const hash = await computeResumeFileHash(file);
+        setLastResumeFileHash(hash);
+      } catch {
+        setLastResumeFileHash(null);
+      }
+      const cached = getCachedResumeResult(file);
+      if (cached) {
+        applyResumeResult(cached);
+        toast.success("저장된 분석 결과를 불러왔습니다. 내용 확인 후 등록 버튼을 눌러 주세요.");
+        return;
+      }
+      setUploadLoading(true);
+      setUploadPhase("uploading");
+      const t1 = window.setTimeout(() => setUploadPhase("extracting"), 600);
+      const t2 = window.setTimeout(() => setUploadPhase("analyzing"), 2200);
+      try {
+        const { result } = await parseResumeToBaseline(file);
+        applyResumeResult(result);
+        toast.success("이력서를 분석했습니다. 내용을 확인한 뒤 등록 버튼을 눌러 주세요.");
       } catch {
         toast.error("이력서 처리에 실패했습니다.");
       } finally {
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
         setUploadLoading(false);
+        setUploadPhase("idle");
       }
     },
-    []
+    [applyResumeResult]
   );
 
   const updateIfrs = (patch: Partial<IfrsMetrics>) =>
     setForm((prev) => ({
       ...prev,
-      ifrsMetrics: { ...(prev.ifrsMetrics ?? { transitionReadyScore: 0, skillGap: 0, humanCapitalROI: 0 }), ...patch },
+      disclosureMetrics: { ...(prev.disclosureMetrics ?? { transitionReadyScore: 0, skillGap: 0, humanCapitalROI: 0 }), ...patch },
     }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    onSave({
+      ...form,
+      ...(isEdit ? {} : { resumeFileHash: lastResumeFileHash ?? undefined }),
+    });
     onOpenChange(false);
     if (isEdit) {
       toast.success("데이터 변경사항이 저장되었습니다. Credential 모듈에서 해시 갱신이 필요합니다.");
@@ -275,7 +343,7 @@ export function EmployeeFormModal({
               >
                 <input
                   type="file"
-                  accept=".pdf,.txt,application/pdf,text/plain"
+                  accept={RESUME_ACCEPT}
                   className="hidden"
                   id="core-resume-upload"
                   disabled={uploadLoading}
@@ -288,11 +356,71 @@ export function EmployeeFormModal({
                 <label htmlFor="core-resume-upload" className={uploadLoading ? "pointer-events-none" : "cursor-pointer"}>
                   <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
                   <p className="mt-1 font-medium text-foreground">
-                    {uploadLoading ? "분석 중…" : "이력서를 놓거나 클릭해 업로드"}
+                    {uploadLoading
+                      ? uploadPhase === "uploading"
+                        ? "파일 확인 중…"
+                        : uploadPhase === "extracting"
+                          ? "텍스트 추출 중…"
+                          : "AI가 이력서를 분석하고 있습니다…"
+                      : "이력서를 놓거나 클릭해 업로드"}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">PDF, TXT · AI가 기본 정보와 Baseline DNA를 채웁니다</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">PDF, TXT, Word(.docx), HWP(.hwp) · 업로드 시 빈칸에 정보가 채워집니다. 등록은 등록 버튼을 눌러 주세요.</p>
                 </label>
               </div>
+            </fieldset>
+          )}
+
+          {/* 편집 시: DB에 저장된 이력서 즉시 반영 안내 + 새 파일로 갱신(선택) */}
+          {isEdit && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground">이력서</legend>
+              {form.resume && (form.resume.education?.length > 0 || form.resume.experience?.length > 0) ? (
+                <>
+                  <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                    등록된 이력서가 반영되어 있습니다 (학력 {form.resume.education?.length ?? 0}건, 경력 {form.resume.experience?.length ?? 0}건). 새 파일을 올리면 덮어씁니다.
+                  </p>
+                  <div
+                    onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) handleResumeFile(f); }}
+                    onDragOver={(e) => e.preventDefault()}
+                    className={`flex min-h-[72px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 p-3 text-center text-xs ${uploadLoading ? "cursor-wait opacity-70" : "hover:border-primary/40"}`}
+                  >
+                    <input
+                      type="file"
+                      accept={RESUME_ACCEPT}
+                      className="hidden"
+                      id="core-resume-upload-edit"
+                      disabled={uploadLoading}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleResumeFile(f); e.target.value = ""; }}
+                    />
+                    <label htmlFor="core-resume-upload-edit" className={uploadLoading ? "pointer-events-none" : "cursor-pointer"}>
+                      <Upload className="mx-auto h-5 w-5 text-muted-foreground" />
+                      <span className="mt-1 block text-muted-foreground">새 이력서로 갱신 (빈칸 채움 후 저장 버튼)</span>
+                    </label>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">등록된 이력서가 없습니다. 새 파일을 올리면 분석 후 반영됩니다.</p>
+                  <div
+                    onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) handleResumeFile(f); }}
+                    onDragOver={(e) => e.preventDefault()}
+                    className={`flex min-h-[72px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 p-3 text-center text-xs ${uploadLoading ? "cursor-wait opacity-70" : "hover:border-primary/40"}`}
+                  >
+                    <input
+                      type="file"
+                      accept={RESUME_ACCEPT}
+                      className="hidden"
+                      id="core-resume-upload-edit"
+                      disabled={uploadLoading}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleResumeFile(f); e.target.value = ""; }}
+                    />
+                    <label htmlFor="core-resume-upload-edit" className={uploadLoading ? "pointer-events-none" : "cursor-pointer"}>
+                      <Upload className="mx-auto h-5 w-5 text-muted-foreground" />
+                      <span className="mt-1 block text-muted-foreground">이력서 업로드 (빈칸 채움 후 저장 버튼)</span>
+                    </label>
+                  </div>
+                </>
+              )}
             </fieldset>
           )}
 
@@ -341,6 +469,16 @@ export function EmployeeFormModal({
                 />
               </div>
               <div>
+                <Label htmlFor="applicationDate">지원일</Label>
+                <Input
+                  id="applicationDate"
+                  type="date"
+                  value={form.applicationDate ?? ""}
+                  onChange={(e) => update({ applicationDate: e.target.value || undefined })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
                 <Label htmlFor="joinedAt">입사일</Label>
                 <Input
                   id="joinedAt"
@@ -381,22 +519,26 @@ export function EmployeeFormModal({
                 </select>
               </div>
               <div>
-                <Label>연령대</Label>
-                <select
-                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                  value={form.ageBand ?? "30-39"}
-                  onChange={(e) => update({ ageBand: e.target.value as AgeBand })}
-                >
-                  {AGE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+                <Label htmlFor="age">연령</Label>
+                <Input
+                  id="age"
+                  type="number"
+                  min={0}
+                  max={120}
+                  placeholder="만 나이"
+                  value={form.age ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? undefined : Number(e.target.value);
+                    update({ age: v === undefined || Number.isNaN(v) ? undefined : Math.max(0, Math.min(120, v)) });
+                  }}
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label>고용 형태</Label>
                 <select
                   className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                  value={form.employmentType ?? "regular"}
+                  value={form.employmentType ?? (isEdit ? "regular" : "new_hire")}
                   onChange={(e) => update({ employmentType: e.target.value as EmploymentType })}
                 >
                   {EMPLOYMENT_OPTIONS.map((o) => (

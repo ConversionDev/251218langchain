@@ -8,16 +8,18 @@ export interface TransitionTrendPoint {
   transitionReadyScore: number;
 }
 
-/** DNA 성장 이력 한 축 (1년 전 vs 현재) */
+/** DNA 성장 이력 한 축 (반기 단위: 상반기 vs 하반기) */
 export interface DNAGrowthPoint {
   dimension: keyof SuccessDNA;
   label: string;
+  /** 상반기(1~6월) 역량 점수 */
   pastYear: number;
+  /** 하반기(7~12월) 역량 점수 */
   current: number;
   growthPct: number;
 }
 
-/** 월별 역량 궤적 (Line Chart용, 지난 12개월) */
+/** 역량 궤적 한 시점 (반기 단위: 상반기·하반기 2점으로 성장 시각화) */
 export interface DNATrajectoryPoint {
   month: string;
   monthLabel: string;
@@ -51,6 +53,10 @@ export interface TransitionReadinessSummary {
   transitionRecommendation: string;
   /** 리스크 알림 문구 */
   riskNotice: string;
+  /** 공시 지표 전환 준비도 (있을 때만) */
+  transitionReadyScore?: number;
+  /** 공시 지표 스킬 갭 (있을 때만) */
+  skillGap?: number;
 }
 
 /**

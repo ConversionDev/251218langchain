@@ -1,29 +1,38 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { Sparkles, ShieldCheck, ArrowRight, Brain, Info, FileText } from "lucide-react";
+import {
+  Brain,
+  Info,
+  FileText,
+  UserX,
+  ShieldCheck,
+  ArrowRight,
+  Target,
+} from "lucide-react";
 import { DNARadarChart } from "@/modules/intelligence/components/DNARadarChart";
 import { DNAGrowthChart } from "@/modules/intelligence/components/DNAGrowthChart";
 import { DNAGrowthTrajectoryChart } from "@/modules/intelligence/components/DNAGrowthTrajectoryChart";
-import { TransitionTrendChart } from "@/modules/intelligence/components/TransitionTrendChart";
 import { DNABadge } from "@/modules/shared/components/DNABadge";
 import {
-  getIntelligenceEmployee,
-  getTransitionReadinessSummary,
+  toIntelligenceEmployee,
+  getCapabilitySummary,
   getDNAGrowthHistory,
   getDNAGrowthTrajectory,
-  getDNAGrowthTrajectoryFromDNA,
+  getTransitionReadinessSummary,
+  buildTransitionAnalysisPrompt,
+  parseTransitionAnalysisResponse,
 } from "@/modules/intelligence/services";
-import {
-  analyzeBehavioralDataFromMultiple,
-  mergeDnaWithWeights,
-} from "@/modules/intelligence/services/unstructuredAnalyzer";
+import { sendChatMessageStream } from "@/modules/chat/services";
+import { fetchEmployeesPaginated } from "@/modules/core/services";
+import { Button } from "@/components/ui/button";
+import { mergeDnaWithWeights } from "@/modules/intelligence/services/unstructuredAnalyzer";
 import type { IntelligenceEmployee } from "@/modules/intelligence/types";
-import { S2_BENCHMARK } from "@/modules/intelligence/types";
-import type { BehavioralSourceItem, SuccessDNA } from "@/modules/shared/types";
+import type { Employee, SuccessDNA } from "@/modules/shared/types";
+import { getAverageSuccessDna } from "@/modules/shared/utils/employeeAggregates";
 import {
   Dialog,
   DialogContent,
@@ -32,80 +41,65 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-/** 데모: 선택된 직원에 대해 회의록 기반 분석이 없을 때 샘플 3건으로 분석 후 스토어 반영 */
-const SAMPLE_TRANSCRIPTS = [
-  "이번 주 회의에서 팀 방향을 제시하고 결정을 주도했고, 기술 개선안을 제안했습니다. 데이터 분석 결과를 공유하고 팀과 협업해 합의를 이끌었습니다.",
-  "새로운 아이디어와 개선안을 논의했고, 변화에 맞춰 유연하게 대응하기로 했습니다. 개발과 설계 부분을 조율하고 지원 요청에 응했습니다.",
-  "리더로서 방향을 정하고, 기술 검증과 시스템 개선을 논의했습니다. 창의적인 대안을 함께 검토하고 적응력 있는 전환 계획을 수립했습니다.",
-];
-
-/** 회의록 내용 보기 다이얼로그용 목 데이터 — 실제 데이터가 없을 때 항상 표시 */
-const MOCK_SOURCE_ITEMS: BehavioralSourceItem[] = SAMPLE_TRANSCRIPTS.map((content, i) => ({
-  kind: "meeting",
-  title: `회의록 ${i + 1}`,
-  content,
-}));
-
-const DIMENSION_LABELS_KO: Record<keyof SuccessDNA, string> = {
-  leadership: "리더십",
-  technical: "기술력",
-  creativity: "창의성",
-  collaboration: "협업",
-  adaptability: "적응력",
-};
-
-const defaultEmployee = getIntelligenceEmployee();
-
 export default function IntelligencePage() {
   const hydrated = useHydrated();
   const selectedEmployee = useStore((s) => s.selectedEmployee);
-  const updateEmployee = useStore((s) => s.updateEmployee);
   const [highlightedDimension, setHighlightedDimension] = useState<keyof SuccessDNA | null>(null);
+  const [regularAverageDna, setRegularAverageDna] = useState<SuccessDNA | undefined>(undefined);
+  const [aiTransitionNarrative, setAiTransitionNarrative] = useState<string>("");
+  const [aiTransitionLoading, setAiTransitionLoading] = useState(false);
+  const [aiTransitionError, setAiTransitionError] = useState<string | null>(null);
 
-  const { employee, summary } = useMemo((): {
-    employee: IntelligenceEmployee;
-    summary: ReturnType<typeof getTransitionReadinessSummary>;
-  } => {
-    const base = defaultEmployee;
-    const emp: IntelligenceEmployee = hydrated && selectedEmployee
-      ? {
-          ...selectedEmployee,
-          successDna: selectedEmployee.successDna ?? base.successDna ?? undefined,
-          behavioralDna: selectedEmployee.behavioralDna,
-          behavioralSource: selectedEmployee.behavioralSource,
-          behavioralSourceItems: selectedEmployee.behavioralSourceItems,
-          ifrsMetrics: selectedEmployee.ifrsMetrics ?? base.ifrsMetrics ?? undefined,
-          transitionTrend: base.transitionTrend,
-        }
-      : base;
+  useEffect(() => {
+    setAiTransitionNarrative("");
+    setAiTransitionError(null);
+  }, [selectedEmployee?.id]);
 
-    const sum = getTransitionReadinessSummary(emp);
-    return { employee: emp, summary: sum };
+  useEffect(() => {
+    if (!hydrated) return;
+    fetchEmployeesPaginated({ page: 1, pageSize: 100, employmentType: "regular" })
+      .then(({ items }) => {
+        const avg = getAverageSuccessDna(items ?? []);
+        setRegularAverageDna(avg ?? undefined);
+      })
+      .catch(() => setRegularAverageDna(undefined));
+  }, [hydrated]);
+
+  const employee = useMemo((): IntelligenceEmployee | null => {
+    if (!hydrated || !selectedEmployee) return null;
+    return toIntelligenceEmployee(selectedEmployee);
   }, [selectedEmployee, hydrated]);
 
-  // 선택된 직원에 대해 비정형(회의록) 분석이 없으면 샘플 회의록 3건으로 분석 후 스토어 반영
-  useEffect(() => {
-    if (!hydrated || !selectedEmployee?.id) return;
-    if (selectedEmployee.behavioralDna != null) return;
+  const capabilitySummary = useMemo(
+    () => (employee?.successDna ? getCapabilitySummary(employee.successDna) : null),
+    [employee?.successDna]
+  );
 
-    const result = analyzeBehavioralDataFromMultiple(SAMPLE_TRANSCRIPTS);
-    updateEmployee(selectedEmployee.id, {
-      behavioralDna: result.dna,
-      behavioralSource: result.source,
-      behavioralSourceItems: result.sourceItems,
-    });
-  }, [hydrated, selectedEmployee?.id, selectedEmployee?.behavioralDna, updateEmployee]);
+  const requestTransitionAnalysis = () => {
+    if (!employee) return;
+    const { message, system_prompt } = buildTransitionAnalysisPrompt(employee);
+    setAiTransitionLoading(true);
+    setAiTransitionError(null);
+    setAiTransitionNarrative("");
+    sendChatMessageStream(
+      { message, system_prompt, use_rag: true },
+      {
+        onChunk: (content) => setAiTransitionNarrative((prev) => prev + content),
+        onDone: () => setAiTransitionLoading(false),
+        onError: (err) => {
+          setAiTransitionError(err);
+          setAiTransitionLoading(false);
+        },
+      }
+    );
+  };
 
-  // 차트: 기존 DNA와 비정형 분석이 둘 다 있으면 가중 평균 (기존 0.7 + 비정형 0.3), 없으면 있는 쪽만 사용
   const chartDna: SuccessDNA | undefined =
-    employee.successDna && employee.behavioralDna
-      ? mergeDnaWithWeights(employee.successDna, employee.behavioralDna)
-      : (employee.behavioralDna ?? employee.successDna);
-  const successDna = employee.successDna;
-  const dataSourceLabel = employee.behavioralSource ?? "이력/평가 기반 데이터";
-  const strengthLabel = successDna
-    ? DIMENSION_LABELS_KO[summary.strengthDimension]
-    : "";
+    (employee &&
+      (employee.successDna && employee.behavioralDna
+        ? mergeDnaWithWeights(employee.successDna, employee.behavioralDna)
+        : employee.behavioralDna ?? employee.successDna)) ?? undefined;
+  const dataSourceLabel = employee?.behavioralSource ?? "이력/평가 기반 데이터";
 
   if (!hydrated) {
     return (
@@ -117,61 +111,95 @@ export default function IntelligencePage() {
     );
   }
 
+  if (hydrated && !employee) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
+            <Brain className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs">AI 기반 역량 추출 및 진단</span>
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">역량 진단</h1>
+          <p className="mt-1 text-muted-foreground">5대 역량 진단 및 직무 전환 분석</p>
+        </div>
+        <section className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-16 text-center">
+          <UserX className="h-12 w-12 text-muted-foreground" />
+          <p className="mt-4 text-sm font-medium text-foreground">분석할 직원을 선택해 주세요</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <Link href="/core/employees" className="underline hover:no-underline">
+              기존 직원
+            </Link>
+            에서 직원을 선택하면 이곳에서 역량 진단을 확인할 수 있습니다.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      <div>
-        <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
-          <Brain className="h-3.5 w-3.5 shrink-0" />
-          <span className="text-xs">Talent Intelligence: AI 기반 비정형 행동 패턴 및 역량 추출 엔진</span>
+      {/* 헤더: 페이지 타이틀 + 선택 직원 + 데이터 출처 배지 */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
+            <Brain className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs">역량 진단</span>
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">역량 진단</h1>
+          <p className="mt-1 text-muted-foreground">
+            {employee?.name ?? "이름 없음"}
+            {employee?.department ? ` · ${employee.department}` : ""}
+          </p>
         </div>
-        <h1 className="text-2xl font-bold text-foreground">Talent Intelligence</h1>
-        <p className="mt-1 text-muted-foreground">
-          Success DNA 역량과 IFRS S2 전환 준비도 분석
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {dataSourceLabel}
+          </span>
+          {employee?.successDna && <DNABadge dna={employee.successDna} showTitle={true} />}
+        </div>
       </div>
 
-      {/* AI 전환 가능성 리포트 요약 */}
-      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="flex items-center gap-2 text-primary">
-          <Sparkles className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">AI가 분석한 전환 가능성 리포트</h2>
-        </div>
-        <div className="mt-4 space-y-4">
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">현재 상태 분석</h3>
-            <p className="mt-1 text-foreground leading-relaxed">{summary.currentState}</p>
+      {/* 역량 진단: 요약 카드 3개 */}
+      {capabilitySummary && (
+        <section className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              종합 점수
+            </p>
+            <p className="mt-1 text-2xl font-bold text-foreground">
+              {capabilitySummary.overallScore}
+              <span className="ml-0.5 text-sm font-normal text-muted-foreground">/ 100</span>
+            </p>
           </div>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">전환(Transition) 제언</h3>
-            <p className="mt-1 text-foreground leading-relaxed">{summary.transitionRecommendation}</p>
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              강점 역량 (Top 2)
+            </p>
+            <p className="mt-1 font-medium text-foreground">
+              {capabilitySummary.topDimensions
+                .map((d) => `${d.label} ${d.score}`)
+                .join(", ")}
+            </p>
           </div>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">리스크 알림</h3>
-            <p className="mt-1 text-foreground leading-relaxed">{summary.riskNotice}</p>
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              보완 역량
+            </p>
+            <p className="mt-1 font-medium text-foreground">
+              {capabilitySummary.improveDimension
+                ? `${capabilitySummary.improveDimension.label} ${capabilitySummary.improveDimension.score}`
+                : "—"}
+            </p>
           </div>
-        </div>
-        <div className="mt-6 flex flex-wrap items-center gap-4">
-          <div className="rounded-lg bg-primary/10 px-4 py-2">
-            <span className="text-sm text-muted-foreground">전환 가능성</span>
-            <p className="text-2xl font-bold text-primary">{summary.transitionProbability}%</p>
-          </div>
-          {strengthLabel && (
-            <div className="rounded-lg bg-muted/50 px-4 py-2">
-              <span className="text-sm text-muted-foreground">핵심 강점 역량</span>
-              <p className="font-medium text-foreground">{strengthLabel}</p>
-            </div>
-          )}
-          {successDna && (
-            <DNABadge dna={successDna} showTitle={true} />
-          )}
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* Success DNA 레이더 차트 + DNA 성장 이력 */}
+      {/* 2열: 레이더 | 평가 근거 패널 */}
       <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-foreground">Success DNA 역량 비교</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          본인 vs 전사 고성과자 평균 · 1년 전 대비 성장 서사
+          본인 vs 조직 평균 (실제 DB 데이터 기준)
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
@@ -193,87 +221,170 @@ export default function IntelligencePage() {
                 <DialogTitle className="text-base">분석에 사용된 출처 원문</DialogTitle>
               </DialogHeader>
               <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                {(employee.behavioralSourceItems?.length
-                  ? employee.behavioralSourceItems
-                  : MOCK_SOURCE_ITEMS
-                ).map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-lg border border-border bg-muted/30 p-3"
-                  >
-                    <p className="mb-2 text-sm font-medium text-foreground">
-                      {item.title ?? `${item.kind} ${idx + 1}`}
-                    </p>
-                    <pre className="whitespace-pre-wrap break-words font-sans text-xs text-muted-foreground">
-                      {item.content}
-                    </pre>
-                  </div>
-                ))}
+                {(employee?.behavioralSourceItems ?? []).length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    분석된 회의록이 없습니다.
+                  </p>
+                ) : (
+                  (employee?.behavioralSourceItems ?? []).map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-lg border border-border bg-muted/30 p-3"
+                    >
+                      <p className="mb-2 text-sm font-medium text-foreground">
+                        {item.title ?? `${item.kind} ${idx + 1}`}
+                      </p>
+                      <pre className="whitespace-pre-wrap break-words font-sans text-xs text-muted-foreground">
+                        {item.content}
+                      </pre>
+                    </div>
+                  ))
+                )}
               </div>
             </DialogContent>
           </Dialog>
         </div>
+        <div className="mt-6 grid gap-8 lg:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">역량 레이더</h3>
+            {chartDna && (
+              <DNARadarChart
+                data={chartDna}
+                highPerformerAverage={regularAverageDna}
+                trainingHours={employee?.trainingHours ?? undefined}
+                onDimensionClick={(key) =>
+                  setHighlightedDimension((prev) => (prev === key ? null : key))
+                }
+                highlightedDimension={highlightedDimension}
+              />
+            )}
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">평가 근거</h3>
+            <div className="mt-2 min-h-[200px] rounded-lg border border-border bg-muted/20 p-4">
+              {employee?.successDnaReason?.trim() ? (
+                <p className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
+                  {employee.successDnaReason}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  평가 근거 데이터가 없습니다. AI 분석을 실행하거나 수동으로 입력해 주세요.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* 성장 이력/궤적: 데이터 있을 때만 표시 */}
         {chartDna && (
-          <div className="mt-6 space-y-8">
-            <div className="grid items-stretch gap-8 lg:grid-cols-2">
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">역량 레이더</h3>
-                <DNARadarChart
-                  data={chartDna}
-                  trainingHours={employee.trainingHours ?? undefined}
-                  onDimensionClick={(key) =>
-                    setHighlightedDimension((prev) => (prev === key ? null : key))
-                  }
-                  highlightedDimension={highlightedDimension}
-                />
-              </div>
-              <div className="flex min-h-[320px] min-w-0 flex-1 flex-col">
-                <h3 className="text-sm font-medium text-muted-foreground">역량별 성장 궤적 (지난 1년)</h3>
+          <>
+            {employee && getDNAGrowthTrajectory({ ...employee, successDna: chartDna } as Employee).length > 0 && (
+              <div className="mt-8 flex min-h-[320px] min-w-0 flex-1 flex-col">
+                <h3 className="text-sm font-medium text-muted-foreground">역량별 성장 궤적</h3>
                 <DNAGrowthTrajectoryChart
-                  data={(() => {
-                    const empWithChartDna = { ...employee, successDna: chartDna };
-                    const t = getDNAGrowthTrajectory(empWithChartDna);
-                    return t.length > 0 ? t : getDNAGrowthTrajectoryFromDNA(chartDna);
-                  })()}
+                  data={getDNAGrowthTrajectory({ ...employee, successDna: chartDna })}
                   highlightDimension={highlightedDimension}
                   onHighlightChange={setHighlightedDimension}
                 />
               </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">DNA 성장 이력 (1년 전 → 현재)</h3>
-              <DNAGrowthChart data={getDNAGrowthHistory({ ...employee, successDna: chartDna })} />
-            </div>
-          </div>
+            )}
+            {employee && getDNAGrowthHistory({ ...employee, successDna: chartDna } as Employee).length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-sm font-medium text-muted-foreground">DNA 성장 이력</h3>
+                <DNAGrowthChart
+                  data={getDNAGrowthHistory({ ...employee, successDna: chartDna })}
+                />
+              </div>
+            )}
+          </>
         )}
       </section>
 
-      {/* 전환 준비도 추이 */}
+      {/* 직무 전환 분석: 숫자는 데이터 기반, 문구는 엑사원 생성 */}
       <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-foreground">전환 준비도 추이 (Transition Trend)</h2>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Target className="h-5 w-5 shrink-0" />
+          <h2 className="text-lg font-semibold text-foreground">직무 전환 분석</h2>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          최근 12개월 전환 준비도 변화. 목표선(S2 Benchmark)은 해당 산업으로 전환하기 위한 최소 준비 점수이며, 이 위에 있으면 전환 준비 완료로 간주합니다.
+          전환 가능성·지표는 DB 데이터로 산출하고, 아래 분석 문구는 AI가 직원 데이터를 바탕으로 생성합니다. 「직무 전환 분석 요청」을 누르면 직원별 맞춤 문구가 생성됩니다.
         </p>
-        {employee.ifrsMetrics && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            현재 역량 갭(Skill Gap): <strong className="text-foreground">{employee.ifrsMetrics.skillGap}점</strong>
-            {employee.ifrsMetrics.transitionReadyScore < S2_BENCHMARK ? (
-              <span className="ml-2">
-                — 목표까지 <strong className="text-primary">{S2_BENCHMARK - employee.ifrsMetrics.transitionReadyScore}점</strong> 남음
-              </span>
-            ) : (
-              <span className="ml-2 text-green-600 dark:text-green-400">— S2 목표 달성</span>
-            )}
-          </p>
-        )}
-        {employee.transitionTrend?.length > 0 && (
-          <div className="mt-6">
-            <TransitionTrendChart
-              data={employee.transitionTrend}
-              goalScore={S2_BENCHMARK}
-            />
-          </div>
-        )}
+        {(() => {
+          if (!employee) return null;
+          const summary = getTransitionReadinessSummary(employee);
+          const parsed =
+            aiTransitionNarrative && !aiTransitionLoading
+              ? parseTransitionAnalysisResponse(aiTransitionNarrative)
+              : null;
+          const showAiBlocks =
+            parsed && (parsed.transitionRecommendation || parsed.riskNotice || parsed.currentState);
+          const showStreaming = aiTransitionLoading && aiTransitionNarrative;
+          return (
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">전환 가능성</p>
+                  <p className="mt-0.5 text-2xl font-bold text-foreground">{summary.transitionProbability}%</p>
+                </div>
+                {summary.transitionReadyScore != null && (
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">전환 준비도 (IFRS S2)</p>
+                    <p className="mt-0.5 text-2xl font-bold text-foreground">{summary.transitionReadyScore}점</p>
+                  </div>
+                )}
+                {summary.skillGap != null && (
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">스킬 갭</p>
+                    <p className="mt-0.5 text-2xl font-bold text-foreground">{summary.skillGap}점</p>
+                  </div>
+                )}
+              </div>
+              {aiTransitionError && (
+                <p className="text-sm text-destructive">{aiTransitionError}</p>
+              )}
+              {aiTransitionLoading && (
+                <p className="text-sm text-muted-foreground">AI 직무 전환 분석 중…</p>
+              )}
+              <div className="grid gap-3 sm:grid-cols-1">
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">현재 상태</p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-foreground">
+                    {showStreaming
+                      ? aiTransitionNarrative
+                      : showAiBlocks
+                        ? parsed!.currentState
+                        : summary.currentState}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">전환 제언</p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-foreground">
+                    {showStreaming ? "" : showAiBlocks ? parsed!.transitionRecommendation : summary.transitionRecommendation}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">배치 시 고려사항</p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-foreground">
+                    {showStreaming ? "" : showAiBlocks ? parsed!.riskNotice : summary.riskNotice}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={requestTransitionAnalysis}
+                  disabled={aiTransitionLoading}
+                >
+                  {aiTransitionNarrative && !aiTransitionLoading ? "직무 전환 다시 분석" : "직무 전환 분석 요청"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                시계열 전환 준비도·직무별 목표 역량 데이터가 쌓이면 추이 차트와 매핑 분석이 확장됩니다.
+              </p>
+            </div>
+          );
+        })()}
       </section>
 
       {/* 블록체인 안내 + 검증하기 */}
@@ -286,10 +397,10 @@ export default function IntelligencePage() {
             </p>
           </div>
           <Link
-            href={`/credential?id=${employee.id}`}
+            href={`/credential?id=${employee?.id ?? ""}`}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            검증하기 (Verify)
+            검증하기
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

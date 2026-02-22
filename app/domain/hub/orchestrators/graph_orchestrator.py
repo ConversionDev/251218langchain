@@ -131,6 +131,41 @@ def get_hr_summary() -> str:
         return f"HR 요약 조회 실패: {str(e)}"
 
 
+@tool
+def get_employee_info(name: str) -> str:
+    """이름으로 직원을 검색해 요약 정보를 반환합니다. '김도윤에 대해 설명해줘', 'OOO 직원 정보' 등 개별 직원 질문에 사용합니다. name에는 성명 일부(예: 김도윤, 도윤)를 넣습니다."""
+    if not (name and name.strip()):
+        return "이름을 입력해 주세요."
+    try:
+        from core.database import SessionLocal  # type: ignore
+        from domain.hub.repositories.employee_repository import find_by_name  # type: ignore
+
+        db = SessionLocal()
+        try:
+            employees = find_by_name(db, name.strip(), limit=5)
+            if not employees:
+                return f"'{name.strip()}'(으)로 검색된 직원이 없습니다."
+            parts = []
+            for i, emp in enumerate(employees, 1):
+                pid = emp.get("id", "")
+                pname = emp.get("name", "")
+                job = emp.get("jobTitle", "") or "-"
+                dept = emp.get("department", "") or "-"
+                line = f"[{i}] ID: {pid}, 이름: {pname}, 직급: {job}, 부서: {dept}"
+                if emp.get("trainingHours") is not None:
+                    line += f", 교육훈련: {emp['trainingHours']}시간"
+                if emp.get("successDna"):
+                    line += ", Success DNA 보유"
+                if emp.get("email"):
+                    line += f", 이메일: {emp['email']}"
+                parts.append(line)
+            return "\n".join(parts)
+        finally:
+            db.close()
+    except Exception as e:
+        return f"직원 검색 실패: {str(e)}"
+
+
 TOOLS = [
     analyze_with_exaone,
     search_documents,
@@ -138,6 +173,7 @@ TOOLS = [
     calculate,
     define,
     get_hr_summary,
+    get_employee_info,
 ]
 TOOL_MAP: Dict[str, Any] = {t.name: t for t in TOOLS}
 

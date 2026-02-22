@@ -16,7 +16,7 @@ import {
   Legend,
 } from "recharts";
 import type { Employee } from "@/modules/shared/types";
-import { PIE_PALETTE_INDIGO_EMERALD, BRAND_CHART_COLORS } from "@/modules/shared/constants/chartColors";
+import { PIE_PALETTE_INDIGO_EMERALD, DEPARTMENT_BAR_COLORS } from "@/modules/shared/constants/chartColors";
 import {
   getGenderDistribution,
   getEmploymentDistribution,
@@ -183,11 +183,14 @@ export function PeopleCompositionCharts({ employees }: PeopleCompositionChartsPr
             />
             <Bar
               dataKey="인원"
-              fill={BRAND_CHART_COLORS.primary}
               barSize={30}
               radius={[0, 4, 4, 0]}
               name="인원"
-            />
+            >
+              {departmentData.map((_, i) => (
+                <Cell key={i} fill={DEPARTMENT_BAR_COLORS[i % DEPARTMENT_BAR_COLORS.length]} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </motion.div>

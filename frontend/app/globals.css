@@ -8,14 +8,14 @@
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
+    --primary: 160 84% 39%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
+    --secondary: 166 30% 94%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
+    --muted: 174 25% 95%;
     --muted-foreground: 215 16% 47%;
     --border: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --ring: 160 84% 39%;
     --radius: 0.5rem;
     /* 차트: 라이트 모드 */
     --chart-tooltip-bg: 0 0% 100%;
@@ -24,21 +24,23 @@
     --chart-cursor-opacity: 0.25;
   }
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 14%;
-    --card-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --border: 217 33% 22%;
-    --ring: 217 91% 60%;
-    /* 차트: 다크 모드 (Slate-900/Zinc-950 톤) */
-    --chart-tooltip-bg: 222 47% 9%;
-    --chart-tooltip-border: 215 28% 17%;
-    --chart-cursor-fill: 215 20% 65%;
+    /* 배경: 파란 기울 제거, neutral 다크 그레이 (라이트 모드와 분위기 통일) */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+    /* 액센트: 라이트와 동일하게 emerald(초록) 유지 */
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 14%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 63%;
+    --border: 0 0% 18%;
+    --ring: 160 84% 39%;
+    /* 차트: 다크 모드 neutral 톤 */
+    --chart-tooltip-bg: 0 0% 9%;
+    --chart-tooltip-border: 0 0% 18%;
+    --chart-cursor-fill: 0 0% 60%;
     --chart-cursor-opacity: 0.2;
   }
 }
@@ -183,4 +185,16 @@
   background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23999' fill-opacity='0.04' font-size='32' font-family='system-ui' transform='rotate(-25)'%3EOFFICIAL%3C/text%3E%3C/svg%3E");
   background-repeat: repeat;
   pointer-events: none;
+}
+
+/* AI 캐릭터/어시스턴트 비주얼 영역용: 글래스 + 에메랄드 글로우로 통일 (랜딩·워크스페이스 등) */
+.character-panel {
+  border-color: rgb(167 243 208 / 0.5);
+  background: rgb(255 255 255 / 0.75);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.08), 0 0 0 1px rgb(16 185 129 / 0.1);
+}
+.dark .character-panel {
+  border-color: rgb(16 185 129 / 0.2);
+  background: rgb(15 23 42 / 0.6);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4), 0 0 24px -4px rgb(16 185 129 / 0.12);
 }
