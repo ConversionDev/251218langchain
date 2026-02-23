@@ -105,6 +105,13 @@ def get_performance_samples_dir() -> Path:
     return d
 
 
+def get_env_mapping_data_dir() -> Path:
+    """환경 데이터 매핑(다국어·배터리 물질) 입출력. app/data/env_mapping/"""
+    d = get_data_dir() / "env_mapping"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_output_dir() -> Path:
     """출력 디렉토리 경로 반환.
 
