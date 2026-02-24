@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 from core.database import SessionLocal  # type: ignore
 from domain.hub.repositories.disclosure_repository import (  # type: ignore
     get_disclosure_doc_count,
+    get_disclosure_embedded_count,
+    fill_embeddings_for_disclosures,
     search_disclosures,
 )
 
@@ -30,7 +32,9 @@ class DisclosureStatusResponse(BaseModel):
     """disclosures 테이블 적재 상태."""
 
     ingested: bool = Field(..., description="학습(적재) 완료 여부")
-    document_count: int = Field(..., description="벡터로 저장된 문서(청크) 개수")
+    document_count: int = Field(..., description="총 문서(청크) 개수")
+    embedded_count: int = Field(0, description="임베딩 완료된 문서 개수")
+    embedding_ratio: float = Field(0.0, description="임베딩 비율 (0~1)")
 
 
 class DisclosureCheckRequest(BaseModel):
@@ -167,11 +171,55 @@ async def get_disclosure_status() -> DisclosureStatusResponse:
     """ISO 30414 문서가 disclosures 테이블에 적재되었는지 조회."""
     db = SessionLocal()
     try:
-        count = get_disclosure_doc_count(db)
+        total = get_disclosure_doc_count(db)
+        embedded = get_disclosure_embedded_count(db)
+        ratio = (embedded / total) if total > 0 else 0.0
         return DisclosureStatusResponse(
-            ingested=count > 0,
-            document_count=count,
+            ingested=total > 0,
+            document_count=total,
+            embedded_count=embedded,
+            embedding_ratio=round(ratio, 4),
         )
+    finally:
+        db.close()
+
+
+class EmbeddingRunResponse(BaseModel):
+    """임베딩 실행 결과."""
+
+    success: bool
+    processed: int = Field(0, description="새로 임베딩된 문서 수")
+    total: int = Field(0, description="전체 문서 수")
+    embedded: int = Field(0, description="임베딩 완료 문서 수")
+    message: str = ""
+
+
+@router.post("/embedding/run", response_model=EmbeddingRunResponse)
+async def run_disclosure_embedding() -> EmbeddingRunResponse:
+    """embedding이 null인 공시 문서에 임베딩을 채웁니다."""
+    db = SessionLocal()
+    try:
+        from domain.shared.embedding import get_disclosure_embedding_model  # type: ignore
+
+        emb_model = get_disclosure_embedding_model()
+        if emb_model is None:
+            return EmbeddingRunResponse(
+                success=False, message="임베딩 모델을 로드할 수 없습니다."
+            )
+        processed = fill_embeddings_for_disclosures(db, emb_model)
+        db.commit()
+        total = get_disclosure_doc_count(db)
+        embedded = get_disclosure_embedded_count(db)
+        return EmbeddingRunResponse(
+            success=True,
+            processed=processed,
+            total=total,
+            embedded=embedded,
+            message=f"임베딩 완료: {processed}건 처리됨 ({embedded}/{total})",
+        )
+    except Exception as e:
+        logger.exception("임베딩 실행 실패: %s", e)
+        return EmbeddingRunResponse(success=False, message=f"실패: {str(e)}")
     finally:
         db.close()
 

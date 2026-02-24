@@ -4,10 +4,12 @@
 performance_records 테이블. 분기별 실적/활동 조회 및 AI 성장 분석용.
 """
 
+import pgvector.sqlalchemy  # type: ignore[import-untyped]
 from sqlalchemy import Column, DateTime, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from core.database import Base  # type: ignore
+from domain.shared.embedding import BGE_M3_DENSE_DIM  # type: ignore
 
 
 class PerformanceRecord(Base):  # type: ignore[misc]
@@ -23,3 +25,5 @@ class PerformanceRecord(Base):  # type: ignore[misc]
     tags = Column(JSONB(), nullable=True, comment="태그 배열")
     grade = Column(String(32), nullable=True, index=True, comment="high|normal")
     created_at = Column(DateTime(), server_default=text("now()"), nullable=True, comment="생성 시각")
+    embedding_content = Column(Text(), nullable=True, comment="RAG 임베딩용 텍스트 (직원명·분기·유형·본문 요약)")
+    embedding = Column(pgvector.sqlalchemy.Vector(BGE_M3_DENSE_DIM), nullable=True, comment="BGE-m3 1024차원, RAG 검색용")  # type: ignore[var-annotated]

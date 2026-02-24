@@ -5,8 +5,10 @@ Graph Orchestrator — 채팅 그래프 빌더
 """
 
 import logging
+import re
 import sys
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
+from uuid import uuid4
 
 from langchain_core.messages import (
     AIMessage,
@@ -107,23 +109,82 @@ def define(term: str) -> str:
 
 @tool
 def get_hr_summary() -> str:
-    """등록된 임직원 수와 RAG 적재 상태(공시·역량 anchor)를 반환합니다. '전체 직원 수', '공시 완성도', 'RAG에 어떤 문서가 있나요', '적재 상태' 등 질문에 사용합니다."""
+    """등록된 일반 직원 수와 RAG 적재 상태(공시·역량·성과)를 반환합니다. '전체 직원 수', '공시 완성도', 'RAG에 어떤 문서가 있나요', '적재 상태' 등 질문에 사용합니다."""
     try:
         from core.database import SessionLocal  # type: ignore
         from domain.hub.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
         from domain.hub.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
         from domain.hub.repositories.employee_repository import list_all as repo_list_all  # type: ignore
+        from domain.hub.repositories.performance_record_repository import get_performance_record_count  # type: ignore
 
         db = SessionLocal()
         try:
-            employees = repo_list_all(db)
-            employee_count = len(employees) if employees else 0
+            employees = repo_list_all(db) or []
+            employee_count = len(employees)
+            ats_statuses = {"pending", "screening", "hired", "rejected"}
+
+            def _is_new_hire(emp: Dict[str, Any]) -> bool:
+                et0 = str(emp.get("employmentType") or "").strip().lower()
+                st0 = str(emp.get("status") or "").strip().lower()
+                return et0 == "new_hire" or st0 in ats_statuses
+
+            def _is_high_performer(emp: Dict[str, Any]) -> bool:
+                dna = emp.get("successDna")
+                if not isinstance(dna, dict):
+                    return False
+                keys = ("leadership", "technical", "creativity", "collaboration", "adaptability")
+                vals: List[float] = []
+                for k in keys:
+                    v = dna.get(k)
+                    try:
+                        if v is None:
+                            continue
+                        vals.append(float(v))
+                    except Exception:
+                        continue
+                if not vals:
+                    return False
+                return (sum(vals) / len(vals)) >= 80.0
+
+            new_hires = [e for e in employees if _is_new_hire(e)]
+            regulars = [e for e in employees if not _is_new_hire(e)]
+            high_performers = [e for e in employees if _is_high_performer(e)]
+
+            def _completeness(rows: List[Dict[str, Any]]) -> int:
+                if not rows:
+                    return 0
+                fields = ("gender", "age", "employmentType", "trainingHours")
+                filled = 0
+                for r in rows:
+                    for f in fields:
+                        v = r.get(f)
+                        if v is None:
+                            continue
+                        if isinstance(v, float) and v != v:  # NaN
+                            continue
+                        filled += 1
+                return round((filled / (len(rows) * len(fields))) * 100)
+
+            regular_completeness = _completeness(regulars)
+            all_completeness = _completeness(employees)
             disclosure_count = get_disclosure_doc_count(db)
             anchor_count = get_anchor_doc_count(db)
-            return (
-                f"등록 임직원 수: {employee_count}명. "
-                f"공시(disclosure) RAG 문서 청크: {disclosure_count}건. "
-                f"역량(competency_anchors) RAG 문서: {anchor_count}건."
+            perf_count = get_performance_record_count(db)
+            return "\n".join(
+                [
+                    "[인원 구분(모두 DB 기준)]",
+                    f"- 전체 직원 수(신입 + 일반): {employee_count}명",
+                    f"- 일반 직원 수: {len(regulars)}명",
+                    f"- 신입사원 수(인턴·사원 포함): {len(new_hires)}명",
+                    f"- 고성과자 수(Success DNA 평균 80점 이상): {len(high_performers)}명",
+                    "[공시 완성도]",
+                    f"- 일반 직원 기준 공시 완성도: {regular_completeness}%",
+                    f"- 전체 직원 기준 공시 완성도: {all_completeness}%",
+                    "[RAG 적재 상태]",
+                    f"- 성과(performance_records) 기록: {perf_count}건",
+                    f"- 공시(disclosures) RAG 문서 청크: {disclosure_count}건",
+                    f"- 역량(competency_anchors) RAG 문서: {anchor_count}건",
+                ]
             )
         finally:
             db.close()
@@ -166,6 +227,173 @@ def get_employee_info(name: str) -> str:
         return f"직원 검색 실패: {str(e)}"
 
 
+@tool
+def list_employees(
+    employment_type: Optional[str] = None,
+    department: Optional[str] = None,
+    job_title: Optional[str] = None,
+    performance_tier: Optional[str] = None,
+    limit: int = 50,
+) -> str:
+    """직원/신입/지원자 목록을 조회합니다.
+    employment_type(all|new_hire|regular), performance_tier(all|high), department·job_title 부분 검색.
+    전체 직원·명단·목록·고성과자 질문에 사용합니다.
+    """
+    et = (employment_type or "all").strip().lower()
+    if et not in {"all", "new_hire", "regular"}:
+        return "employment_type은 all, new_hire, regular 중 하나여야 합니다."
+    pt = (performance_tier or "all").strip().lower()
+    if pt not in {"all", "high"}:
+        return "performance_tier는 all, high 중 하나여야 합니다."
+    try:
+        from core.database import SessionLocal  # type: ignore
+        from domain.hub.repositories.employee_repository import list_for_chat, count_for_chat, count_all  # type: ignore
+
+        db = SessionLocal()
+        try:
+            safe_limit = max(1, min(500, int(limit or 50)))
+            if pt == "high":
+                safe_limit = 500
+            emp_type_filter = None if et == "all" else et
+            dept_filter = (department or "").strip() or None
+            title_filter = (job_title or "").strip() or None
+            rows = list_for_chat(
+                db,
+                employment_type=emp_type_filter,
+                department_part=dept_filter,
+                job_title_part=title_filter,
+                exclude_sample=False,
+                limit=safe_limit,
+            )
+            if not rows:
+                return "조건에 맞는 직원이 없습니다."
+            total = count_all(db)
+            filtered_total = count_for_chat(
+                db,
+                employment_type=emp_type_filter,
+                department_part=dept_filter,
+                job_title_part=title_filter,
+                exclude_sample=False,
+            )
+
+            ats_statuses = {"pending", "screening", "hired", "rejected"}
+
+            def _is_new_hire(emp: Dict[str, Any]) -> bool:
+                et0 = str(emp.get("employmentType") or "").strip().lower()
+                st0 = str(emp.get("status") or "").strip().lower()
+                return et0 == "new_hire" or st0 in ats_statuses
+
+            def _is_high_performer(emp: Dict[str, Any]) -> bool:
+                dna = emp.get("successDna")
+                if not isinstance(dna, dict):
+                    return False
+                keys = ("leadership", "technical", "creativity", "collaboration", "adaptability")
+                vals: List[float] = []
+                for k in keys:
+                    v = dna.get(k)
+                    try:
+                        if v is None:
+                            continue
+                        vals.append(float(v))
+                    except Exception:
+                        continue
+                if not vals:
+                    return False
+                return (sum(vals) / len(vals)) >= 80.0
+
+            # 통계는 SQL count 쿼리로 정확하게 계산 (limit 무관)
+            new_hire_total = count_for_chat(db, employment_type="new_hire", department_part=dept_filter, job_title_part=title_filter)
+            regular_total = count_for_chat(db, employment_type="regular", department_part=dept_filter, job_title_part=title_filter)
+            new_hire_count = new_hire_total
+            regular_count = regular_total
+            # 고성과자는 successDna 계산 필요 → 표시 대상(rows)에서 산출
+            high_count = sum(1 for r in rows if _is_high_performer(r))
+
+            if pt == "high":
+                rows = [r for r in rows if _is_high_performer(r)]
+                if not rows:
+                    return "조건에 맞는 직원이 없습니다."
+                high_count = len(rows)
+                new_hire_count = sum(1 for r in rows if _is_new_hire(r))
+                regular_count = len(rows) - new_hire_count
+                filtered_total = high_count
+
+            # GPU OOM 방지: LLM에 보내는 명단은 최대 30명으로 제한
+            MAX_DISPLAY = 30
+            displayed = min(len(rows), MAX_DISPLAY)
+            ratio_pct = round((high_count / total) * 100, 1) if total > 0 else 0
+            lines: List[str] = [
+                f"[조회 결과] 전체 {total}명 중 조건 일치 {filtered_total}명 (신입 {new_hire_count} / 일반 {regular_count} / 고성과 {high_count}, 전체 대비 비율 {ratio_pct}%)",
+            ]
+            if displayed < len(rows):
+                lines.append(f"▼ 아래는 {filtered_total}명 중 상위 {displayed}명 표시 (이름·부서·직급을 그대로 답변에 나열하세요)")
+            else:
+                lines.append("▼ 직원 명단 (이름·부서·직급을 그대로 답변에 나열하세요)")
+            for i, emp in enumerate(rows[:MAX_DISPLAY], 1):
+                cls = "신입" if _is_new_hire(emp) else "일반"
+                hp = ",고성과" if _is_high_performer(emp) else ""
+                lines.append(
+                    f"[{i}] 이름: {emp.get('name','')}, 부서: {emp.get('department') or '-'}, "
+                    f"직급: {emp.get('jobTitle') or '-'}, 구분: {cls}{hp}"
+                )
+            if displayed < len(rows):
+                lines.append(f"… 외 {len(rows) - displayed}명 더 있음. department/job_title 필터를 사용하면 더 볼 수 있습니다.")
+            return "\n".join(lines)
+        finally:
+            db.close()
+    except Exception as e:
+        return f"직원 목록 조회 실패: {str(e)}"
+
+
+@tool
+def get_employee_performance(employee_name_or_id: str, limit: int = 30) -> str:
+    """직원의 성과 활동(performance_records)을 조회합니다. 'OOO 성과', 'OOO 활동/실적', 'OOO 회의록·보고서' 등 질문에 사용합니다. 인자에는 직원 이름(예: 강경구) 또는 직원 ID(예: E001)를 넣습니다."""
+    if not (employee_name_or_id and employee_name_or_id.strip()):
+        return "직원 이름 또는 ID를 입력해 주세요."
+    try:
+        from core.database import SessionLocal  # type: ignore
+        from domain.hub.repositories.employee_repository import find_by_name, get_by_id  # type: ignore
+        from domain.hub.repositories.performance_record_repository import list_by_employee  # type: ignore
+
+        db = SessionLocal()
+        try:
+            key = employee_name_or_id.strip()
+            # 먼저 이름으로 검색, 없으면 ID로 단건 조회
+            employees = find_by_name(db, key, limit=5)
+            if not employees:
+                emp = get_by_id(db, key)
+                if emp:
+                    employees = [emp]
+            employee_ids = [{"id": e.get("id", ""), "name": e.get("name", "")} for e in employees]
+            if not employee_ids:
+                return f"'{key}'(으)로 검색된 직원이 없습니다. 성과 조회는 직원 이름 또는 ID가 필요합니다."
+            parts: List[str] = []
+            for e in employee_ids:
+                eid, ename = e.get("id", ""), e.get("name", "")
+                if not eid:
+                    continue
+                rows = list_by_employee(db, eid, limit=max(1, min(50, int(limit or 30))))
+                if not rows:
+                    parts.append(f"[{ename or eid}] 성과 기록 없음.")
+                    continue
+                lines = [f"[{ename or eid}] 성과 {len(rows)}건:"]
+                for r in rows[:20]:
+                    period = r.get("period") or "-"
+                    text_type = r.get("textType") or r.get("text_type") or "-"
+                    content = (r.get("content") or "")[:200].replace("\n", " ")
+                    if len((r.get("content") or "")) > 200:
+                        content += "…"
+                    lines.append(f"  - {period} {text_type}: {content}")
+                if len(rows) > 20:
+                    lines.append(f"  … 외 {len(rows) - 20}건")
+                parts.append("\n".join(lines))
+            return "\n\n".join(parts)
+        finally:
+            db.close()
+    except Exception as e:
+        return f"성과 조회 실패: {str(e)}"
+
+
 TOOLS = [
     analyze_with_exaone,
     search_documents,
@@ -174,8 +402,19 @@ TOOLS = [
     define,
     get_hr_summary,
     get_employee_info,
+    get_employee_performance,
+    list_employees,
 ]
 TOOL_MAP: Dict[str, Any] = {t.name: t for t in TOOLS}
+
+TOOL_TABLE_MAP: Dict[str, List[str]] = {
+    "get_employee_info": ["employees"],
+    "get_employee_performance": ["performance_records"],
+    "get_hr_summary": ["employees", "performance_records", "disclosures", "competency_anchors"],
+    "list_employees": ["employees"],
+    "search_documents": ["disclosures"],
+    "define": ["disclosures"],
+}
 
 
 # --- 2. 노드 (model, rag, tool) ---
@@ -200,6 +439,116 @@ def _get_llm_provider():
     from domain.hub.llm.exaone_provider import LLMProvider  # type: ignore
 
     return LLMProvider
+
+
+def _find_last_user_query(messages: List[BaseMessage]) -> Optional[str]:
+    """메시지 목록에서 최근 사용자 질문 텍스트를 찾는다."""
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            return str(msg.content)
+    return None
+
+
+def _has_tool_message(messages: List[BaseMessage]) -> bool:
+    """현재 턴(최근 HumanMessage 이후)에 이미 도구가 실행되었는지 확인."""
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            return False
+        if isinstance(m, ToolMessage):
+            return True
+    return False
+
+
+def _extract_employee_name_from_query(query: str) -> Optional[str]:
+    """개별 직원 조회/성과 질문에서 이름 후보를 추출."""
+    if not query or not query.strip():
+        return None
+    q = query.strip()
+    if not any(k in q for k in ("직원", "직급", "부서", "직무", "성과", "활동", "실적", "지표", "알려")):
+        return None
+    m = re.search(r"([가-힣]{2,4})의", q)
+    if not m:
+        return None
+    candidate = m.group(1)
+    stop_words = {
+        "직원", "직급", "부서", "직무", "성과", "활동", "실적", "지표", "기준", "역량", "공시",
+        "전체", "일반", "신입", "고성과", "요약", "전환", "준비도", "문서", "상태",
+    }
+    return None if candidate in stop_words else candidate
+
+
+def _build_forced_tool_calls(user_query: str) -> List[Dict[str, Any]]:
+    """
+    모델이 도구를 설명만 하고 호출하지 않을 때, 최소한의 안전한 도구 호출을 강제 생성.
+    - 총원/적재상태: get_hr_summary
+    - 명단/목록: list_employees
+    """
+    if not user_query or not user_query.strip():
+        return []
+
+    forced_calls: List[Dict[str, Any]] = []
+    forced_names: set = set()
+    q = user_query.strip().lower()
+    q_raw = (user_query or "").strip()
+    employee_name = _extract_employee_name_from_query(user_query)
+
+    def _append_forced(name: str, args: Dict[str, Any]) -> None:
+        if name in forced_names:
+            return
+        forced_names.add(name)
+        forced_calls.append(
+            {
+                "id": f"call_{uuid4().hex[:12]}",
+                "name": name,
+                "args": args,
+                "type": "tool_call",
+            }
+        )
+
+    if _needs_hr_summary_prefetch(user_query):
+        _append_forced("get_hr_summary", {})
+
+    has_explicit_list_intent = any(k in q_raw for k in ("명단", "목록", "누가", "누구", "보여"))
+
+    if _needs_employee_list_prefetch(user_query) and (
+        not _needs_hr_summary_prefetch(user_query) or has_explicit_list_intent
+    ):
+        is_new_hire_query = ("신입" in q or "지원자" in q)
+        is_regular_query = ("기존 직원" in q or "일반 직원" in q)
+        is_high_query = ("고성과" in q or "high performer" in q or "highperformer" in q)
+        if is_new_hire_query:
+            employment_type = "new_hire"
+        elif is_regular_query or is_high_query:
+            employment_type = "regular"
+        else:
+            employment_type = "all"
+        performance_tier = "high" if ("고성과" in q or "high performer" in q or "highperformer" in q) else "all"
+        job_title_part = _infer_job_title_part(user_query)
+        department_part = _infer_department_part(user_query)
+        is_full_list = any(k in q_raw for k in ("전체 명단", "전체 목록", "전원", "모두 보여", "다 보여", "전부"))
+        list_limit = 500 if (is_full_list or is_high_query) else (200 if (department_part or job_title_part or is_new_hire_query) else 200)
+        args: Dict[str, Any] = {"employment_type": employment_type, "performance_tier": performance_tier, "limit": list_limit}
+        if job_title_part:
+            args["job_title"] = job_title_part
+        if department_part:
+            args["department"] = department_part
+        _append_forced("list_employees", args)
+        if is_high_query:
+            # 고성과자 질의는 성과 테이블 근거도 함께 확보해 source 누락을 줄인다.
+            _append_forced("get_hr_summary", {})
+
+    # 개별 직원 성과/지표 질의는 성과 도구 + 기본정보 모두 강제 (5대 지표 등 복합 질의 대응)
+    if employee_name and _has_performance_keyword(user_query):
+        _append_forced(
+            "get_employee_performance",
+            {"employee_name_or_id": employee_name, "limit": 30},
+        )
+        _append_forced("get_employee_info", {"name": employee_name})
+    # 개별 직원 기본정보 질의는 직원 정보 도구를 강제
+    elif employee_name and any(k in q_raw for k in ("직급", "부서", "직무", "이메일", "직원 정보", "기본 정보")):
+        _append_forced("get_employee_info", {"name": employee_name})
+
+    return forced_calls
 
 
 def model_node(state: ChatState) -> ChatState:
@@ -252,24 +601,41 @@ def model_node(state: ChatState) -> ChatState:
 
     if _supports_tool_calling(provider):
         llm_with_tools = llm.bind_tools(TOOLS)
-        chunks = []
-        tool_calls = []
-        for chunk in llm_with_tools.stream(messages):
-            chunks.append(chunk)
-            if hasattr(chunk, "tool_calls") and chunk.tool_calls:
-                tool_calls.extend(chunk.tool_calls)
-        if chunks:
-            full_content = "".join(
-                chunk.content for chunk in chunks
-                if hasattr(chunk, "content") and chunk.content
-            )
-            response = (
-                AIMessage(content=full_content, tool_calls=tool_calls)
-                if tool_calls
-                else AIMessage(content=full_content)
-            )
+        if _has_tool_message(messages):
+            # 도구 실행 후 최종 답변 턴: stream() → 클라이언트 실시간 스트리밍
+            stream_chunks: List[Any] = []
+            for chunk in llm_with_tools.stream(messages):
+                stream_chunks.append(chunk)
+            if stream_chunks:
+                content_parts: List[str] = []
+                for c in stream_chunks:
+                    part = getattr(c, "content", None) or ""
+                    content_parts.append(part if isinstance(part, str) else str(part))
+                response = AIMessage(content="".join(content_parts))
+            else:
+                response = AIMessage(content="")
+            logger.info("[MODEL] 최종 답변 턴 스트리밍 완료 (청크 %d개)", len(stream_chunks))
         else:
-            response = AIMessage(content="")
+            # 1턴 최적화: LLM invoke 생략, _build_forced_tool_calls로 직접 도구 결정
+            user_query = _find_last_user_query(messages) or ""
+            forced_calls = _build_forced_tool_calls(user_query)
+            if forced_calls:
+                logger.info("[MODEL] 1턴 최적화: LLM 미호출, 강제 도구 직접 적용: %s", [c["name"] for c in forced_calls])
+                response = AIMessage(content="", tool_calls=forced_calls)
+            else:
+                # 도구 불필요 → LLM 1회만 호출하여 바로 스트리밍 답변
+                logger.info("[MODEL] 1턴 최적화: 도구 불필요, 직접 스트리밍 답변")
+                stream_chunks_direct: List[Any] = []
+                for chunk in llm_with_tools.stream(messages):
+                    stream_chunks_direct.append(chunk)
+                if stream_chunks_direct:
+                    content_parts_direct: List[str] = []
+                    for c in stream_chunks_direct:
+                        part = getattr(c, "content", None) or ""
+                        content_parts_direct.append(part if isinstance(part, str) else str(part))
+                    response = AIMessage(content="".join(content_parts_direct))
+                else:
+                    response = AIMessage(content="")
     else:
         chunks = []
         for chunk in llm.stream(messages):
@@ -294,16 +660,20 @@ def tool_node(state: ChatState) -> ChatState:
 
     tool_calls = getattr(last_message, "tool_calls", None) if last_message else None
     if tool_calls:
+        logger.info("[TOOLS] executing tool_calls=%s", len(tool_calls))
         for call in tool_calls:
             name = call["name"]
             args = call.get("args", {})
             if name in TOOL_MAP:
                 try:
                     output = TOOL_MAP[name].invoke(args)
+                    logger.info("[TOOLS] executed: %s", name)
                 except Exception as e:
                     output = f"도구 실행 오류: {str(e)}"
+                    logger.warning("[TOOLS] failed: %s err=%s", name, e)
             else:
                 output = f"알 수 없는 도구: {name}"
+                logger.warning("[TOOLS] skipped unknown tool: %s", name)
             results.append(
                 ToolMessage(
                     content=str(output),
@@ -318,10 +688,14 @@ def tool_node(state: ChatState) -> ChatState:
 # 질문과 무관한 문서 제외: 거리(score)가 이 값 이하인 문서만 참고 (코사인 거리, 작을수록 유사).
 # 임계값 통과 0건이면 컨텍스트 없이 모델 자체 지식으로만 답하고 출처 미표시.
 RAG_DISTANCE_THRESHOLD = 0.8
+# 라우트 미감지 테이블 검색 시 엄격 임계값 — 정말 유사한 것만 포함
+RAG_STRICT_THRESHOLD = 0.5
 # 표준 키워드 없을 때: 최소거리가 이 값보다 크면 "공시 무관 질문"으로 보고 disclosure 결과 전부 제외
 RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE = 0.75
 # competency_anchors fallback: 최소거리 1건 넣을 때의 상한. 이보다 크면 무관한 질문으로 보고 fallback 안 함
 RAG_ANCHOR_FALLBACK_MAX_DISTANCE = 0.9
+# performance_records fallback: competency와 동일 패턴
+RAG_PERF_FALLBACK_MAX_DISTANCE = 0.9
 # 직원 검색: 엉뚱한 인물 추천 방지를 위해 disclosure/competency보다 엄격 (작을수록 유사, 0.6 이하만 포함)
 RAG_EMPLOYEE_DISTANCE_THRESHOLD = 0.6
 
@@ -371,6 +745,9 @@ def _infer_disclosure_standard_types(query: str) -> Optional[List[str]]:
         or "스톡테이크" in q or "스톡 테이크" in q
     ):
         return ["GLOBAL_GREEN_STOCKTAKE"]
+    # "공시" 단독 — 특정 표준이 아닌 일반 공시 질문 → 전체 표준 검색
+    if "공시" in q and not any(k in q for k in ("기후", "탄소", "재무")):
+        return ["ISO30414", "IFRS_S1", "IFRS_S2"]
     return None
 
 
@@ -383,16 +760,17 @@ def _has_competency_keyword(query: str) -> bool:
     keywords = (
         "직업", "역량", "능력", "직무", "스킬", "skill", "competency", "ability",
         "onet", "o*net", "ncs", "수행준거", "지식", "기술", "태도",
-        # O*NET/역량 관련 영문 용어 (Oral Comprehension, Fluency of Ideas 등)
         "comprehension", "fluency", "ideas", "expression", "reasoning", "writing",
         "oral", "written", "originality", "deductive", "inductive", "memorization",
         "mathematical", "number facility", "problem sensitivity", "selective attention",
+        "문제해결", "의사소통", "리더십", "협업", "적응력",
+        "leadership", "collaboration", "adaptability",
     )
     return any(kw in q for kw in keywords)
 
 
 def _has_employee_keyword(query: str) -> bool:
-    """질문에 직원/인력/이력서/부서 관련 키워드가 있는지. 있으면 employees 테이블도 RAG 검색."""
+    """질문에 직원/인력/이력서/부서/신입 관련 키워드가 있는지. 있으면 employees 테이블도 RAG 검색."""
     if not query or not query.strip():
         return False
     q = query.strip().lower()
@@ -400,8 +778,37 @@ def _has_employee_keyword(query: str) -> bool:
         "직원", "임직원", "인력", "사람", "스태프", "employee", "staff", "직원 수",
         "이력서", "resume", "경력", "학력", "부서", "department", "팀", "team",
         "누가", "누구", "어떤 사람", "교육 이수", "훈련", "training",
+        "신입", "지원자", "applicant", "채용", "입사", "후보",
+        "성과", "활동", "실적", "performance", "회의록", "보고서",
+        "명단", "목록", "인원", "사원", "직급", "소속",
+        "고성과", "저성과", "기존 직원", "전체 직원", "현재 직원",
+        "rag", "문서등록", "적재",
     )
     return any(kw in q for kw in keywords)
+
+
+def _has_performance_keyword(query: str) -> bool:
+    """질문에 성과/활동/실적 관련 키워드가 있는지."""
+    if not query or not query.strip():
+        return False
+    q = query.strip().lower()
+    keywords = (
+        "성과", "활동", "실적", "performance", "회의록", "보고서", "이메일 실적",
+        "분기 성과", "kpi", "평가", "성과 기록",
+        "지표", "목표", "달성", "업적", "고성과", "저성과", "기여",
+        "성과등급", "고성과자", "분기별", "연간 성과", "프로젝트",
+    )
+    return any(kw in q for kw in keywords)
+
+
+def _infer_query_routes(query: str) -> Dict[str, bool]:
+    """질의에서 사용할 데이터 라우트 추론(명시 로그/범위 판별용)."""
+    return {
+        "employees": _has_employee_keyword(query),
+        "performance_records": _has_performance_keyword(query),
+        "competency_anchors": _has_competency_keyword(query),
+        "disclosures": _infer_disclosure_standard_types(query) is not None,
+    }
 
 
 def _build_rag_sources(docs: List[Any]) -> List[Dict[str, Any]]:
@@ -464,6 +871,202 @@ def _build_context_with_sources(docs: List[Any]) -> str:
     return "\n\n".join(parts)
 
 
+def _infer_job_title_part(query: str) -> Optional[str]:
+    """질의에서 직급 키워드를 추정해 list_for_chat의 job_title_part로 사용."""
+    if not query or not query.strip():
+        return None
+    q = query.strip().lower()
+    # '사원'은 일반적으로 "전체 직원" 의미로 쓰이는 경우가 많아 기본 필터에서 제외.
+    # 직급 필터는 "직급 사원", "사원 직급", "사원만"처럼 명시된 경우에만 적용.
+    explicit_staff_title = (
+        "직급 사원" in q
+        or "사원 직급" in q
+        or "사원만" in q
+        or "사원만 보여" in q
+    )
+    for token in ("팀장", "과장", "부장", "차장", "대리", "주임", "인턴"):
+        if token in q:
+            return token
+    if explicit_staff_title:
+        return "사원"
+    return None
+
+
+def _infer_department_part(query: str) -> Optional[str]:
+    """질의에서 부서 키워드를 추정해 list_for_chat의 department_part로 사용."""
+    if not query or not query.strip():
+        return None
+    q = query.strip().lower()
+    q_no_space = q.replace(" ", "")
+    if "개발·it" in q or "개발/it" in q or "개발it" in q_no_space:
+        return "개발·IT"
+    for token in ("영업", "마케팅", "인사", "재무", "전략기획", "경영지원", "감사"):
+        if token in q_no_space:
+            return token
+    return None
+
+
+def _needs_hr_summary_prefetch(query: str) -> bool:
+    """총원/건수형 질문은 모델 도구호출 실패를 대비해 요약을 선제 조회."""
+    if not query or not query.strip():
+        return False
+    q = query.strip().lower().replace(" ", "")
+    keywords = (
+        "직원수", "일반직원수", "임직원수", "총몇", "몇명", "몇명이", "전체직원", "전체임직원", "총원",
+        "공시완성도", "적재상태", "rag문서", "rag", "등록되어",
+    )
+    return any(k in q for k in keywords)
+
+
+def _needs_employee_list_prefetch(query: str) -> bool:
+    """명단/누구/보여줘/알려줘 계열 질문은 직원 목록을 선제 조회."""
+    if not query or not query.strip():
+        return False
+    q = query.strip().lower()
+    list_keywords = ("누가", "누구", "명단", "목록", "보여", "고성과")
+    if any(k in q for k in list_keywords):
+        return True
+    if ("신입" in q or "지원자" in q) and any(ak in q for ak in ("알려", "조회", "검색", "확인")):
+        return True
+    return False
+
+
+def _build_prefetch_context(
+    db: Any,
+    user_query: str,
+    routes: Dict[str, bool],
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    모델이 tool call을 실패해도 답할 수 있도록 DB 기반 운영 컨텍스트를 선제 주입.
+    - 직원 총원/적재상태 질문: HR 요약
+    - 직원 목록/직급 질문: list_for_chat 기반 목록
+    """
+    parts: List[str] = []
+    sources: List[Dict[str, Any]] = []
+
+    if routes.get("employees") and (_needs_hr_summary_prefetch(user_query) or _needs_employee_list_prefetch(user_query)):
+        try:
+            from domain.hub.repositories.employee_repository import (  # type: ignore
+                count_all as repo_count_all,
+                list_all as repo_list_all,
+                list_for_chat,
+            )
+            from domain.hub.repositories.performance_record_repository import get_performance_record_count  # type: ignore
+            from domain.hub.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
+            from domain.hub.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
+
+            if _needs_hr_summary_prefetch(user_query):
+                employee_count = repo_count_all(db)
+                # 집계 질문은 전체 모수를 기준으로 계산해야 하므로 제한 없는 목록을 사용.
+                rows_all = repo_list_all(db) or []
+                ats_statuses = {"pending", "screening", "hired", "rejected"}
+
+                def _is_new_hire(emp: Dict[str, Any]) -> bool:
+                    et0 = str(emp.get("employmentType") or "").strip().lower()
+                    st0 = str(emp.get("status") or "").strip().lower()
+                    return et0 == "new_hire" or st0 in ats_statuses
+
+                regular_count = sum(1 for e in rows_all if not _is_new_hire(e))
+                new_hire_count = len(rows_all) - regular_count
+                perf_count = get_performance_record_count(db)
+                disclosure_count = get_disclosure_doc_count(db)
+                anchor_count = get_anchor_doc_count(db)
+                parts.append(
+                    "[운영 요약]\n"
+                    f"전체 직원 수(신입 + 일반): {employee_count}명\n"
+                    f"일반 직원 수: {regular_count}명\n"
+                    f"신입사원 수(인턴·사원 포함): {new_hire_count}명\n"
+                    f"성과(performance_records) 기록: {perf_count}건\n"
+                    f"공시(disclosures) 문서 청크: {disclosure_count}건\n"
+                    f"역량(competency_anchors) 문서: {anchor_count}건"
+                )
+                sources.extend(
+                    [
+                        {"table": "employees", "id": "prefetch:hr_summary", "source": "prefetch"},
+                        {"table": "performance_records", "id": "prefetch:hr_summary", "source": "prefetch"},
+                        {"table": "disclosures", "id": "prefetch:hr_summary", "source": "prefetch"},
+                        {"table": "competency_anchors", "id": "prefetch:hr_summary", "source": "prefetch"},
+                    ]
+                )
+
+            q_raw = (user_query or "").strip()
+            has_explicit_list_intent = any(k in q_raw for k in ("명단", "목록", "누가", "누구", "보여"))
+            if _needs_employee_list_prefetch(user_query) and (
+                not _needs_hr_summary_prefetch(user_query) or has_explicit_list_intent
+            ):
+                q = user_query.strip().lower()
+                job_title_part = _infer_job_title_part(user_query)
+                department_part = _infer_department_part(user_query)
+                is_new_hire_query = ("신입" in q or "지원자" in q)
+                is_regular_query = ("기존 직원" in q or "일반 직원" in q)
+                is_high_query = ("고성과" in q or "high performer" in q or "highperformer" in q)
+                if is_new_hire_query:
+                    employment_type = "new_hire"
+                elif is_regular_query or is_high_query:
+                    employment_type = "regular"
+                else:
+                    employment_type = None
+                performance_tier = "high" if ("고성과" in q or "high performer" in q or "highperformer" in q) else "all"
+                is_full_list = any(k in q_raw for k in ("전체 명단", "전체 목록", "전원", "모두 보여", "다 보여", "전부"))
+                prefetch_limit = 500 if (is_full_list or performance_tier == "high") else (200 if (department_part or job_title_part) else 200)
+                rows = list_for_chat(
+                    db,
+                    employment_type=employment_type,
+                    department_part=department_part,
+                    job_title_part=job_title_part,
+                    exclude_sample=False,
+                    limit=prefetch_limit,
+                )
+                if performance_tier == "high":
+                    def _is_high_performer(emp: Dict[str, Any]) -> bool:
+                        dna = emp.get("successDna")
+                        if not isinstance(dna, dict):
+                            return False
+                        keys = ("leadership", "technical", "creativity", "collaboration", "adaptability")
+                        vals: List[float] = []
+                        for k in keys:
+                            v = dna.get(k)
+                            try:
+                                if v is None:
+                                    continue
+                                vals.append(float(v))
+                            except Exception:
+                                continue
+                        if not vals:
+                            return False
+                        return (sum(vals) / len(vals)) >= 80.0
+                    rows = [r for r in rows if _is_high_performer(r)]
+                if rows:
+                    PREFETCH_MAX_DISPLAY = 30
+                    display_limit = min(len(rows), PREFETCH_MAX_DISPLAY)
+                    lines = [f"[직원 목록 프리패치] 조회 {len(rows)}명 (이 이름들을 답변에 그대로 나열하세요)"]
+                    for i, emp in enumerate(rows[:display_limit], 1):
+                        lines.append(
+                            f"[{i}] 이름: {emp.get('name','')}, "
+                            f"부서: {emp.get('department') or '-'}, 직급: {emp.get('jobTitle') or '-'}"
+                        )
+                    if len(rows) > display_limit:
+                        lines.append(f"… 외 {len(rows) - display_limit}명")
+                    parts.append("\n".join(lines))
+                    sources.append({"table": "employees", "id": "prefetch:list_employees", "source": "prefetch"})
+        except Exception as e:
+            logger.info("[RAG] prefetch 실패(계속 진행): %s", e)
+
+    text = "\n\n".join(parts).strip()
+    if not text:
+        return "", []
+    # 중복 소스 제거
+    uniq: List[Dict[str, Any]] = []
+    seen = set()
+    for s in sources:
+        key = (s.get("table"), s.get("id"))
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(s)
+    return text, uniq
+
+
 def rag_node(state: ChatState) -> ChatState:
     """RAG 노드. Query 분류(공시 기준 / 인물·역량 / 복합)에 따라 검색 후 컨텍스트 융합.
     - 공시 기준 질문: disclosures 검색 (standard_types).
@@ -485,6 +1088,28 @@ def rag_node(state: ChatState) -> ChatState:
     # 로그 레벨과 관계없이 RAG 진입을 확인할 수 있도록 WARNING 사용
     _q = (user_query[:80] + "…") if len(user_query) > 80 else user_query
     logger.warning("[RAG] 질의 처리 중: %s", _q)
+    routes = _infer_query_routes(user_query)
+    logger.info(
+        "[RAG] route: employees=%s, performance_records=%s, competency_anchors=%s, disclosures=%s",
+        routes["employees"],
+        routes["performance_records"],
+        routes["competency_anchors"],
+        routes["disclosures"],
+    )
+
+    # 모든 라우트가 False → 데이터 범위 밖 질문. 검색 없이 즉시 OOS 반환.
+    if not any(routes.values()):
+        logger.info("[RAG] 모든 라우트 미감지 → out_of_scope 즉시 반환")
+        oos = (
+            "★ 필수 지시: 답변의 첫 문장을 반드시 다음과 같이 시작하세요 → "
+            "'[시스템 안내] 이 질문은 현재 데이터 범위(employees, performance_records, disclosures, competency_anchors) 밖의 질문입니다.'\n"
+            "그 다음 줄부터 일반 지식으로 간략히 답변하세요."
+        )
+        return {
+            "context": oos,
+            "rag_sources": [{"table": "system", "source": "out_of_scope", "id": "OUT_OF_SCOPE"}],
+        }
+
     try:
         if "fastapi_server" in sys.modules:
             import fastapi_server  # type: ignore
@@ -499,12 +1124,18 @@ def rag_node(state: ChatState) -> ChatState:
                 from core.database import SessionLocal  # type: ignore
                 from domain.hub.repositories.disclosure_repository import (  # type: ignore
                     search_disclosures_with_filter,
+                    search_disclosures_hybrid,
                 )
                 from domain.hub.repositories.competency_anchor_repository import (  # type: ignore
                     search_competency_anchors_with_filter,
+                    search_competency_anchors_hybrid,
                 )
                 from domain.hub.repositories.employee_repository import (  # type: ignore
                     search_employees_with_filter,
+                )
+                from domain.hub.repositories.performance_record_repository import (  # type: ignore
+                    search_performance_records_with_filter,
+                    search_performance_records_hybrid,
                 )
 
                 # disclosure 테이블은 FlagEmbedding(BGE-m3)으로 적재됨 → 쿼리도 동일 모델(fp16)로 같은 벡터 공간
@@ -528,160 +1159,191 @@ def rag_node(state: ChatState) -> ChatState:
                     emb = getattr(fastapi_server, "local_embeddings", None)
                     if emb is not None and hasattr(emb, "embed_query"):
                         query_vec = emb.embed_query(user_query)
+                prefetch_text, prefetch_sources = "", []
                 if query_vec is not None:
                     db = SessionLocal()
                     try:
-                        # 역량/능력 질문이면 disclosure 검색 생략 → competency_anchors만 사용 (IFRS/OECD 출처 혼선 방지)
-                        if not _has_competency_keyword(user_query):
-                            standard_types = _infer_disclosure_standard_types(user_query)
+                        prefetch_text, prefetch_sources = _build_prefetch_context(db, user_query, routes)
+                        # --- disclosures: 항상 검색, 라우트 여부에 따라 임계값 차등 ---
+                        disc_threshold = RAG_DISTANCE_THRESHOLD if routes["disclosures"] else RAG_STRICT_THRESHOLD
+                        standard_types = _infer_disclosure_standard_types(user_query) if routes["disclosures"] else None
+                        try:
+                            pairs = search_disclosures_hybrid(
+                                db, query_vec, user_query, k=10, standard_types=standard_types
+                            )
+                        except Exception:
                             pairs = search_disclosures_with_filter(
                                 db, query_vec, k=10, standard_types=standard_types
                             )
-                            disclosure_count_before_threshold = len(pairs)
+                        disclosure_count_before_threshold = len(pairs)
+                        disclosure_passed = 0
+                        min_distance = None
+                        closest_doc = None
+                        passed_docs: List[Any] = []
+                        for doc, distance in pairs:
+                            if min_distance is None or distance < min_distance:
+                                min_distance = distance
+                                closest_doc = doc
+                            if distance <= disc_threshold:
+                                passed_docs.append(doc)
+                                disclosure_passed += 1
+                        no_kw_max = RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE if routes["disclosures"] else RAG_STRICT_THRESHOLD
+                        if min_distance is not None and min_distance > no_kw_max:
+                            passed_docs = []
                             disclosure_passed = 0
-                            min_distance = None
-                            closest_doc = None
-                            passed_docs: List[Any] = []
-                            for doc, distance in pairs:
-                                if min_distance is None or distance < min_distance:
-                                    min_distance = distance
-                                    closest_doc = doc
-                                if distance <= RAG_DISTANCE_THRESHOLD:
-                                    passed_docs.append(doc)
-                                    disclosure_passed += 1
-                            # 표준 키워드 없을 때: disclosure 출처 전부 제외 (무관한 질문에서 OECD 등 잘못된 출처 방지)
-                            if standard_types is None:
-                                passed_docs = []
-                                disclosure_passed = 0
-                                logger.info(
-                                    "[RAG] disclosure: 키워드 없음(IFRS/OECD/공시 등) → 무관한 질문으로 판단, disclosure 제외",
-                                )
-                            else:
-                                # 키워드 있을 때만: 임계값 통과분 + (통과 0건이면 최소거리 1건) 포함
-                                if (
-                                    min_distance is not None
-                                    and min_distance > RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE
-                                ):
-                                    passed_docs = []
-                                    disclosure_passed = 0
-                                    logger.info(
-                                        "[RAG] disclosure: 최소거리=%.4f > %.2f → disclosure 제외",
-                                        min_distance,
-                                        RAG_DISCLOSURE_NO_KEYWORD_MAX_DISTANCE,
-                                    )
-                                else:
-                                    for doc in passed_docs:
-                                        if getattr(doc, "metadata", None) is not None:
-                                            doc.metadata["table"] = "disclosures"
-                                        all_docs.append(doc)
-                                    if (
-                                        disclosure_count_before_threshold > 0
-                                        and disclosure_passed == 0
-                                        and closest_doc is not None
-                                    ):
-                                        if getattr(closest_doc, "metadata", None) is not None:
-                                            closest_doc.metadata["table"] = "disclosures"
-                                        all_docs.append(closest_doc)
-                                        disclosure_passed = 1
-                                        logger.info(
-                                            "[RAG] disclosure: 임계값 미통과 → 최소거리 1건 포함, 거리=%.4f",
-                                            min_distance or 0,
-                                        )
-                            extra = ""
-                            if disclosure_count_before_threshold > 0 and disclosure_passed == 0 and min_distance is not None and closest_doc is None:
-                                extra = f", 최소거리={min_distance:.4f}"
-                            level = logger.warning if disclosure_count_before_threshold > 0 and disclosure_passed == 0 else logger.info
-                            level(
-                                "[RAG] disclosure: standard_types=%s, 후보=%s, 임계값 통과=%s (threshold=%.2f)%s",
-                                standard_types,
-                                disclosure_count_before_threshold,
-                                disclosure_passed,
-                                RAG_DISTANCE_THRESHOLD,
-                                extra,
+                            logger.info(
+                                "[RAG] disclosure: 최소거리=%.4f > %.2f → disclosure 제외 (routed=%s)",
+                                min_distance, no_kw_max, routes["disclosures"],
                             )
                         else:
-                            logger.info(
-                                "[RAG] disclosure: 역량/능력 질문으로 판단, disclosure 검색 생략 (competency_anchors만 사용)",
-                            )
-                        # competency_anchors: 직업/역량 키워드 없으면 출처 미포함 (무관한 질문에서 잘못된 출처 방지)
-                        anchor_passed = 0
-                        if not _has_competency_keyword(user_query):
-                            logger.info(
-                                "[RAG] competency_anchors: 키워드 없음(직업/역량/능력 등) → 무관한 질문으로 판단, competency 제외",
-                            )
-                        else:
-                            anchor_pairs = search_competency_anchors_with_filter(db, query_vec, k=5)
-                            min_anchor_distance = None
-                            closest_anchor_doc = None
-                            for doc, distance in anchor_pairs:
-                                if min_anchor_distance is None or distance < min_anchor_distance:
-                                    min_anchor_distance = distance
-                                    closest_anchor_doc = doc
-                                if distance <= RAG_DISTANCE_THRESHOLD:
-                                    if getattr(doc, "metadata", None) is not None:
-                                        doc.metadata["table"] = "competency_anchors"
-                                    all_docs.append(doc)
-                                    anchor_passed += 1
+                            for doc in passed_docs:
+                                if getattr(doc, "metadata", None) is not None:
+                                    doc.metadata["table"] = "disclosures"
+                                all_docs.append(doc)
                             if (
-                                anchor_pairs
-                                and anchor_passed == 0
-                                and closest_anchor_doc is not None
-                                and (min_anchor_distance is not None and min_anchor_distance <= RAG_ANCHOR_FALLBACK_MAX_DISTANCE)
+                                disclosure_count_before_threshold > 0
+                                and disclosure_passed == 0
+                                and closest_doc is not None
+                                and routes["disclosures"]
                             ):
-                                if getattr(closest_anchor_doc, "metadata", None) is not None:
-                                    closest_anchor_doc.metadata["table"] = "competency_anchors"
-                                all_docs.append(closest_anchor_doc)
-                                anchor_passed = 1
+                                if getattr(closest_doc, "metadata", None) is not None:
+                                    closest_doc.metadata["table"] = "disclosures"
+                                all_docs.append(closest_doc)
+                                disclosure_passed = 1
                                 logger.info(
-                                    "[RAG] competency_anchors: 임계값 미통과 → 최소거리 1건 포함 (거리=%.4f <= %.2f)",
-                                    min_anchor_distance or 0,
-                                    RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
+                                    "[RAG] disclosure: 임계값 미통과 → 최소거리 1건 포함, 거리=%.4f",
+                                    min_distance or 0,
                                 )
-                            elif anchor_pairs and anchor_passed == 0 and min_anchor_distance is not None and min_anchor_distance > RAG_ANCHOR_FALLBACK_MAX_DISTANCE:
-                                logger.info(
-                                    "[RAG] competency_anchors: 최소거리=%.4f > %.2f → fallback 제외",
-                                    min_anchor_distance,
-                                    RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
-                                )
+                        logger.info(
+                            "[RAG] disclosure(hybrid): standard_types=%s, 후보=%s, 임계값 통과=%s (threshold=%.2f, routed=%s)",
+                            standard_types, disclosure_count_before_threshold,
+                            disclosure_passed, disc_threshold, routes["disclosures"],
+                        )
+                        # --- competency_anchors: 항상 검색, 라우트 여부에 따라 임계값 차등 ---
+                        anchor_threshold = RAG_DISTANCE_THRESHOLD if routes["competency_anchors"] else RAG_STRICT_THRESHOLD
+                        anchor_passed = 0
+                        try:
+                            anchor_pairs = search_competency_anchors_hybrid(db, query_vec, user_query, k=5)
+                        except Exception:
+                            anchor_pairs = search_competency_anchors_with_filter(db, query_vec, k=5)
+                        min_anchor_distance = None
+                        closest_anchor_doc = None
+                        for doc, distance in anchor_pairs:
+                            if min_anchor_distance is None or distance < min_anchor_distance:
+                                min_anchor_distance = distance
+                                closest_anchor_doc = doc
+                            if distance <= anchor_threshold:
+                                if getattr(doc, "metadata", None) is not None:
+                                    doc.metadata["table"] = "competency_anchors"
+                                all_docs.append(doc)
+                                anchor_passed += 1
+                        if (
+                            anchor_pairs
+                            and anchor_passed == 0
+                            and closest_anchor_doc is not None
+                            and routes["competency_anchors"]
+                            and (min_anchor_distance is not None and min_anchor_distance <= RAG_ANCHOR_FALLBACK_MAX_DISTANCE)
+                        ):
+                            if getattr(closest_anchor_doc, "metadata", None) is not None:
+                                closest_anchor_doc.metadata["table"] = "competency_anchors"
+                            all_docs.append(closest_anchor_doc)
+                            anchor_passed = 1
                             logger.info(
-                                "[RAG] competency_anchors: 후보=%s, 임계값 통과=%s (threshold=%.2f)",
-                                len(anchor_pairs),
-                                anchor_passed,
-                                RAG_DISTANCE_THRESHOLD,
+                                "[RAG] competency_anchors: 임계값 미통과 → 최소거리 1건 포함 (거리=%.4f <= %.2f)",
+                                min_anchor_distance or 0,
+                                RAG_ANCHOR_FALLBACK_MAX_DISTANCE,
                             )
-                        # employees: 직원/인력/이력서/부서 질문 시 검색. 공시+인물 복합 질문(예: 직원 중 ISO 30414 만족하는 사람)이면 disclosure와 융합됨.
-                        if _has_employee_keyword(user_query):
-                            emp_pairs = search_employees_with_filter(db, query_vec, k=5)
-                            emp_passed = 0
-                            for doc, dist in emp_pairs:
-                                if dist <= RAG_EMPLOYEE_DISTANCE_THRESHOLD:
+                        elif anchor_pairs and anchor_passed == 0 and min_anchor_distance is not None:
+                            logger.info(
+                                "[RAG] competency_anchors: 최소거리=%.4f, threshold=%.2f, routed=%s → 제외",
+                                min_anchor_distance, anchor_threshold, routes["competency_anchors"],
+                            )
+                        logger.info(
+                            "[RAG] competency_anchors(hybrid): 후보=%s, 임계값 통과=%s (threshold=%.2f, routed=%s)",
+                            len(anchor_pairs), anchor_passed, anchor_threshold, routes["competency_anchors"],
+                        )
+                        # --- employees: 항상 검색, 라우트 여부에 따라 임계값 차등 ---
+                        emp_threshold = RAG_EMPLOYEE_DISTANCE_THRESHOLD if routes["employees"] else RAG_STRICT_THRESHOLD
+                        emp_pairs = search_employees_with_filter(db, query_vec, k=5)
+                        emp_passed = 0
+                        for doc, dist in emp_pairs:
+                            if dist <= emp_threshold:
+                                if getattr(doc, "metadata", None) is not None:
+                                    doc.metadata["table"] = "employees"
+                                all_docs.append(doc)
+                                emp_passed += 1
+                        logger.info(
+                            "[RAG] employees: 후보=%s, 임계값 통과=%s (threshold=%.2f, routed=%s)",
+                            len(emp_pairs), emp_passed, emp_threshold, routes["employees"],
+                        )
+                        # --- performance_records: 항상 검색, 하이브리드 + fallback ---
+                        perf_threshold = RAG_DISTANCE_THRESHOLD if routes["performance_records"] else RAG_STRICT_THRESHOLD
+                        try:
+                            try:
+                                perf_pairs = search_performance_records_hybrid(db, query_vec, user_query, k=5)
+                            except Exception:
+                                perf_pairs = search_performance_records_with_filter(db, query_vec, k=5)
+                            perf_passed = 0
+                            min_perf_dist = None
+                            closest_perf_doc = None
+                            for doc, dist in perf_pairs:
+                                if min_perf_dist is None or dist < min_perf_dist:
+                                    min_perf_dist = dist
+                                    closest_perf_doc = doc
+                                if dist <= perf_threshold:
                                     if getattr(doc, "metadata", None) is not None:
-                                        doc.metadata["table"] = "employees"
+                                        doc.metadata["table"] = "performance_records"
                                     all_docs.append(doc)
-                                    emp_passed += 1
+                                    perf_passed += 1
+                            if (
+                                perf_pairs
+                                and perf_passed == 0
+                                and closest_perf_doc is not None
+                                and routes["performance_records"]
+                                and min_perf_dist is not None
+                                and min_perf_dist <= RAG_PERF_FALLBACK_MAX_DISTANCE
+                            ):
+                                if getattr(closest_perf_doc, "metadata", None) is not None:
+                                    closest_perf_doc.metadata["table"] = "performance_records"
+                                all_docs.append(closest_perf_doc)
+                                perf_passed = 1
+                                logger.info(
+                                    "[RAG] performance_records: 임계값 미통과 → 최소거리 1건 포함 (거리=%.4f <= %.2f)",
+                                    min_perf_dist, RAG_PERF_FALLBACK_MAX_DISTANCE,
+                                )
                             logger.info(
-                                "[RAG] employees: 후보=%s, 임계값 통과=%s (threshold=%.2f)",
-                                len(emp_pairs),
-                                emp_passed,
-                                RAG_EMPLOYEE_DISTANCE_THRESHOLD,
+                                "[RAG] performance_records(hybrid): 후보=%s, 임계값 통과=%s (threshold=%.2f, routed=%s)",
+                                len(perf_pairs), perf_passed, perf_threshold, routes["performance_records"],
                             )
-                        else:
-                            logger.info("[RAG] employees: 직원/인력 키워드 없음 → 검색 생략")
+                        except Exception as _pe:
+                            logger.info("[RAG] performance_records 검색 생략 (embedding 미설정 가능): %s", _pe)
                     finally:
                         db.close()
                 else:
                     logger.warning("RAG disclosure: embed_query 사용 가능한 모델 없음, disclosure 검색 생략")
             except Exception as e:
                 logger.warning("RAG disclosure(테이블) 검색 실패: %s", e, exc_info=True)
+                prefetch_text, prefetch_sources = "", []
             if all_docs:
                 context = _build_context_with_sources(all_docs)
                 rag_sources = _build_rag_sources(all_docs)
+                if prefetch_text:
+                    context = f"{prefetch_text}\n\n{context}".strip()
+                    existing = {(s.get("table"), s.get("id")) for s in rag_sources}
+                    for s in prefetch_sources:
+                        key = (s.get("table"), s.get("id"))
+                        if key not in existing:
+                            rag_sources.append(s)
+                            existing.add(key)
                 logger.info(
                     "[RAG] context 사용: main=%s, disclosure+anchor 포함 총 %s건",
                     main_count,
                     len(all_docs),
                 )
                 return {"context": context, "rag_sources": rag_sources}
+            if prefetch_text:
+                logger.info("[RAG] 벡터 검색 0건, prefetch 컨텍스트로 답변 유도")
+                return {"context": prefetch_text, "rag_sources": prefetch_sources}
             logger.info(
                 "[RAG] 검색 결과 없음 (main=%s, disclosure 후보=%s, threshold=%.2f)",
                 main_count,
@@ -724,7 +1386,9 @@ def should_use_tools(state: ChatState) -> Literal["tools", "__end__"]:
     if isinstance(last_message, AIMessage):
         tool_calls = getattr(last_message, "tool_calls", None)
         if tool_calls:
+            logger.info("[ROUTE] model -> tools (%s calls)", len(tool_calls))
             return "tools"
+    logger.info("[ROUTE] model -> end (tool_calls 없음)")
     return "__end__"
 
 
@@ -768,6 +1432,7 @@ __all__ = [
     "should_use_tools",
     "TOOLS",
     "TOOL_MAP",
+    "TOOL_TABLE_MAP",
     "build_agent_graph",
     "get_default_graph",
     "model_node",

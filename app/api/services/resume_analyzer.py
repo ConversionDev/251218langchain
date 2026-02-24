@@ -12,12 +12,67 @@ import json
 import logging
 import re
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from api.shared.upload_store import load_upload_file  # type: ignore
 from domain.shared.document_extract import extract_text_from_document  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+# 지원 가능 부서 7개 (채용 공고·정규화 기준). 이 외는 "해당 부서는 지원할 수 없습니다" 처리.
+ALLOWED_DEPARTMENTS = [
+    "인사",
+    "재무",
+    "영업",
+    "마케팅",
+    "개발·IT",
+    "경영지원",
+    "전략·기획",
+]
+
+# 이력서 부서/직무 문구 → 지원 가능 부서 매핑 (부분 일치). 순서 유지해 먼저 매칭된 것 사용.
+DEPARTMENT_NORMALIZE_MAP: List[Tuple[str, str]] = [
+    ("인사", "인사"),
+    ("재무", "재무"),
+    ("회계", "재무"),
+    ("영업", "영업"),
+    ("마케팅", "마케팅"),
+    ("브랜드", "마케팅"),
+    ("개발·IT", "개발·IT"),
+    ("개발", "개발·IT"),
+    ("IT ", "개발·IT"),
+    ("정보기술", "개발·IT"),
+    ("정보 기술", "개발·IT"),
+    ("솔루션 아키텍트", "개발·IT"),
+    ("IT컨설팅", "개발·IT"),
+    ("IT 컨설팅", "개발·IT"),
+    ("기술연구", "개발·IT"),
+    ("R&D", "개발·IT"),
+    ("연구개발", "개발·IT"),
+    ("경영지원", "경영지원"),
+    ("총무", "경영지원"),
+    ("전략·기획", "전략·기획"),
+    ("전략", "전략·기획"),
+    ("기획", "전략·기획"),
+    ("리서치", "전략·기획"),
+    ("컨설팅", "전략·기획"),
+    ("정책", "전략·기획"),
+]
+
+
+def _normalize_department_for_apply(raw: str) -> str:
+    """이력서 부서 문구를 지원 가능 부서 7개 중 하나로 정규화. 매칭 실패 시 '해당 부서는 지원할 수 없습니다'."""
+    s = (raw or "").strip()
+    if not s or "명시 불가" in s or "군집 데이터" in s:
+        return "해당 부서는 지원할 수 없습니다"
+    if s in ALLOWED_DEPARTMENTS:
+        return s
+    s_lower = s.lower()
+    for keyword, canonical in DEPARTMENT_NORMALIZE_MAP:
+        if keyword in s or keyword.lower() in s_lower:
+            return canonical
+    return "해당 부서는 지원할 수 없습니다"
+
 
 # 동일 파일/텍스트 재요청 시 즉시 반환 (최대 50건, FIFO)
 _RESUME_CACHE_MAX = 50
@@ -54,9 +109,12 @@ _RESUME_SYSTEM_PROMPT = """당신은 직무역량 전문가입니다. 군집 데
   "successDnaReason": "각 역량별로 왜 이 점수를 줬는지 한 줄씩 요약. 예: 리더십 85: 동아리 회장·팀 리드 경험. 기술력 60: Python 중급, 실무 일부."
 }
 
+- department: **이력서에 적힌 지원 부서·희망 직무 문구를 그대로** 기재하세요. 예: "IT 컨설팅 / 솔루션 아키텍트"가 적혀 있으면 그대로 "IT 컨설팅 / 솔루션 아키텍트"로 출력. "정보 기술 부문", "IT 부서" 등으로 요약·축약하지 마세요. 직급이 아니라 지원 직무/희망 부서 원문을 유지하세요. **"군집 데이터에 따른 특정 부서 명시 불가" 같은 문구는 절대 사용하지 마세요.** 이력서에 부서/직무가 없으면 "미정"으로 출력하세요.
+- resume.education: 학교, 학위, 전공, startDate, **endDate(졸업일)**. 이력서에 졸업일·졸업예정일이 있으면(예: 2020.02, 2020년 2월) **endDate를 YYYY-MM 형식**(예: "2020-02")으로 반드시 기입하세요.
+- resume.experience: 회사, 역할, **startDate(근무 시작일), endDate(근무 종료일)**를 반드시 채우세요. 이력서에 "2015/03~2023/02", "2015.03-2023.02", "2015년 3월~2023년 2월"처럼 적혀 있으면 startDate "2015-03", endDate "2023-02"처럼 **YYYY-MM 형식**으로 출력. description(업무 설명)은 지원자가 직접 기입하므로 **비워 두세요**(빈 문자열 "").
 - gender: 이력서에 성별이 명시되면 male(남)/female(여)/other(기타), 없으면 undisclosed.
-- birthDate: 이력서에 생년월일이 있으면 YYYY-MM-DD로 반드시 기입, 없으면 빈 문자열 또는 생략.
-- age: 만 나이(정수). 생년월일(birthDate)이 있으면 오늘 기준 만 나이로 계산: (현재연도 - 출생연도)에서 올해 생일이 아직 안 지났으면 1 빼기. 예: 1990년 3월 15일 → 2025년 2월 기준 34세. 나이만 있고 생년월일 없으면 그대로 사용, 둘 다 없으면 0.
+- birthDate: 이력서에 생년월일이 있으면 YYYY-MM-DD로 **반드시** 기입, 없으면 빈 문자열 또는 생략.
+- age: **이력서에 나이(만 나이) 또는 생년월일이 있으면 반드시 추출.** 생년월일이 있으면 오늘 기준 만 나이로 계산. 나이만 있으면 그대로 사용, 둘 다 없으면 0.
 - employmentType: 이력서에 고용형태(정규직·계약직·인턴 등)가 있으면 해당 값(regular|contract|part_time|intern), 신입/미기재면 new_hire.
 - trainingHours: 이력서에 연간 교육·연수 시간이 있으면 시간(정수), 없으면 0.
 Success DNA는 리더십, 기술력, 창의성, 협업, 적응력 5대 역량을 0-100 점수로 평가하세요. 군집 데이터와 직무역량 기준에 맞춰 객관적으로 산정하세요.
@@ -182,6 +240,54 @@ def _age_from_birth_date(birth_str: Optional[str]) -> Optional[int]:
         return None
 
 
+def _normalize_ym(val: Any) -> str:
+    """날짜 문자열을 YYYY-MM 형식으로 정규화. 2015/03, 2015.03, 2015-03 등 → 2015-03. input type=month 호환."""
+    if val is None:
+        return ""
+    s = str(val).strip()
+    if not s:
+        return ""
+    # 이미 YYYY-MM 또는 YYYY-MM-DD
+    if re.match(r"^\d{4}-\d{2}(-\d{2})?$", s):
+        return s[:7]  # YYYY-MM
+    # YYYY/MM, YYYY.MM, YYYYMM
+    m = re.match(r"^(\d{4})[/.\s-]?(\d{1,2})$", s.replace(" ", ""))
+    if m:
+        y, mon = m.group(1), int(m.group(2))
+        if 1 <= mon <= 12:
+            return f"{y}-{mon:02d}"
+    m = re.match(r"^(\d{4})(\d{2})$", s)
+    if m:
+        y, mon = m.group(1), int(m.group(2))
+        if 1 <= mon <= 12:
+            return f"{y}-{mon:02d}"
+    return s[:10] if s else ""
+
+
+def _parse_ym_range(s: str) -> Tuple[str, str]:
+    """'2015/03~2023/02', '2015.03-2023.02' 등 → ('2015-03', '2023-02'). 파싱 실패 시 ('','')."""
+    if not s or not isinstance(s, str):
+        return ("", "")
+    s = s.strip()
+    parts = re.split(r"[\s~\-]+", s, 1)
+    if len(parts) >= 2:
+        start = _normalize_ym(parts[0].strip())
+        end = _normalize_ym(parts[1].strip())
+        if start and end:
+            return (start, end)
+    return ("", "")
+
+
+def _sanitize_department_in_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """캐시 등 기존 결과에서 부서 정규화: '명시 불가' 등 → 지원 가능 부서 또는 '해당 부서는 지원할 수 없습니다'."""
+    if not result:
+        return result
+    dept = result.get("department")
+    if isinstance(dept, str):
+        result = {**result, "department": _normalize_department_for_apply(dept)}
+    return result
+
+
 def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     """raw JSON을 프론트엔드 형식으로 정규화."""
     from datetime import date
@@ -217,6 +323,26 @@ def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     education = ensure_list(resume_education, ["school", "degree", "field", "startDate", "endDate"])
     experience = ensure_list(resume_experience, ["company", "role", "startDate", "endDate", "description"])
+    # 학력·경력 날짜 YYYY-MM 정규화 (2015/03 → 2015-03). 업무 설명은 지원자 기입용으로 비움.
+    for item in education:
+        for key in ("startDate", "endDate"):
+            if key in item and item[key]:
+                item[key] = _normalize_ym(item[key]) or item[key]
+    for item in experience:
+        for key in ("startDate", "endDate"):
+            if key in item and item[key]:
+                item[key] = _normalize_ym(item[key]) or item[key]
+        # "2015/03~2023/02"처럼 한 필드에만 있는 경우 분리
+        start, end = item.get("startDate") or "", item.get("endDate") or ""
+        if (not start or not end) and (start or end):
+            combined = start or end
+            if "~" in combined or ("-" in combined and re.search(r"\d{4}", combined)):
+                ps, pe = _parse_ym_range(combined)
+                if ps:
+                    item["startDate"] = ps
+                if pe:
+                    item["endDate"] = pe
+        item["description"] = ""  # 업무 설명은 본인이 직접 기입하도록 비워 둠
     skills = ensure_list(resume_skills, ["name", "level"])
     certs = ensure_list(resume_certs, ["name", "issuer"])
 
@@ -253,10 +379,14 @@ def _normalize_resume_parse_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     else:
         success_dna_reason = str(reason_raw).strip() or None
 
+    dept_raw = str(raw.get("department") or "").strip() or ""
+    # 지원 가능 부서 7개로 정규화. 미매칭·명시 불가 시 "해당 부서는 지원할 수 없습니다"
+    department = _normalize_department_for_apply(dept_raw)
+
     return {
         "name": str(raw.get("name") or "").strip() or "신규",
         "jobTitle": str(raw.get("jobTitle") or "").strip() or "사원",
-        "department": str(raw.get("department") or "").strip() or "미정",
+        "department": department,
         "email": str(raw.get("email") or "").strip() or "",
         "joinedAt": joined_at[:10] if len(joined_at) >= 10 else joined_at,
         "gender": gender,
@@ -405,7 +535,7 @@ def analyze_resume_file(data: bytes, filename: str) -> Dict[str, Any]:
     if cache_key in _resume_cache:
         _resume_cache.move_to_end(cache_key)  # LRU 유지
         logger.debug("이력서 캐시 히트: %s", cache_key[:8])
-        return dict(_resume_cache[cache_key])
+        return _sanitize_department_in_result(dict(_resume_cache[cache_key]))
 
     text = _extract_text_from_resume_file(data, filename)
     if not text or len(text.strip()) < 10:

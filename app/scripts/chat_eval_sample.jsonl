@@ -1,0 +1,12 @@
+{"id":"emp_list","question":"기존 직원만 보여줘","must_include":["이름"],"must_not_include":[],"expected_sources":["employees"]}
+{"id":"emp_count","question":"전체 직원이 몇 명이야","must_include":["명"],"must_not_include":[],"expected_sources":["employees"]}
+{"id":"emp_info","question":"강경구의 직급과 부서를 알려줘","must_include":["강경구"],"must_not_include":[],"expected_sources":["employees"]}
+{"id":"perf_activity","question":"강경구의 최근 성과 활동을 요약해줘","must_include":["강경구"],"must_not_include":[],"expected_sources":["performance_records"]}
+{"id":"perf_indicator","question":"강경구의 5대 지표를 알고 싶어","must_include":["강경구"],"must_not_include":[],"expected_sources":["performance_records"]}
+{"id":"disc_ifrs","question":"IFRS S2 전환 준비도 핵심 지표를 알려줘","must_include":["IFRS"],"must_not_include":[],"expected_sources":["disclosures"]}
+{"id":"disc_iso","question":"ISO 30414 인적자본 공시 기준을 설명해줘","must_include":["ISO"],"must_not_include":[],"expected_sources":["disclosures"]}
+{"id":"comp_anchor","question":"역량 anchor 기준으로 문제해결 역량 설명해줘","must_include":["역량"],"must_not_include":[],"expected_sources":["competency_anchors"]}
+{"id":"mix_emp_perf","question":"고성과자가 누구야","must_include":["성과"],"must_not_include":[],"expected_sources":["employees","performance_records"]}
+{"id":"mix_disc_comp","question":"ESG 공시 기준과 관련 역량을 함께 설명해줘","must_include":["공시","역량"],"must_not_include":[],"expected_sources":["disclosures","competency_anchors"]}
+{"id":"hr_summary","question":"전체 직원 수와 일반 직원 수, 공시 완성도 알려줘","must_include":["전체 직원","일반 직원","공시"],"must_not_include":["임직원"],"expected_sources":["employees","disclosures"]}
+{"id":"out_of_scope","question":"오늘 서울 날씨 어때?","must_include":["범위"],"must_not_include":[],"expected_sources":["system"]}

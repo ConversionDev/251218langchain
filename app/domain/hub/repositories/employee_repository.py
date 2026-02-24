@@ -7,13 +7,12 @@ RAG: embedding_content·embedding·FAISS/pgvector 검색 지원.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+import random
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from langchain_core.documents import Document
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
-from tqdm import tqdm
-
 from domain.models.bases.employee import Employee  # type: ignore
 
 _AGE_BAND_BY_AGE = (
@@ -185,6 +184,83 @@ def list_all(db: Session) -> List[Dict[str, Any]]:
     return [_row_to_dict(r) for r in rows]
 
 
+def count_all(db: Session) -> int:
+    """전체 직원 수."""
+    from sqlalchemy import func
+    r = db.query(func.count(Employee.id)).scalar()
+    return int(r) if r is not None else 0
+
+
+def _build_chat_query(
+    db: Session,
+    employment_type: Optional[str] = None,
+    department_part: Optional[str] = None,
+    job_title_part: Optional[str] = None,
+    exclude_sample: bool = False,
+):
+    """list_for_chat / count_for_chat 공용 필터 빌더."""
+    q = db.query(Employee)
+    if employment_type == "new_hire":
+        q = q.filter(
+            (Employee.employment_type == "new_hire")
+            | (Employee.status.in_(["pending", "screening", "hired", "rejected"]))
+        )
+    elif employment_type == "regular":
+        q = q.filter(
+            (Employee.employment_type.is_(None))
+            | (Employee.employment_type == "")
+            | (Employee.employment_type == "regular")
+        )
+        q = q.filter(
+            (Employee.status.is_(None))
+            | (Employee.status == "")
+            | (~Employee.status.in_(["pending", "screening", "rejected"]))
+        )
+    if department_part and department_part.strip():
+        pattern = f"%{department_part.strip()}%"
+        q = q.filter(Employee.department.ilike(pattern))
+    if job_title_part and job_title_part.strip():
+        pattern = f"%{job_title_part.strip()}%"
+        q = q.filter(Employee.job_title.ilike(pattern))
+    if exclude_sample:
+        q = q.filter(~Employee.id.ilike("SAMPLE%"))
+    return q
+
+
+def count_for_chat(
+    db: Session,
+    employment_type: Optional[str] = None,
+    department_part: Optional[str] = None,
+    job_title_part: Optional[str] = None,
+    exclude_sample: bool = False,
+) -> int:
+    """list_for_chat와 동일한 필터로 전체 건수만 조회 (limit 없음)."""
+    from sqlalchemy import func
+    q = _build_chat_query(db, employment_type, department_part, job_title_part, exclude_sample)
+    r = q.with_entities(func.count(Employee.id)).scalar()
+    return int(r) if r is not None else 0
+
+
+def list_for_chat(
+    db: Session,
+    employment_type: Optional[str] = None,
+    department_part: Optional[str] = None,
+    job_title_part: Optional[str] = None,
+    exclude_sample: bool = False,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """채팅용 직원 목록 조회.
+
+    - employment_type: None(전체), 'new_hire', 'regular'
+    - department_part: 부서 부분 일치(대소문자 무시)
+    - job_title_part: 직급 부분 일치(예: 팀장, 사원, 인턴)
+    - exclude_sample: SAMPLE_ 계열 테스트 데이터 제외 여부 (기본 False)
+    """
+    q = _build_chat_query(db, employment_type, department_part, job_title_part, exclude_sample)
+    rows = q.order_by(Employee.id).limit(max(1, min(500, int(limit or 50)))).all()
+    return [_row_to_dict(r) for r in rows]
+
+
 def list_paginated(
     db: Session,
     page: int = 1,
@@ -221,6 +297,155 @@ def list_paginated(
         .all()
     )
     return [_row_to_dict(r) for r in rows], total
+
+
+def backfill_missing_profile_fields(
+    db: Session,
+    *,
+    dry_run: bool = False,
+    seed: int = 42,
+    gender_ratio: Optional[Dict[str, float]] = None,
+    age_ratio: Optional[Dict[str, float]] = None,
+    high_training_range: Tuple[int, int] = (24, 40),
+    normal_training_range: Tuple[int, int] = (8, 24),
+    unknown_training_range: Tuple[int, int] = (6, 18),
+) -> Dict[str, Any]:
+    """
+    기존 직원(regular)의 결측 gender/age/training_hours를 일괄 보정.
+    - 성별/연령은 비율 기반 분배(버킷 할당).
+    - 교육시간은 성과 맥락 반영(high vs normal/unknown).
+    - 기존 값은 절대 덮어쓰지 않음.
+    """
+    rng = random.Random(seed)
+    g_ratio = gender_ratio or {
+        "male": 0.58,
+        "female": 0.40,
+        "other": 0.01,
+        "undisclosed": 0.01,
+    }
+    a_ratio = age_ratio or {
+        "20s": 0.18,
+        "30s": 0.47,
+        "40s": 0.25,
+        "50plus": 0.10,
+    }
+
+    def _normalize_ratio(d: Dict[str, float], keys: List[str]) -> Dict[str, float]:
+        clean = {k: max(0.0, float(d.get(k, 0.0))) for k in keys}
+        total = sum(clean.values())
+        if total <= 0:
+            base = 1.0 / len(keys)
+            return {k: base for k in keys}
+        return {k: clean[k] / total for k in keys}
+
+    def _quota_assign(ids: List[str], ratio: Dict[str, float], keys: List[str]) -> Dict[str, str]:
+        if not ids:
+            return {}
+        ratio_n = _normalize_ratio(ratio, keys)
+        n = len(ids)
+        raw = {k: ratio_n[k] * n for k in keys}
+        base = {k: int(raw[k]) for k in keys}
+        remain = n - sum(base.values())
+        order = sorted(keys, key=lambda k: (raw[k] - base[k]), reverse=True)
+        for i in range(remain):
+            base[order[i % len(order)]] += 1
+        buckets: List[str] = []
+        for k in keys:
+            buckets.extend([k] * base[k])
+        rng.shuffle(buckets)
+        shuffled_ids = list(ids)
+        rng.shuffle(shuffled_ids)
+        return {eid: buckets[i] for i, eid in enumerate(shuffled_ids)}
+
+    def _pick_age(bucket: str) -> int:
+        if bucket == "20s":
+            return rng.randint(22, 29)
+        if bucket == "30s":
+            return rng.randint(30, 39)
+        if bucket == "40s":
+            return rng.randint(40, 49)
+        return rng.randint(50, 60)
+
+    # regular 기준을 list_paginated와 동일하게 유지
+    regular_rows = db.query(Employee).filter(
+        (Employee.employment_type.is_(None))
+        | (Employee.employment_type == "")
+        | (Employee.employment_type == "regular")
+    ).filter(
+        (Employee.status.is_(None))
+        | (Employee.status == "")
+        | (~Employee.status.in_(["pending", "screening", "rejected"]))
+    ).all()
+
+    # 성과 등급 맥락 맵: employee_id -> high/normal/unknown
+    from domain.models.bases.performance_record import PerformanceRecord  # type: ignore
+    perf_rows = db.query(PerformanceRecord.employee_id, PerformanceRecord.grade).all()
+    perf_map: Dict[str, str] = {}
+    for eid, grade in perf_rows:
+        if not eid:
+            continue
+        g = (grade or "").strip().lower()
+        if g == "high":
+            perf_map[eid] = "high"
+        elif eid not in perf_map:
+            perf_map[eid] = "normal" if g else "unknown"
+
+    gender_missing_ids = [r.id for r in regular_rows if not (r.gender and str(r.gender).strip())]
+    age_missing_ids = [r.id for r in regular_rows if r.age is None]
+    training_missing_ids = [r.id for r in regular_rows if r.training_hours is None]
+
+    gender_plan = _quota_assign(gender_missing_ids, g_ratio, ["male", "female", "other", "undisclosed"])
+    age_plan = _quota_assign(age_missing_ids, a_ratio, ["20s", "30s", "40s", "50plus"])
+
+    updated = {"gender": 0, "age": 0, "trainingHours": 0}
+    preview: List[Dict[str, Any]] = []
+
+    for row in regular_rows:
+        change: Dict[str, Any] = {"id": row.id}
+        if row.id in gender_plan:
+            val = gender_plan[row.id]
+            change["gender"] = val
+            if not dry_run:
+                row.gender = val
+            updated["gender"] += 1
+        if row.id in age_plan:
+            val_age = _pick_age(age_plan[row.id])
+            change["age"] = val_age
+            if not dry_run:
+                row.age = val_age
+            updated["age"] += 1
+        if row.id in training_missing_ids:
+            perf_tag = perf_map.get(row.id, "unknown")
+            if perf_tag == "high":
+                low, high = high_training_range
+            elif perf_tag == "normal":
+                low, high = normal_training_range
+            else:
+                low, high = unknown_training_range
+            val_th = rng.randint(min(low, high), max(low, high))
+            change["trainingHours"] = val_th
+            change["trainingBasis"] = perf_tag
+            if not dry_run:
+                row.training_hours = val_th
+            updated["trainingHours"] += 1
+        if len(change) > 1 and len(preview) < 10:
+            preview.append(change)
+
+    if not dry_run:
+        db.commit()
+
+    return {
+        "dryRun": dry_run,
+        "seed": seed,
+        "targetRegularEmployees": len(regular_rows),
+        "missingBefore": {
+            "gender": len(gender_missing_ids),
+            "age": len(age_missing_ids),
+            "trainingHours": len(training_missing_ids),
+        },
+        "updated": updated,
+        "preview": preview,
+    }
 
 
 def get_next_id(db: Session) -> str:
@@ -337,22 +562,50 @@ def fill_embeddings_for_employees(
     db: Session,
     embeddings_model: Any,
     batch_size: int = 32,
+    include_existing: bool = False,
+    force_rebuild_content: bool = False,
+    content_builder: Optional[Callable[[Employee], Optional[str]]] = None,
 ) -> int:
-    """embedding_content가 없으면 생성하고, embedding이 null인 행만 임베딩 후 업데이트."""
-    processed = 0
+    """직원 임베딩 일괄 갱신.
+
+    기본 동작은 embedding이 null인 행만 처리.
+    include_existing=True면 기존 embedding 보유 행까지 포함해 재생성.
+    """
+    updated = 0
+    offset = 0
     while True:
-        rows = (
-            db.query(Employee)
-            .filter(Employee.embedding.is_(None))
-            .limit(200)
-            .all()
-        )
+        if include_existing:
+            rows = (
+                db.query(Employee)
+                .order_by(Employee.id)
+                .offset(offset)
+                .limit(200)
+                .all()
+            )
+            offset += len(rows)
+        else:
+            rows = (
+                db.query(Employee)
+                .filter(Employee.embedding.is_(None))
+                .limit(200)
+                .all()
+            )
         if not rows:
             break
         texts = []
         for r in rows:
-            content = r.embedding_content or build_embedding_content(r)
-            if not r.embedding_content:
+            content = None
+            if content_builder is not None:
+                try:
+                    content = content_builder(r)
+                except Exception:
+                    content = None
+            if not content:
+                if force_rebuild_content:
+                    content = build_embedding_content(r)
+                else:
+                    content = r.embedding_content or build_embedding_content(r)
+            if force_rebuild_content or not r.embedding_content:
                 r.embedding_content = content
             texts.append(content or r.id)
         vectors: List[Optional[List[float]]] = []
@@ -378,8 +631,8 @@ def fill_embeddings_for_employees(
                 r.embedding = vec
         db.commit()
         db.expunge_all()
-        processed += len(rows)
-    return processed
+        updated += len(rows)
+    return updated
 
 
 def search_employees_with_filter(

@@ -5,7 +5,6 @@ Hub 공통 서비스
 Soccer Rule 서비스는 domain.spokes.soccer.services 에서 re-export.
 """
 
-from .semantic_classifier import classify, is_classifier_available
 from domain.spokes.soccer.services import (  # type: ignore
     PlayerService,
     ScheduleService,
@@ -14,8 +13,6 @@ from domain.spokes.soccer.services import (  # type: ignore
 )
 
 __all__ = [
-    "classify",
-    "is_classifier_available",
     "PlayerService",
     "ScheduleService",
     "StadiumService",

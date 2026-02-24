@@ -23,32 +23,12 @@ logger = logging.getLogger(__name__)
 _llama = APIRouter(prefix="/internal/llama", tags=["Llama Discriminator"])
 
 
-class ClassifyRequest(BaseModel):
-    text: str = Field(..., description="분류할 텍스트")
-
-
-class ClassifyResponse(BaseModel):
-    result: str = Field(..., description="BLOCK | RULE_BASED | POLICY_BASED")
-
-
 class ClassifySpamRequest(BaseModel):
     email_metadata: dict = Field(..., description="subject, sender, body 등")
 
 
 class ClassifySpamResponse(BaseModel):
     result: dict = Field(..., description="spam_prob, confidence, label")
-
-
-@_llama.post("/classify", response_model=ClassifyResponse)
-async def llama_classify_endpoint(request: ClassifyRequest) -> ClassifyResponse:
-    """시멘틱 분류."""
-    try:
-        from domain.hub.llm import classify  # type: ignore
-
-        result = classify(request.text.strip()) if request.text else "POLICY_BASED"
-        return ClassifyResponse(result=result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @_llama.post("/classify_spam", response_model=ClassifySpamResponse)

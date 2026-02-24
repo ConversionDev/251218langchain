@@ -25,19 +25,8 @@ def _get_hub_base_url() -> str:
 
 
 def llama_classify(text: str, *, timeout: float = 30.0) -> str:
-    """Llama 시멘틱 분류. HTTP POST hub/internal/llama/classify."""
-    base = _get_hub_base_url()
-    url = f"{base}/internal/llama/classify"
-    payload = {"text": text}
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.post(url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("result", "POLICY_BASED")
-    except Exception as e:
-        print(f"[WARNING] Llama classify HTTP 실패, 기본값 사용: {e}")
-        return "POLICY_BASED"
+    """규칙/정책 라우팅용. 시멘틱 분류 제거로 기본값 POLICY_BASED 반환."""
+    return "POLICY_BASED"
 
 
 def llama_classify_spam(email_metadata: Dict[str, Any], *, timeout: float = 60.0) -> Dict[str, Any]:

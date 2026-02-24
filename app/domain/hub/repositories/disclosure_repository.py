@@ -150,6 +150,11 @@ def fill_embeddings_for_disclosures(
 
 
 def get_disclosure_doc_count(db: Session) -> int:
+    """공시 문서(청크) 총 개수 (embedding 유무 무관)."""
+    return db.query(Disclosure).count()
+
+
+def get_disclosure_embedded_count(db: Session) -> int:
     """embedding이 채워진 공시 문서(청크) 개수."""
     return db.query(Disclosure).filter(Disclosure.embedding.isnot(None)).count()
 
@@ -165,6 +170,57 @@ def search_disclosures(db: Session, query_embedding: List[float], k: int = 5) ->
         {"vec": vec_str, "k": k},
     )
     return [row[0] for row in r]
+
+
+def search_disclosures_hybrid(
+    db: Session,
+    query_embedding: List[float],
+    query_text: str,
+    k: int = 10,
+    standard_types: Optional[List[str]] = None,
+    vector_weight: float = 0.7,
+    bm25_weight: float = 0.3,
+) -> List[Tuple[Document, float]]:
+    """벡터 + BM25 하이브리드 검색. 결합 점수(낮을수록 유사) 반환."""
+    vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    tokens = query_text.strip().split()
+    ts_query = " | ".join(tokens) if tokens else query_text.strip()
+
+    conditions = ["embedding IS NOT NULL"]
+    params: Any = {"vec": vec_str, "k": k, "tsq": ts_query}
+    if standard_types:
+        conditions.append("standard_type = ANY(:standard_types)")
+        params["standard_types"] = standard_types
+    where = " AND ".join(conditions)
+
+    sql = (
+        f"SELECT id, content, source, page, standard_type, section_title, unique_id, "
+        f"(embedding <-> CAST(:vec AS vector)) AS vec_dist, "
+        f"ts_rank_cd(tsv, to_tsquery('simple', :tsq), 1) AS bm25_rank "
+        f"FROM disclosures WHERE {where} "
+        f"ORDER BY ("
+        f"  {vector_weight} * (embedding <-> CAST(:vec AS vector)) + "
+        f"  {bm25_weight} * (1.0 - ts_rank_cd(tsv, to_tsquery('simple', :tsq), 1))"
+        f") LIMIT :k"
+    )
+    r = db.execute(sql_text(sql), params)
+    rows: List[Tuple[Document, float]] = []
+    for row in r:
+        doc_id, content, source, page, standard_type, section_title, unique_id, vec_dist, bm25_rank = row
+        combined = vector_weight * float(vec_dist) + bm25_weight * (1.0 - float(bm25_rank))
+        doc = Document(
+            page_content=content or "",
+            metadata={
+                "id": doc_id,
+                "source": source or "",
+                "page": page,
+                "standard_type": standard_type or "",
+                "section_title": section_title or "",
+                "unique_id": unique_id or "",
+            },
+        )
+        rows.append((doc, combined))
+    return rows
 
 
 def search_disclosures_with_filter(

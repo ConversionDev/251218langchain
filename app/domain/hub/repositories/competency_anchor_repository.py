@@ -175,6 +175,62 @@ def fill_embeddings_for_anchors(
     return processed
 
 
+def search_competency_anchors_hybrid(
+    db: Session,
+    query_embedding: List[float],
+    query_text: str,
+    k: int = 10,
+    category: Optional[str] = None,
+    level: Optional[int] = None,
+    vector_weight: float = 0.7,
+    bm25_weight: float = 0.3,
+) -> List[Tuple[Document, float]]:
+    """벡터 + BM25 하이브리드 검색. 결합 점수(낮을수록 유사) 반환."""
+    vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    tokens = query_text.strip().split()
+    ts_query = " | ".join(tokens) if tokens else query_text.strip()
+
+    conditions = ["embedding IS NOT NULL"]
+    params: Any = {"vec": vec_str, "k": k, "tsq": ts_query}
+    if category is not None:
+        conditions.append("category = :category")
+        params["category"] = category
+    if level is not None:
+        conditions.append("level = :level")
+        params["level"] = level
+    where = " AND ".join(conditions)
+
+    sql = (
+        f"SELECT id, content, category, level, section_title, source, source_type, unique_id, "
+        f"(embedding <-> CAST(:vec AS vector)) AS vec_dist, "
+        f"ts_rank_cd(tsv, to_tsquery('simple', :tsq), 1) AS bm25_rank "
+        f"FROM competency_anchors WHERE {where} "
+        f"ORDER BY ("
+        f"  {vector_weight} * (embedding <-> CAST(:vec AS vector)) + "
+        f"  {bm25_weight} * (1.0 - ts_rank_cd(tsv, to_tsquery('simple', :tsq), 1))"
+        f") LIMIT :k"
+    )
+    r = db.execute(sql_text(sql), params)
+    result: List[Tuple[Document, float]] = []
+    for row in r:
+        doc_id, content, cat, lv, section_title, source, source_type, unique_id, vec_dist, bm25_rank = row
+        combined = vector_weight * float(vec_dist) + bm25_weight * (1.0 - float(bm25_rank))
+        doc = Document(
+            page_content=content or "",
+            metadata={
+                "id": doc_id,
+                "category": cat or "",
+                "level": lv,
+                "section_title": section_title or "",
+                "source": source or "",
+                "source_type": source_type or "",
+                "unique_id": unique_id or "",
+            },
+        )
+        result.append((doc, combined))
+    return result
+
+
 def search_competency_anchors_with_filter(
     db: Session,
     query_embedding: List[float],

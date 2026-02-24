@@ -361,6 +361,10 @@ class ExaoneLLM(BaseLLM):
                 outputs[0][input_length:], skip_special_tokens=True
             )
 
+            # GPU 메모리 즉시 해제
+            del input_ids, outputs
+            torch.cuda.empty_cache()
+
             return generated_text.strip()
         except Exception as e:
             error_msg = f"텍스트 생성 실패: {str(e)}"
@@ -512,6 +516,10 @@ class ExaoneLangChainWrapper(BaseChatModel):
         )
         generated_text = generated_text.strip()
 
+        # GPU 메모리 즉시 해제
+        del input_ids, outputs
+        torch.cuda.empty_cache()
+
         # 도구가 바인딩되어 있으면 JSON 파싱 시도
         tool_calls = []
         content = generated_text
@@ -654,6 +662,10 @@ class ExaoneLangChainWrapper(BaseChatModel):
                 yield chunk
 
         thread.join()
+
+        # GPU 메모리 즉시 해제
+        del input_ids
+        torch.cuda.empty_cache()
 
         # 도구 호출 파싱 (스트리밍 완료 후)
         if self._tools and generated_text:

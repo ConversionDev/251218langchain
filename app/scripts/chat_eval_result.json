@@ -1,0 +1,160 @@
+{
+  "average_score": 0.95,
+  "count": 12,
+  "results": [
+    {
+      "id": "emp_list",
+      "question": "기존 직원만 보여줘",
+      "answer": "군집의 모든 직원 중 현재 접근 가능한 직원 목록은 위와 같습니다. 신입사원은 없으며, 일반 직원이 전체의 대다수를 차지하고 있으며 고성과자는 1명(김도윤)으로 확인되었습니다. 따라서, 고성과자의 성과와 역량은 competency_anchors에서 찾아볼 수 있으며, 공시 정보는 disclosures에서, 그리고 상세한 성과 기록은 performance_records에서 확인 가능합니다. [근거: employees, competency_anchors, disclosures, performance_records]",
+      "sources": [
+        "employees"
+      ],
+      "include_score": 0.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 0.4
+    },
+    {
+      "id": "emp_count",
+      "question": "전체 직원이 몇 명이야",
+      "answer": "전체 직원 수는 602명으로, 이 중 일반 직원은 301명이며 신입사원도 동일한 수인 301명입니다. 고성과자는 성공 DNA 평균 기준으로 단 한 명입니다. 현재 모든 직원의 공시 자료가 완전하게 기록되어 있으며 (공시 완성도 100%), 성과 기록은 총 3599건에 달하고 역량 관련 문서는 2000건이 적재되어 있습니다. [근거: employees, performance_records, disclosures, competency_anchors, tool:get_hr_summary]",
+      "sources": [
+        "competency_anchors",
+        "disclosures",
+        "employees",
+        "performance_records"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "emp_info",
+      "question": "강경구의 직급과 부서를 알려줘",
+      "answer": "강경구의 직급은 사원이며, 부서는 개발·IT입니다. [근거: get_employee_info]",
+      "sources": [
+        "employees"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "perf_activity",
+      "question": "강경구의 최근 성과 활동을 요약해줘",
+      "answer": "강경구의 최근 성과 활동에 대한 기록은 현재 존재하지 않습니다. [근거: performance_records]",
+      "sources": [
+        "performance_records"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "perf_indicator",
+      "question": "강경구의 5대 지표를 알고 싶어",
+      "answer": "강경구의 최근 성과 기록은 현재 확인된 데이터에 존재하지 않습니다. [근거: performance_records]",
+      "sources": [
+        "performance_records"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "disc_ifrs",
+      "question": "IFRS S2 전환 준비도 핵심 지표를 알려줘",
+      "answer": "따라서, IFRS S2 전환 준비도를 평가하는 데 핵심적인 지표들은 다음과 같습니다:\n- **전환 계획의 완성도**: 기업이 기후 변화에 대응하기 위한 구체적인 계획을 얼마나 잘 수립하고 실행 중인지를 나타냅니다. [근거: IFRS_S2_climate_disclosures]\n- **자원 할당 및 계획**: 기후 관련 위험과 기회를 관리하기 위한 자원 할당 전략과 계획의 투명성입니다. [근거: IFRS_S2_climate_disclosures]\n- **재무 영향 분석**: 기후 관련 위험과 기회가 현재와 미래의 재무 상태, 성과, 현금 흐름에 미치는 영향에 대한 분석 결과입니다. [근거: IFRS_S2_climate_disclosures]\n\n이러한 지표들은 기업의 지속 가능성 보고서에서 IFRS S2 기준에 따라 공개되어야 하며, 이해관계자들이 기업의 기후 변화 대응 전략을 평가하는 데 중요한 역할을 합니다.",
+      "sources": [
+        "disclosures"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "disc_iso",
+      "question": "ISO 30414 인적자본 공시 기준을 설명해줘",
+      "answer": "ISO 30414는 인적자본 데이터의 투명하고 일관된 보고를 위한 지침을 제공하며, 이는 조직의 내부 이해 관계자와 외부 이해 관계자 모두에게 가치를 전달하는 데 중점을 둡니다. 이 표준은 조직의 인적자본 위험과 기회, 그리고 중요한 재무적 및 비재무적 성과를 이해하는 데 필요한 정량적 지표를 포함하며, 특히 고성과자들의 데이터를 포함하여 투명한 보고를 강조합니다. 따라서 ISO 30414는 인적자본의 효과적인 관리와 지속 가능한 가치 창출을 위한 기반을 마련합니다. [근거: ISO 30414:2018, 인간 자본 데이터의 내부 및 외부 보고 지침]",
+      "sources": [
+        "disclosures"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "comp_anchor",
+      "question": "역량 anchor 기준으로 문제해결 역량 설명해줘",
+      "answer": "문제해결 역량은 창조적이고 논리적인 사고를 바탕으로 직장에서 발생하는 다양한 문제 상황을 효과적으로 인식하고 해결하는 능력을 의미합니다. 따라서, 이 역량은 단순한 문제 인식을 넘어 타당한 근거를 바탕으로 새로운 해결 방안을 고안하고, 기존 방법을 창의적으로 응용하거나 개선하는 능력을 포함합니다. [근거: competency_anchors]",
+      "sources": [
+        "competency_anchors"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "mix_emp_perf",
+      "question": "고성과자가 누구야",
+      "answer": "김도윤은 개발·IT 부서의 일반 직원으로 분류되며, 고성과자로도 인정받고 있습니다. [근거: employees, competency_anchors, performance_records]",
+      "sources": [
+        "competency_anchors",
+        "disclosures",
+        "employees",
+        "performance_records"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "mix_disc_comp",
+      "question": "ESG 공시 기준과 관련 역량을 함께 설명해줘",
+      "answer": "ESG 공시는 기업의 환경(Environmental), 사회(Social), 지배구조(Governance) 관련 이슈를 투명하게 공개하는 것을 의미합니다. 따라서, 현재의 ESG 관련 법규와 가이드라인 (예: IFRS S2 및 IFRS S1 기준)에 따라 기업은 기후 변화 리스크, 사회적 책임 활동, 그리고 투명한 지배구조 운영 방식 등을 상세히 공개해야 합니다. 역량 측면에서는 이러한 공시를 효과적으로 수행하기 위해 환경 전문가, 사회적 책임 컨설턴트, 그리고 투명한 경영 전략을 수립하고 실행할 수 있는 거버넌스 전문가의 역할이 중요합니다. 이를 통해 기업은 지속 가능한 경영 전략을 구축하고 이해관계자들에게 명확한 정보를 제공할 수 있습니다. [근거: employees, competency_anchors, disclosures]",
+      "sources": [
+        "competency_anchors",
+        "disclosures"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "hr_summary",
+      "question": "전체 직원 수와 일반 직원 수, 공시 완성도 알려줘",
+      "answer": "전체 직원 수는 602명이며, 그 중 일반 직원 수는 301명입니다. 모든 일반 직원은 공시 문서를 완성하였으며 (공시 완성도: 100%), 이는 전체 직원 집단에서도 동일하게 적용됩니다. RAG 시스템에는 성과 기록이 3599건, 역량 관련 문서가 2000건 적재되어 있으며 공시 문서는 현재 적재되어 있지 않습니다 (공시 문서 청크: 0건).",
+      "sources": [
+        "competency_anchors",
+        "disclosures",
+        "employees",
+        "performance_records"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    },
+    {
+      "id": "out_of_scope",
+      "question": "오늘 서울 날씨 어때?",
+      "answer": "현재 연결된 데이터에는 날씨 정보가 포함되어 있지 않습니다. 따라서 정확한 서울 날씨 정보를 제공할 수 없습니다. 일반적으로 날씨 정보는 외부 기상 서비스나 실시간 날씨 API를 통해 확인해야 합니다. [시스템 안내] 현재 연결된 데이터 범위 내에서는 날씨 정보를 제공할 수 없습니다.",
+      "sources": [
+        "system"
+      ],
+      "include_score": 1.0,
+      "exclude_score": 1.0,
+      "source_score": 1.0,
+      "total_score": 1.0
+    }
+  ]
+}
