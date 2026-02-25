@@ -1,4 +1,4 @@
-cas,name_en,name_ko
+python app/data/env_mapping/verify_cas_msds.pycas,name_en,name_ko
 124-38-9,Carbon dioxide,이산화탄소
 10024-97-2,Dinitrogen oxide,아산화질소
 74-82-8,Methane,메테인

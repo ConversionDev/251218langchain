@@ -41,7 +41,7 @@ jobs:
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='.git' \
-            api/app/ $EC2_USERNAME@$EC2_HOST:$APP_DIR/
+            app/ $EC2_USERNAME@$EC2_HOST:$APP_DIR/
           echo "✅ Files transferred"
 
       - name: Setup virtual environment & start app

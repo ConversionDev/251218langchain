@@ -33,9 +33,10 @@ import {
 
 interface ISOComplianceDashboardProps {
   employees: Employee[];
+  deptEmployees?: Employee[];
 }
 
-export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProps) {
+export function ISOComplianceDashboard({ employees, deptEmployees }: ISOComplianceDashboardProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -62,12 +63,12 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
       return {
         genderData: getGenderDistribution(source),
         ageBarData: getAgeGroupDistribution(source),
-        headcountByDeptComposed: getDepartmentHeadcount(source),
+        headcountByDeptComposed: getDepartmentHeadcount(deptEmployees ?? source),
         totalCount: total,
         completeness,
         avgTrainingHours,
       };
-    }, [employees]);
+    }, [employees, deptEmployees]);
 
   if (!mounted) {
     return (
@@ -89,7 +90,7 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">총 임직원 수</p>
+              <p className="text-sm text-muted-foreground">총 직원 수 (신입+일반)</p>
               <p className="text-2xl font-bold text-foreground">{totalCount}명</p>
             </div>
           </div>
@@ -127,6 +128,13 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
           className="rounded-xl border border-border bg-card p-6 shadow-sm"
         >
           <h3 className="text-sm font-semibold text-foreground">성별 분포</h3>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+            {genderData.map((g) => (
+              <div key={g.name} className="rounded border border-border px-2 py-1">
+                {g.name}: <span className="font-semibold text-foreground">{g.value}명</span>
+              </div>
+            ))}
+          </div>
           <div className="mt-4 h-[240px] w-full min-h-[240px]">
             {genderData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
@@ -169,6 +177,13 @@ export function ISOComplianceDashboard({ employees }: ISOComplianceDashboardProp
           className="rounded-xl border border-border bg-card p-6 shadow-sm"
         >
           <h3 className="text-sm font-semibold text-foreground">연령대 분포</h3>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-5">
+            {ageBarData.map((a) => (
+              <div key={a.name} className="rounded border border-border px-2 py-1">
+                {a.name}: <span className="font-semibold text-foreground">{a.인원}명</span>
+              </div>
+            ))}
+          </div>
           <div className="mt-4 h-[240px] w-full min-h-[240px]">
             {ageBarData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>

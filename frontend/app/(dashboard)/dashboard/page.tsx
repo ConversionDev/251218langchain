@@ -7,12 +7,22 @@ import { Users, Brain, TrendingUp, ShieldCheck, ArrowRight } from "lucide-react"
 import { useHydrated } from "@/hooks/use-hydrated";
 import { getIfrsMetricsView } from "@/modules/shared/utils/disclosureMetrics";
 import { getAggregatePerformanceMetrics } from "@/modules/performance/services";
-import { fetchEmployeesPaginated } from "@/modules/core/services";
+import { fetchEmployees } from "@/modules/core/services";
 import type { Employee } from "@/modules/shared/types";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DashboardVisualization } from "@/modules/overview/components/DashboardVisualization";
 
 const isoFields = ["gender", "ageBand", "employmentType", "trainingHours"] as const;
+
+function toRegularEmployees(all: Employee[]): Employee[] {
+  return (all ?? []).filter((e) => {
+    const type = (e.employmentType ?? "").trim().toLowerCase();
+    const status = (e.status ?? "").trim().toLowerCase();
+    if (type === "new_hire") return false;
+    // ATS 후보만 제외, hired는 기존 직원으로 포함
+    return !["pending", "screening", "rejected"].includes(status);
+  });
+}
 
 function useDashboardSummary(employees: Employee[]) {
   const total = employees.length;
@@ -49,6 +59,24 @@ function useDashboardSummary(employees: Employee[]) {
   };
 }
 
+function hasVerifiableAnalysis(employee: Employee): boolean {
+  const hasDna = !!employee.successDna;
+  const m = employee.disclosureMetrics;
+  if (!m) return hasDna;
+  if ("items" in m) {
+    return hasDna && Array.isArray(m.items) && m.items.length > 0;
+  }
+  return hasDna;
+}
+
+function useCredentialSummary(employees: Employee[]) {
+  const total = employees.length;
+  const verifiedCount = employees.filter(hasVerifiableAnalysis).length;
+  const pendingCount = Math.max(0, total - verifiedCount);
+  const completionRate = total ? Math.round((verifiedCount / total) * 100) : 0;
+  return { total, verifiedCount, pendingCount, completionRate };
+}
+
 const container = {
   hidden: { opacity: 0 },
   show: {
@@ -64,16 +92,41 @@ const item = {
 
 export default function DashboardPage() {
   const hydrated = useHydrated();
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [regularEmployees, setRegularEmployees] = useState<Employee[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!hydrated) return;
-    fetchEmployeesPaginated({ page: 1, pageSize: 500, employmentType: "regular" })
-      .then(({ items }) => setRegularEmployees(items ?? []))
-      .catch(() => setRegularEmployees([]));
+    fetchEmployees()
+      .then((all) => {
+        const rows = all ?? [];
+        setAllEmployees(rows);
+        setRegularEmployees(toRegularEmployees(rows));
+        setLoadError(false);
+      })
+      .catch(() => {
+        setAllEmployees([]);
+        setRegularEmployees([]);
+        setLoadError(true);
+      });
   }, [hydrated]);
 
-  const summary = useDashboardSummary(regularEmployees);
+  const allSummary = useDashboardSummary(allEmployees);
+  const regularSummary = useDashboardSummary(regularEmployees);
+  const credentialSummary = useCredentialSummary(allEmployees);
+  const totalEmployeesValue = loadError ? "연결 오류" : `${allSummary.totalCount}명`;
+  const disclosureCompletenessValue = loadError ? "-" : `${allSummary.completeness}%`;
+  const avgTrainingHoursValue = loadError ? "-" : `${allSummary.avgTrainingHours}h`;
+  const transitionScoreValue = loadError ? "-" : `${regularSummary.avgTransitionScore}점`;
+  const hcrValue = loadError ? "-" : regularSummary.humanCapitalROI.toFixed(2);
+  const sustainabilityValue = loadError ? "-" : `${regularSummary.sustainabilityImpact}점`;
+  const performanceValue = loadError ? "-" : `${regularSummary.performanceIndex}점`;
+  const verifiedTotalValue = loadError
+    ? "-"
+    : `${credentialSummary.verifiedCount}/${credentialSummary.total}건`;
+  const verificationRateValue = loadError ? "-" : `${credentialSummary.completionRate}%`;
+  const pendingVerificationValue = loadError ? "-" : `${credentialSummary.pendingCount}건`;
 
   if (!hydrated) {
     return (
@@ -97,9 +150,9 @@ export default function DashboardPage() {
       color: "text-indigo-400",
       bg: "bg-indigo-500/10",
       values: [
-        { label: "총 임직원", value: `${summary.totalCount}명` },
-        { label: "공시 완성도", value: `${summary.completeness}%` },
-        { label: "평균 교육 이수 시간", value: `${summary.avgTrainingHours}h` },
+        { label: "총 직원 (신입+일반)", value: totalEmployeesValue },
+        { label: "공시 완성도", value: disclosureCompletenessValue },
+        { label: "평균 교육 이수 시간", value: avgTrainingHoursValue },
       ],
     },
     {
@@ -110,7 +163,7 @@ export default function DashboardPage() {
       color: "text-emerald-400",
       bg: "bg-emerald-500/10",
       values: [
-        { label: "전환 준비도 평균", value: `${summary.avgTransitionScore}점` },
+        { label: "전환 준비도 평균", value: transitionScoreValue },
         { label: "Green/AI 역량", value: "분석 가능" },
       ],
     },
@@ -122,9 +175,9 @@ export default function DashboardPage() {
       color: "text-amber-400",
       bg: "bg-amber-500/10",
       values: [
-        { label: "인적자본 투자수익률", value: summary.humanCapitalROI.toFixed(2) },
-        { label: "지속가능 기여도", value: `${summary.sustainabilityImpact}점` },
-        { label: "성과 지수", value: `${summary.performanceIndex}점` },
+        { label: "인적자본 투자수익률", value: hcrValue },
+        { label: "지속가능 기여도", value: sustainabilityValue },
+        { label: "성과 지수", value: performanceValue },
       ],
     },
     {
@@ -135,19 +188,22 @@ export default function DashboardPage() {
       color: "text-slate-300",
       bg: "bg-slate-500/10",
       values: [
-        { label: "검증 가능 건수", value: `${summary.totalCount}건` },
-        { label: "상태", value: "직원 선택 후 검증" },
+        { label: "검증 완료/전체", value: verifiedTotalValue },
+        { label: "검증 완료율", value: verificationRateValue },
+        { label: "미검증", value: pendingVerificationValue },
       ],
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
         <h1 className="text-2xl font-bold text-foreground">전사 현황</h1>
         <p className="mt-1 text-muted-foreground">
           핵심 인사, 역량 진단, 성과·가치 수치를 한눈에 확인하세요.
         </p>
+        </div>
       </div>
 
       <motion.div
@@ -190,7 +246,7 @@ export default function DashboardPage() {
         })}
       </motion.div>
 
-      <DashboardVisualization employees={regularEmployees} />
+      <DashboardVisualization employees={regularEmployees} compositionEmployees={allEmployees} />
     </div>
   );
 }

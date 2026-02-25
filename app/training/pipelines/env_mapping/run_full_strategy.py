@@ -52,6 +52,9 @@ def main() -> None:
     parser.add_argument("--no-pubchem", action="store_true", help="PubChem 보강 생략")
     parser.add_argument("--no-keci", action="store_true", help="KECI 보강 생략")
     parser.add_argument("--no-echa", action="store_true", help="ECHA 보강 생략")
+    parser.add_argument("--no-ec-api", action="store_true", help="EC 번호 API 보강(PubChem) 생략")
+    parser.add_argument("--use-existing-mapping", action="store_true",
+        help="기존 매핑 파일만 사용해 보강 Excel만 재생성 (1·2단계 생략)")
     parser.add_argument("--stage", type=int, default=3, choices=(1, 2, 3), help="run_mapping 언어 단계 (기본 3=12개 언어)")
     parser.add_argument("--delay", type=float, default=0.5, help="ExaOne 호출 간 대기(초)")
     parser.add_argument("--pubchem-delay", type=float, default=0.2, help="PubChem/KECI 요청 간 대기(초)")
@@ -71,6 +74,34 @@ def main() -> None:
     python = sys.executable
     env = os.environ.copy()
     start_total = time.perf_counter()
+
+    # 기존 매핑만 사용: 3단계만 실행 (빠른 재생성)
+    if args.use_existing_mapping:
+        from training.pipelines.env_mapping.rebuild_from_existing import _find_latest_mapping
+        from training.pipelines.env_mapping.vocabulary_builder import run as build_vocabulary
+        mapping_path = _find_latest_mapping(data_dir_default)
+        if not mapping_path:
+            raise SystemExit("data/env_mapping/에 mapping_*.xlsx 또는 mapping_full_*.xlsx가 없습니다.")
+        print("")
+        print("=" * 60)
+        print("기존 매핑만 사용 — 보강 Excel 재생성 (1·2단계 생략)")
+        print("  매핑:", mapping_path.name)
+        print("=" * 60)
+        print("")
+        build_vocabulary(
+            original_path=original,
+            mapping_path=mapping_path,
+            output_path=output,
+            battery_csv_path=battery_csv,
+            skip_pubchem=True,
+            skip_keci=True,
+            skip_echa=True,
+            skip_ec_api=args.no_ec_api,
+        )
+        print("")
+        print("완료:", output)
+        print("=" * 60)
+        return
 
     print("")
     print("=" * 60)
@@ -133,6 +164,8 @@ def main() -> None:
         "--battery-csv", str(battery_csv.resolve()),
         "--pubchem-delay", str(args.pubchem_delay),
     ]
+    if args.no_ec_api:
+        cmd.append("--no-ec-api")
     if args.no_pubchem:
         cmd.append("--no-pubchem")
     if args.no_keci:

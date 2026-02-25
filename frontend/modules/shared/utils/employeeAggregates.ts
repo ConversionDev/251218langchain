@@ -43,25 +43,27 @@ export interface EmploymentDistributionItem {
 
 /** 성별 분포 (Pie/도넛용) */
 export function getGenderDistribution(employees: Employee[]): GenderDistributionItem[] {
-  const map: Record<string, number> = {};
+  const map: Record<string, number> = { male: 0, female: 0, other: 0, undisclosed: 0 };
   employees.forEach((e) => {
-    const g = e.gender ?? "undisclosed";
+    const raw = String(e.gender ?? "").trim().toLowerCase();
+    const g =
+      raw === "male" || raw === "남" ? "male"
+      : raw === "female" || raw === "여" ? "female"
+      : raw === "other" || raw === "기타" ? "other"
+      : "undisclosed";
     map[g] = (map[g] ?? 0) + 1;
   });
-  return Object.entries(map).map(([key, value]) => ({
+  return ["male", "female", "other", "undisclosed"].map((key) => ({
     name: GENDER_LABELS[key] ?? key,
-    value,
+    value: map[key] ?? 0,
   }));
 }
 
 /** 연령대 분포 (20대/30대/40대/50대 이상, BarChart용). age 우선, 없으면 ageBand 사용 */
 export function getAgeGroupDistribution(employees: Employee[]): AgeGroupDistributionItem[] {
-  const map: Record<string, number> = { "20대": 0, "30대": 0, "40대": 0, "50대 이상": 0 };
+  const map: Record<string, number> = { "20대": 0, "30대": 0, "40대": 0, "50대 이상": 0, "미기입": 0 };
   employees.forEach((e) => {
-    const group =
-      e.age != null && e.age > 0
-        ? toAgeGroupFromAge(e.age)
-        : toAgeGroup(e.ageBand ?? "30-39");
+    const group = e.age != null && e.age > 0 ? toAgeGroupFromAge(e.age) : toAgeGroup(e.ageBand ?? "");
     map[group] = (map[group] ?? 0) + 1;
   });
   return AGE_GROUP_ORDER.map((label) => ({
@@ -75,14 +77,40 @@ export function getDepartmentHeadcount(employees: Employee[]): DepartmentHeadcou
   const deptMap: Record<string, Record<string, number>> = {};
   employees.forEach((e) => {
     const emp = e.employmentType ?? "regular";
-    if (!deptMap[e.department]) deptMap[e.department] = {};
-    deptMap[e.department][emp] = (deptMap[e.department][emp] ?? 0) + 1;
+    const dept = (e.department || "").trim() || "미기입";
+    if (!deptMap[dept]) deptMap[dept] = {};
+    deptMap[dept][emp] = (deptMap[dept][emp] ?? 0) + 1;
   });
-  return Object.entries(deptMap).map(([department, counts]) => {
+  const rows = Object.entries(deptMap).map(([department, counts]) => {
     const 총인원 = Object.values(counts).reduce((a, b) => a + b, 0);
-    const 정규직비율 = 총인원 > 0 ? Math.round(((counts.regular ?? 0) / 총인원) * 100) : 0;
-    return { department, 총인원, 정규직비율 };
+    const regular = counts.regular ?? 0;
+    return { department, 총인원, regular };
   });
+
+  // 시각화 규칙: 상위 7개 부서 + 기타(나머지/단건 부서 포함)
+  const topN = 7;
+  const sorted = rows.sort((a, b) => b.총인원 - a.총인원 || a.department.localeCompare(b.department));
+  const singles = sorted.filter((r) => r.총인원 <= 1);
+  const major = sorted.filter((r) => r.총인원 > 1);
+  const top = major.slice(0, topN);
+  const rest = [...major.slice(topN), ...singles];
+
+  const result: DepartmentHeadcountItem[] = top.map((r) => ({
+    department: r.department,
+    총인원: r.총인원,
+    정규직비율: r.총인원 > 0 ? Math.round((r.regular / r.총인원) * 100) : 0,
+  }));
+
+  const restTotal = rest.reduce((s, r) => s + r.총인원, 0);
+  if (restTotal > 0) {
+    const restRegular = rest.reduce((s, r) => s + r.regular, 0);
+    result.push({
+      department: "기타",
+      총인원: restTotal,
+      정규직비율: Math.round((restRegular / restTotal) * 100),
+    });
+  }
+  return result;
 }
 
 /** 고용형태 분포 (Pie/도넛용) */

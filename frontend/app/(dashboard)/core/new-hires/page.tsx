@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { FileUp, UserPlus, Sparkles, CheckCircle, XCircle, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react";
+import { FileUp, UserPlus, Sparkles, CheckCircle, XCircle, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -11,7 +11,6 @@ import {
   fetchNextEmployeeId,
   createEmployeeApi,
   deleteEmployeeApi,
-  refreshEmployeeEmbeddingsApi,
   analyzeEmployeeResumeApi,
   updateEmployeeApi,
 } from "@/modules/core/services";
@@ -27,6 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -34,13 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Employee, RecruitStatus } from "@/modules/shared/types";
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "미검토",
-  screening: "심사 중",
-  hired: "합격",
-  rejected: "탈락",
-};
+import { NEW_HIRE_STATUS_LABELS, NEW_HIRES_MESSAGES } from "@/modules/shared/constants/messages";
 
 function formatAppDate(s: string | undefined): string {
   if (!s) return "—";
@@ -71,7 +66,6 @@ export default function CoreNewHiresPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [justRegistered, setJustRegistered] = useState<string | null>(null);
-  const [embeddingLoading, setEmbeddingLoading] = useState(false);
 
   const loadPage = useCallback((p: number) => {
     setLoading(true);
@@ -92,16 +86,39 @@ export default function CoreNewHiresPage() {
 
   const list = newHires ?? [];
 
+  const [compareCandidate, setCompareCandidate] = useState<Employee | null>(null);
+  const [filterName, setFilterName] = useState("");
+  const [filterDept, setFilterDept] = useState("");
+
+  const refreshList = () => loadPage(page);
+
+  const filteredList = useMemo(() => {
+    return list.filter((e) => {
+      const matchName = !filterName.trim() || (e.name ?? "").toLowerCase().includes(filterName.trim().toLowerCase());
+      const matchDept = !filterDept.trim() || (e.department ?? "").toLowerCase().includes(filterDept.trim().toLowerCase());
+      return matchName && matchDept;
+    });
+  }, [list, filterName, filterDept]);
+
   const byStatus = useMemo(() => {
     const statusKey = (s: RecruitStatus | null | undefined) => s || "pending";
     const map: Record<string, Employee[]> = { pending: [], screening: [], hired: [], rejected: [] };
-    for (const e of list) {
+    for (const e of filteredList) {
       const key = statusKey(e.status);
       if (map[key]) map[key].push(e);
       else map.pending.push(e);
     }
     return map;
-  }, [list]);
+  }, [filteredList]);
+  const kpis = useMemo(
+    () => [
+      { label: NEW_HIRES_MESSAGES.kpi.totalApplicants, value: total },
+      { label: NEW_HIRES_MESSAGES.kpi.screening, value: byStatus.screening.length },
+      { label: NEW_HIRES_MESSAGES.kpi.hired, value: byStatus.hired.length },
+      { label: NEW_HIRES_MESSAGES.kpi.rejected, value: byStatus.rejected.length },
+    ],
+    [total, byStatus]
+  );
 
   const [activeTab, setActiveTab] = useState<string>("pending");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -109,9 +126,6 @@ export default function CoreNewHiresPage() {
   const [reasonEditText, setReasonEditText] = useState("");
   const [rejectDialogEmp, setRejectDialogEmp] = useState<Employee | null>(null);
   const [rejectReasonText, setRejectReasonText] = useState("");
-  const [compareCandidate, setCompareCandidate] = useState<Employee | null>(null);
-
-  const refreshList = () => loadPage(page);
 
   const handleSelectForIntelligence = (emp: Employee) => {
     setSelectedEmployee(emp);
@@ -122,10 +136,10 @@ export default function CoreNewHiresPage() {
     setAnalyzingEmployeeId(emp.id);
     try {
       await analyzeEmployeeResumeApi(emp.id);
-      toast.success(`${emp.name}님 AI 분석 완료. Success DNA가 저장되었습니다.`);
+      toast.success(NEW_HIRES_MESSAGES.toast.analyzeSuccess(emp.name));
       refreshList();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "AI 분석에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : NEW_HIRES_MESSAGES.toast.analyzeFailed);
     } finally {
       setAnalyzingEmployeeId(null);
     }
@@ -135,10 +149,10 @@ export default function CoreNewHiresPage() {
     setUpdatingId(emp.id);
     try {
       await updateEmployeeApi(emp.id, { status, ...(rejectionReason !== undefined && { rejectionReason }) });
-      toast.success(`${emp.name}님 상태가 ${STATUS_LABELS[status]}(으)로 변경되었습니다.`);
+      toast.success(NEW_HIRES_MESSAGES.toast.statusUpdated(emp.name, status));
       refreshList();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "상태 변경에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : NEW_HIRES_MESSAGES.toast.statusUpdateFailed);
     } finally {
       setUpdatingId(null);
     }
@@ -149,11 +163,11 @@ export default function CoreNewHiresPage() {
     setUpdatingId(reasonDialogEmp.id);
     try {
       await updateEmployeeApi(reasonDialogEmp.id, { successDnaReason: reasonEditText.trim() || null });
-      toast.success("평가 근거가 저장되었습니다.");
+      toast.success(NEW_HIRES_MESSAGES.toast.reasonSaved);
       refreshList();
       setReasonDialogEmp(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "저장에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : NEW_HIRES_MESSAGES.toast.saveFailed);
     } finally {
       setUpdatingId(null);
     }
@@ -172,7 +186,7 @@ export default function CoreNewHiresPage() {
       if (editingEmployee) {
         const updated = await updateEmployeeApi(employee.id, employee);
         updateEmployee(employee.id, updated);
-        toast.success(`${updated.name} 정보가 수정되었습니다.`);
+        toast.success(NEW_HIRES_MESSAGES.toast.infoUpdated(updated.name));
         loadPage(page);
       } else {
         const created = await createEmployeeApi(employee);
@@ -190,11 +204,11 @@ export default function CoreNewHiresPage() {
         (err as { existing?: unknown }).existing
       ) {
         const name = err.existing?.name ?? employee.name;
-        toast.warning(`동일한 이력서가 이미 등록되어 있습니다 (${name}). DB에 추가하지 않았습니다.`);
+        toast.warning(NEW_HIRES_MESSAGES.toast.duplicateResume(name));
         return;
       }
       console.error(e);
-      toast.error(e instanceof Error ? e.message : "등록에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : NEW_HIRES_MESSAGES.toast.createFailed);
     }
   };
 
@@ -212,24 +226,24 @@ export default function CoreNewHiresPage() {
   };
 
   const handleDelete = async (emp: Employee) => {
-    if (!window.confirm(`${emp.name} 지원자 데이터를 삭제할까요?`)) return;
+    if (!window.confirm(NEW_HIRES_MESSAGES.confirm.deleteApplicant(emp.name))) return;
     setUpdatingId(emp.id);
     try {
       await deleteEmployeeApi(emp.id);
       deleteEmployee(emp.id);
-      toast.success(`${emp.name} 데이터가 삭제되었습니다.`);
+      toast.success(NEW_HIRES_MESSAGES.toast.deleted(emp.name));
       const currentCount = byStatus[activeTab]?.length ?? 0;
       const nextPage = currentCount <= 1 && page > 1 ? page - 1 : page;
       loadPage(nextPage);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "삭제에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : NEW_HIRES_MESSAGES.toast.deleteFailed);
     } finally {
       setUpdatingId(null);
     }
   };
 
   const handleOnboardToRegular = async (emp: Employee) => {
-    if (!window.confirm(`${emp.name}님을 입사 확정 처리하고 기존 직원으로 전환할까요?`)) return;
+    if (!window.confirm(NEW_HIRES_MESSAGES.confirm.onboardApplicant(emp.name))) return;
     setUpdatingId(emp.id);
     try {
       const today = new Date();
@@ -239,25 +253,12 @@ export default function CoreNewHiresPage() {
         joinedAt,
         status: null,
       });
-      toast.success(`${emp.name}님이 기존 직원으로 전환되었습니다.`);
+      toast.success(NEW_HIRES_MESSAGES.toast.onboarded(emp.name));
       loadPage(page);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "입사 확정 처리에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : NEW_HIRES_MESSAGES.toast.onboardFailed);
     } finally {
       setUpdatingId(null);
-    }
-  };
-
-  const handleRefreshEmbeddings = async () => {
-    setEmbeddingLoading(true);
-    try {
-      const { updated } = await refreshEmployeeEmbeddingsApi();
-      toast.success(`임베딩 갱신 완료 (${updated}명 반영). RAG 검색에 반영됩니다.`);
-      loadPage(page);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "임베딩 갱신에 실패했습니다.");
-    } finally {
-      setEmbeddingLoading(false);
     }
   };
 
@@ -275,56 +276,66 @@ export default function CoreNewHiresPage() {
       <div>
         <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
           <UserPlus className="h-3.5 w-3.5 shrink-0" />
-          <span className="text-xs">이력서 업로드 → AI 분석 → 등록</span>
+          <span className="text-xs">{NEW_HIRES_MESSAGES.header.flow}</span>
         </div>
-        <h1 className="text-2xl font-bold text-foreground">신입 관리</h1>
+        <h1 className="text-2xl font-bold text-foreground">{NEW_HIRES_MESSAGES.header.title}</h1>
         <p className="mt-1 text-muted-foreground">
-          이력서를 업로드하면 AI가 기본 정보와 Success DNA를 채웁니다. 확인 후 등록하면 이 페이지의{' '}
-          <strong>신입 목록</strong>에 추가됩니다. 기존 직원은{' '}
-          <Link href="/core/employees" className="text-primary underline hover:no-underline">기존 직원</Link>에서 관리하세요.
+          {NEW_HIRES_MESSAGES.header.descriptionPrefix}{" "}
+          <strong>{NEW_HIRES_MESSAGES.header.descriptionEmphasis}</strong>{" "}
+          {NEW_HIRES_MESSAGES.header.descriptionSuffix}{" "}
+          <Link href="/core/employees" className="text-primary underline hover:no-underline">
+            {NEW_HIRES_MESSAGES.header.existingEmployeesLinkLabel}
+          </Link>
+          {NEW_HIRES_MESSAGES.header.descriptionTail}
         </p>
       </div>
 
-      <section className="rounded-xl border border-border bg-card p-8 shadow-sm">
-        <div className="flex flex-col items-center justify-center gap-6 text-center">
-          <div className="rounded-full bg-primary/10 p-4">
-            <FileUp className="h-10 w-10 text-primary" />
+      <section className="grid gap-4 md:grid-cols-4">
+        {kpis.map((k) => (
+          <div key={k.label} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-sm text-muted-foreground">{k.label}</p>
+            <p className="text-2xl font-bold text-foreground">{k.value}명</p>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">이력서로 신입 등록</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              PDF, Word, HWP 등 이력서를 올리면 기본 정보와 역량 분석이 자동으로 채워집니다.
-            </p>
+        ))}
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-col items-center justify-center gap-3 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-primary/10 p-2.5">
+              <FileUp className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">{NEW_HIRES_MESSAGES.section.registerTitle}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {NEW_HIRES_MESSAGES.section.registerDescription}
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button onClick={handleOpenModal} size="lg" className="inline-flex items-center gap-2">
+          <div className="flex flex-col items-center gap-2 sm:items-end">
+            <Button onClick={handleOpenModal} className="inline-flex items-center gap-2">
               <FileUp className="h-4 w-4" />
-              이력서 업로드하여 등록하기
+              {NEW_HIRES_MESSAGES.section.registerButton}
             </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="inline-flex items-center gap-2"
-              onClick={handleRefreshEmbeddings}
-              disabled={embeddingLoading}
-            >
-              <Sparkles className="h-4 w-4" />
-              {embeddingLoading ? "갱신 중…" : "임베딩 갱신"}
-            </Button>
+            {justRegistered && (
+              <p className="text-xs text-green-600 dark:text-green-400">
+                {NEW_HIRES_MESSAGES.section.registerDoneHint}
+              </p>
+            )}
           </div>
-          {justRegistered && (
-            <p className="text-sm text-green-600 dark:text-green-400">
-              등록되었습니다. 아래 신입 목록에서 확인하세요.
-            </p>
-          )}
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-foreground">지원자 · 신입 목록 (ATS)</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">신입 전체 {total}명</span>
+      <section className="rounded-xl border border-border bg-card px-5 py-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">{NEW_HIRES_MESSAGES.section.atsTitle}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {NEW_HIRES_MESSAGES.section.atsDescription}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{NEW_HIRES_MESSAGES.section.totalLabel(total)}</span>
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -335,7 +346,7 @@ export default function CoreNewHiresPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="min-w-[6rem] text-center text-sm text-muted-foreground">
+              <span className="min-w-[6rem] text-center">
                 {total ? `${(page - 1) * PAGE_SIZE + 1}-${Math.min(page * PAGE_SIZE, total)}` : "0"} / {total}
               </span>
               <Button
@@ -349,57 +360,84 @@ export default function CoreNewHiresPage() {
               </Button>
             </div>
             <Button variant="outline" size="sm" onClick={() => loadPage(page)} disabled={loading}>
-              새로고침
+              {NEW_HIRES_MESSAGES.section.refresh}
             </Button>
           </div>
         </div>
         {loading && list.length === 0 ? (
           <div className="flex h-32 items-center justify-center rounded border border-border bg-muted/20 text-sm text-muted-foreground">
-            로딩 중…
+            {NEW_HIRES_MESSAGES.section.loading}
           </div>
         ) : list.length === 0 ? (
           <p className="rounded border border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
-            지원자가 없습니다. JSONL 적재 후 <strong>새로고침</strong>을 누르거나, 위에서 이력서 업로드로 등록하세요.
+            {NEW_HIRES_MESSAGES.section.emptyListLead} <strong>{NEW_HIRES_MESSAGES.section.emptyListRefresh}</strong>{" "}
+            {NEW_HIRES_MESSAGES.section.emptyListTail}
             <br />
-            <span className="mt-2 block text-xs">(적재한 DB와 프론트가 같은 API를 쓰는지 확인하세요.)</span>
+            <span className="mt-2 block text-xs">{NEW_HIRES_MESSAGES.section.emptyListHint}</span>
           </p>
         ) : (
           <>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="mb-4">
-              <TabsTrigger value="pending">
-                미검토 ({byStatus.pending.length})
-              </TabsTrigger>
-              <TabsTrigger value="screening">
-                심사 중 ({byStatus.screening.length})
-              </TabsTrigger>
-              <TabsTrigger value="hired">
-                합격 ({byStatus.hired.length})
-              </TabsTrigger>
-              <TabsTrigger value="rejected">
-                탈락 ({byStatus.rejected.length})
-              </TabsTrigger>
-            </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="newhire-filter-name" className="text-sm">이름</Label>
+                    <Input
+                      id="newhire-filter-name"
+                      type="text"
+                      value={filterName}
+                      onChange={(e) => setFilterName(e.target.value)}
+                      placeholder={NEW_HIRES_MESSAGES.input.searchPlaceholder}
+                      className="h-8 w-40"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="newhire-filter-dept" className="text-sm">부서</Label>
+                    <Input
+                      id="newhire-filter-dept"
+                      type="text"
+                      value={filterDept}
+                      onChange={(e) => setFilterDept(e.target.value)}
+                      placeholder={NEW_HIRES_MESSAGES.input.searchPlaceholder}
+                      className="h-8 w-40"
+                    />
+                  </div>
+                </div>
+                <TabsList className="h-9 w-fit max-w-full overflow-x-auto">
+                  <TabsTrigger value="pending" className="whitespace-nowrap">
+                    {NEW_HIRES_MESSAGES.tabs.pending} ({byStatus.pending.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="screening" className="whitespace-nowrap">
+                    {NEW_HIRES_MESSAGES.tabs.screening} ({byStatus.screening.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="hired" className="whitespace-nowrap">
+                    {NEW_HIRES_MESSAGES.tabs.hired} ({byStatus.hired.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="rejected" className="whitespace-nowrap">
+                    {NEW_HIRES_MESSAGES.tabs.rejected} ({byStatus.rejected.length})
+                  </TabsTrigger>
+                </TabsList>
+              </div>
             {(["pending", "screening", "hired", "rejected"] as const).map((tab) => (
               <TabsContent key={tab} value={tab} className="mt-0">
                 <div className="overflow-x-auto rounded border border-border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>이름</TableHead>
-                        <TableHead>부서</TableHead>
-                        <TableHead>직급</TableHead>
-                        <TableHead>지원일</TableHead>
-                        <TableHead>상태</TableHead>
-                        {tab === "rejected" && <TableHead>탈락 사유</TableHead>}
-                        <TableHead className="text-right">액션</TableHead>
+                        <TableHead>{NEW_HIRES_MESSAGES.table.headers.name}</TableHead>
+                        <TableHead>{NEW_HIRES_MESSAGES.table.headers.department}</TableHead>
+                        <TableHead>{NEW_HIRES_MESSAGES.table.headers.jobTitle}</TableHead>
+                        <TableHead>{NEW_HIRES_MESSAGES.table.headers.applicationDate}</TableHead>
+                        <TableHead>{NEW_HIRES_MESSAGES.table.headers.status}</TableHead>
+                        {tab === "rejected" && <TableHead>{NEW_HIRES_MESSAGES.table.headers.rejectionReason}</TableHead>}
+                        <TableHead className="w-[260px] text-right">{NEW_HIRES_MESSAGES.table.headers.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {byStatus[tab].length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={tab === "rejected" ? 7 : 6} className="text-center text-muted-foreground py-8">
-                            해당 상태의 지원자가 없습니다.
+                            {NEW_HIRES_MESSAGES.section.empty}
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -410,7 +448,7 @@ export default function CoreNewHiresPage() {
                                 type="button"
                                 className="text-left underline-offset-2 hover:underline"
                                 onClick={() => handleSelectForIntelligence(emp)}
-                                title="이 직원을 Intelligence에서 조회"
+                                title={NEW_HIRES_MESSAGES.table.nameTitle}
                               >
                                 {emp.name}
                               </button>
@@ -418,48 +456,45 @@ export default function CoreNewHiresPage() {
                             <TableCell>{emp.department || "—"}</TableCell>
                             <TableCell>{emp.jobTitle || "—"}</TableCell>
                             <TableCell>{formatAppDate(emp.applicationDate)}</TableCell>
-                            <TableCell>{STATUS_LABELS[emp.status || "pending"]}</TableCell>
+                            <TableCell>{NEW_HIRE_STATUS_LABELS[(emp.status || "pending") as RecruitStatus]}</TableCell>
                             {tab === "rejected" && (
                               <TableCell className="max-w-[200px] truncate text-muted-foreground" title={emp.rejectionReason ?? undefined}>
                                 {emp.rejectionReason || "—"}
                               </TableCell>
                             )}
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2 flex-wrap">
-                                {emp.successDna && (
+                            <TableCell className="w-[260px] text-right align-middle">
+                              <div className="ml-auto inline-flex flex-nowrap items-center justify-end gap-1">
+                                {(tab === "pending" || (tab === "screening" && !emp.successDna)) && (
                                   <>
+                                    {tab === "pending" && !!emp.successDna && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled
+                                        className="h-8 w-[86px] justify-center whitespace-nowrap border-emerald-500/30 px-2 text-xs text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-400"
+                                      >
+                                        {NEW_HIRES_MESSAGES.buttons.analyzedDone}
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => setCompareCandidate(emp)}
-                                      className="gap-1"
+                                      disabled={analyzingEmployeeId !== null}
+                                      onClick={() => handleAnalyze(emp)}
+                                      className="h-8 w-[86px] justify-center whitespace-nowrap px-2 text-xs"
                                     >
-                                      <BarChart3 className="h-3.5 w-3.5" />
-                                      기존 직원과 비교
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        setReasonDialogEmp(emp);
-                                        setReasonEditText(emp.successDnaReason ?? "");
-                                      }}
-                                      className="gap-1 text-muted-foreground hover:text-foreground"
-                                    >
-                                      평가 근거
+                                      {analyzingEmployeeId === emp.id
+                                        ? NEW_HIRES_MESSAGES.buttons.analyzing
+                                        : (
+                                          <>
+                                            <Sparkles className="mr-1 h-3.5 w-3.5" />{" "}
+                                            {tab === "pending" && emp.successDna
+                                              ? NEW_HIRES_MESSAGES.buttons.analyzeAgain
+                                              : NEW_HIRES_MESSAGES.buttons.analyze}
+                                          </>
+                                        )}
                                     </Button>
                                   </>
-                                )}
-                                {(tab === "pending" || tab === "screening") && !emp.successDna && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={analyzingEmployeeId !== null}
-                                    onClick={() => handleAnalyze(emp)}
-                                    className="gap-1"
-                                  >
-                                    {analyzingEmployeeId === emp.id ? "분석 중…" : <><Sparkles className="h-3.5 w-3.5" /> AI 분석</>}
-                                  </Button>
                                 )}
                                 {tab === "pending" && emp.successDna && (
                                   <Button
@@ -467,34 +502,64 @@ export default function CoreNewHiresPage() {
                                     size="sm"
                                     disabled={updatingId !== null}
                                     onClick={() => handleSetStatus(emp, "screening")}
+                                    className="h-8 w-[72px] justify-center px-2 text-xs"
                                   >
-                                    심사 중으로
+                                    {NEW_HIRES_MESSAGES.buttons.screening}
                                   </Button>
                                 )}
                                 {tab === "screening" && (
                                   <>
                                     <Button
-                                      variant="default"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={updatingId !== null}
+                                      onClick={() => handleSetStatus(emp, "pending")}
+                                      className="h-8 w-[72px] justify-center px-2 text-xs"
+                                    >
+                                      {NEW_HIRES_MESSAGES.tabs.pending}
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={updatingId !== null}
+                                      onClick={() => handleEdit(emp)}
+                                      className="h-8 w-[72px] justify-center px-2 text-xs"
+                                    >
+                                      <Pencil className="mr-1 h-3.5 w-3.5" />
+                                      {NEW_HIRES_MESSAGES.buttons.edit}
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={updatingId !== null}
+                                      onClick={() => handleDelete(emp)}
+                                      className="h-8 w-[72px] justify-center px-2 text-xs text-muted-foreground hover:text-destructive"
+                                    >
+                                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                      {NEW_HIRES_MESSAGES.buttons.delete}
+                                    </Button>
+                                    <Button
+                                      variant="outline"
                                       size="sm"
                                       disabled={updatingId !== null}
                                       onClick={() => handleSetStatus(emp, "hired")}
-                                      className="gap-1"
+                                      className="h-8 w-[72px] justify-center border-emerald-500/40 px-2 text-xs text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-400 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-300"
                                     >
-                                      <CheckCircle className="h-3.5 w-3.5" />
-                                      합격
+                                      <CheckCircle className="mr-1 h-3.5 w-3.5" />
+                                      {NEW_HIRES_MESSAGES.buttons.hired}
                                     </Button>
                                     <Button
-                                      variant="destructive"
+                                      variant="outline"
                                       size="sm"
                                       disabled={updatingId !== null}
                                       onClick={() => {
                                         setRejectDialogEmp(emp);
                                         setRejectReasonText(emp.rejectionReason ?? "");
                                       }}
-                                      className="gap-1"
+                                      className="h-8 w-[72px] justify-center border-rose-500/40 px-2 text-xs text-rose-700 hover:bg-rose-500/10 hover:text-rose-700 dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-500/20 dark:hover:text-rose-300"
                                     >
-                                      <XCircle className="h-3.5 w-3.5" />
-                                      탈락
+                                      <XCircle className="mr-1 h-3.5 w-3.5" />
+                                      {NEW_HIRES_MESSAGES.buttons.rejected}
                                     </Button>
                                   </>
                                 )}
@@ -505,70 +570,85 @@ export default function CoreNewHiresPage() {
                                       size="sm"
                                       disabled={updatingId !== null}
                                       onClick={() => handleOnboardToRegular(emp)}
+                                      className="h-8 w-[72px] justify-center px-2 text-xs"
                                     >
-                                      입사 확정(기존 직원 전환)
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      disabled={updatingId !== null}
-                                      onClick={() => handleSetStatus(emp, "screening")}
-                                    >
-                                      심사 중으로
-                                    </Button>
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      disabled={updatingId !== null}
-                                      onClick={() => {
-                                        setRejectDialogEmp(emp);
-                                        setRejectReasonText(emp.rejectionReason ?? "");
-                                      }}
-                                      className="gap-1"
-                                    >
-                                      <XCircle className="h-3.5 w-3.5" />
-                                      탈락
+                                      {NEW_HIRES_MESSAGES.buttons.onboard}
                                     </Button>
                                   </>
                                 )}
-                                {tab === "rejected" && (
+                                {tab !== "screening" && (
                                   <>
                                     <Button
                                       variant="outline"
                                       size="sm"
                                       disabled={updatingId !== null}
-                                      onClick={() => handleSetStatus(emp, "screening")}
+                                      onClick={() => handleEdit(emp)}
+                                      className="h-8 w-[72px] justify-center px-2 text-xs"
                                     >
-                                      심사 중으로
+                                      <Pencil className="mr-1 h-3.5 w-3.5" />
+                                      {NEW_HIRES_MESSAGES.buttons.edit}
                                     </Button>
                                     <Button
-                                      variant="default"
+                                      variant="outline"
                                       size="sm"
                                       disabled={updatingId !== null}
-                                      onClick={() => handleSetStatus(emp, "hired")}
-                                      className="gap-1"
+                                      onClick={() => handleDelete(emp)}
+                                      className="h-8 w-[72px] justify-center px-2 text-xs text-muted-foreground hover:text-destructive"
                                     >
-                                      <CheckCircle className="h-3.5 w-3.5" />
-                                      합격
+                                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                      {NEW_HIRES_MESSAGES.buttons.delete}
                                     </Button>
                                   </>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={updatingId !== null}
-                                  onClick={() => handleEdit(emp)}
-                                >
-                                  수정
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  disabled={updatingId !== null}
-                                  onClick={() => handleDelete(emp)}
-                                >
-                                  삭제
-                                </Button>
+                                {tab === "hired" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={updatingId !== null}
+                                    onClick={() => handleSetStatus(emp, "screening")}
+                                    className="h-8 w-[72px] justify-center px-2 text-xs"
+                                  >
+                                    {NEW_HIRES_MESSAGES.buttons.screening}
+                                  </Button>
+                                )}
+                                {tab === "hired" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={updatingId !== null}
+                                    onClick={() => {
+                                      setRejectDialogEmp(emp);
+                                      setRejectReasonText(emp.rejectionReason ?? "");
+                                    }}
+                                    className="h-8 w-[72px] justify-center border-rose-500/40 px-2 text-xs text-rose-700 hover:bg-rose-500/10 hover:text-rose-700 dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-500/20 dark:hover:text-rose-300"
+                                  >
+                                    <XCircle className="mr-1 h-3.5 w-3.5" />
+                                    {NEW_HIRES_MESSAGES.buttons.rejected}
+                                  </Button>
+                                )}
+                                {tab === "rejected" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={updatingId !== null}
+                                    onClick={() => handleSetStatus(emp, "screening")}
+                                    className="h-8 w-[80px] justify-center px-2 text-xs"
+                                  >
+                                    {NEW_HIRES_MESSAGES.buttons.screening}
+                                  </Button>
+                                )}
+                                {tab === "rejected" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={updatingId !== null}
+                                    onClick={() => handleSetStatus(emp, "hired")}
+                                    className="h-8 w-[80px] justify-center border-emerald-500/40 px-2 text-xs text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-400 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-300"
+                                  >
+                                    <CheckCircle className="mr-1 h-3.5 w-3.5" />
+                                    {NEW_HIRES_MESSAGES.buttons.hired}
+                                  </Button>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -579,10 +659,10 @@ export default function CoreNewHiresPage() {
                 </div>
               </TabsContent>
             ))}
-          </Tabs>
-          <p className="mt-4 text-sm text-muted-foreground">
-            미검토: 이력서 접수만 된 상태. [AI 분석]으로 엑사원이 Success DNA를 생성합니다. 심사 중에서 [합격]/[탈락]으로 결정하세요.
-          </p>
+            </Tabs>
+            <p className="mt-4 text-sm text-muted-foreground">
+              {NEW_HIRES_MESSAGES.section.footerGuide}
+            </p>
           </>
         )}
       </section>
@@ -615,27 +695,27 @@ export default function CoreNewHiresPage() {
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{reasonDialogEmp?.name} · 평가 근거 (수동 수정 가능)</DialogTitle>
+            <DialogTitle>{reasonDialogEmp ? NEW_HIRES_MESSAGES.dialogs.reasonTitle(reasonDialogEmp.name) : ""}</DialogTitle>
           </DialogHeader>
           {reasonDialogEmp?.successDna && (
             <div className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-              <span className="font-medium text-muted-foreground">Success DNA </span>
+              <span className="font-medium text-muted-foreground">{NEW_HIRES_MESSAGES.dialogs.reasonDnaLabel} </span>
               리더십 {reasonDialogEmp.successDna.leadership} · 기술력 {reasonDialogEmp.successDna.technical} · 창의성 {reasonDialogEmp.successDna.creativity} · 협업 {reasonDialogEmp.successDna.collaboration} · 적응력 {reasonDialogEmp.successDna.adaptability}
             </div>
           )}
           <textarea
             value={reasonEditText}
             onChange={(e) => setReasonEditText(e.target.value)}
-            placeholder="AI가 생성한 평가 근거를 확인·수정하세요."
+            placeholder={NEW_HIRES_MESSAGES.input.reasonPlaceholder}
             rows={5}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => setReasonDialogEmp(null)}>
-              취소
+              {NEW_HIRES_MESSAGES.buttons.cancel}
             </Button>
             <Button size="sm" disabled={updatingId !== null} onClick={handleSaveReason}>
-              {updatingId === reasonDialogEmp?.id ? "저장 중…" : "저장"}
+              {updatingId === reasonDialogEmp?.id ? NEW_HIRES_MESSAGES.buttons.saving : NEW_HIRES_MESSAGES.buttons.save}
             </Button>
           </div>
         </DialogContent>
@@ -652,21 +732,21 @@ export default function CoreNewHiresPage() {
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{rejectDialogEmp?.name} · 탈락 사유</DialogTitle>
+            <DialogTitle>{rejectDialogEmp ? NEW_HIRES_MESSAGES.dialogs.rejectTitle(rejectDialogEmp.name) : ""}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            탈락 처리 시 사유를 입력하면 이의 제기·감사 대응 시 참고할 수 있습니다. (선택)
+            {NEW_HIRES_MESSAGES.dialogs.rejectDescription}
           </p>
           <textarea
             value={rejectReasonText}
             onChange={(e) => setRejectReasonText(e.target.value)}
-            placeholder="예: 경력 부합도 낮음, 자격 요건 미충족 등"
+            placeholder={NEW_HIRES_MESSAGES.input.rejectionPlaceholder}
             rows={4}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => { setRejectDialogEmp(null); setRejectReasonText(""); }}>
-              취소
+              {NEW_HIRES_MESSAGES.buttons.cancel}
             </Button>
             <Button
               variant="destructive"
@@ -674,7 +754,7 @@ export default function CoreNewHiresPage() {
               disabled={updatingId !== null}
               onClick={handleRejectConfirm}
             >
-              {updatingId === rejectDialogEmp?.id ? "처리 중…" : "탈락 처리"}
+              {updatingId === rejectDialogEmp?.id ? NEW_HIRES_MESSAGES.buttons.rejectProcessing : NEW_HIRES_MESSAGES.buttons.rejectConfirm}
             </Button>
           </div>
         </DialogContent>

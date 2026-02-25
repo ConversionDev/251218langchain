@@ -40,13 +40,32 @@ export async function fetchNextEmployeeId(): Promise<string> {
   return data.nextId ?? "E001";
 }
 
-/** 직원 생성 (Neon). 동일 이름이 이미 있으면 409 에러(기존 데이터 반환). */
+/** 이력서 파일 해시로 이미 등록된 지원인지 확인. 중복 시 제출 불가 처리용 */
+export async function checkResumeHashApi(resumeHash: string): Promise<{ exists: boolean; existing?: Employee }> {
+  const res = await fetch(
+    `${API_BASE}/api/employees/check-resume-hash?resume_hash=${encodeURIComponent(resumeHash)}`
+  );
+  if (!res.ok) return { exists: false };
+  const data = (await res.json()) as { exists?: boolean; existing?: Employee };
+  return { exists: !!data.exists, existing: data.existing };
+}
+
+/** 직원 생성 (Neon). 동일 이력서면 409, 검증/DB 오류 시 서버 메시지 그대로 표시. */
 export async function createEmployeeApi(payload: Employee): Promise<Employee> {
-  const res = await fetch(`${API_BASE}/api/employees`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/employees`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === "Failed to fetch" || msg.includes("NetworkError") || msg.includes("Load failed")) {
+      throw new Error("백엔드 서버에 연결할 수 없습니다. API 서버(localhost:8000)가 실행 중인지 확인해 주세요.");
+    }
+    throw e;
+  }
   const body = await res.json().catch(() => ({}));
   if (res.status === 409) {
     const msg = (body as { detail?: string }).detail ?? "이미 등록된 직원입니다";
@@ -55,7 +74,14 @@ export async function createEmployeeApi(payload: Employee): Promise<Employee> {
     throw err;
   }
   if (!res.ok) {
-    throw new Error((body as { detail?: string }).detail ?? `Create failed: ${res.status}`);
+    const raw = (body as { detail?: string | unknown[] }).detail;
+    const message =
+      typeof raw === "string"
+        ? raw
+        : Array.isArray(raw) && raw.length > 0
+          ? (raw as { msg?: string }[]).map((e) => e.msg ?? JSON.stringify(e)).join(". ")
+          : `제출 실패 (${res.status})`;
+    throw new Error(message);
   }
   return body as Employee;
 }
@@ -93,8 +119,8 @@ export async function analyzeEmployeeResumeApi(employeeId: string): Promise<Empl
   return res.json();
 }
 
-/** 직원 임베딩 갱신 (embedding이 비어 있는 직원만 일괄 계산 후 DB 반영, RAG 검색용) */
-export async function refreshEmployeeEmbeddingsApi(): Promise<{ updated: number }> {
+/** 직원+성과 임베딩 갱신 (employees + performance_records 일괄 계산 후 DB 반영, RAG 검색용) */
+export async function refreshEmployeeEmbeddingsApi(): Promise<{ updated: number; performanceUpdated?: number }> {
   const res = await fetch(`${API_BASE}/api/employees/embedding`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -103,6 +129,35 @@ export async function refreshEmployeeEmbeddingsApi(): Promise<{ updated: number 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail ?? `임베딩 갱신 실패: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface EmployeeProfileBackfillResult {
+  dryRun: boolean;
+  seed: number;
+  targetRegularEmployees: number;
+  missingBefore: { gender: number; age: number; trainingHours: number };
+  updated: { gender: number; age: number; trainingHours: number };
+  preview: Array<Record<string, unknown>>;
+}
+
+/** 기존 직원 결측 프로필(성별/나이/교육시간) 일괄 보정 */
+export async function backfillEmployeeProfilesApi(params?: {
+  dryRun?: boolean;
+  seed?: number;
+}): Promise<EmployeeProfileBackfillResult> {
+  const res = await fetch(`${API_BASE}/api/employees/profile-backfill`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      dryRun: params?.dryRun ?? true,
+      seed: params?.seed ?? 42,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `결측 프로필 보정 실패: ${res.status}`);
   }
   return res.json();
 }

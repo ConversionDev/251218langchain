@@ -2,7 +2,7 @@ import { getIfrsMetricsView } from "@/modules/shared/utils/disclosureMetrics";
 import type { Employee, SuccessDNA } from "@/modules/shared/types";
 import type { PerformanceMetrics, ImpactDataPoint, DisclosureSummary } from "./types";
 
-/** 전체 임직원 평균 지표 (selectedEmployee === null 시 사용) */
+/** 전체 일반 직원 평균 지표 (selectedEmployee === null 시 사용) */
 export function getAggregatePerformanceMetrics(employees: Employee[]): PerformanceMetrics | null {
   if (employees.length === 0) return null;
   let dnaSum = 0, trainingHours = 0, roiSum = 0, sustainSum = 0, perfSum = 0;
@@ -27,7 +27,7 @@ export function getAggregatePerformanceMetrics(employees: Employee[]): Performan
   };
 }
 
-/** 전체 임직원 평균 시계열. 직원이 없거나 데이터 없으면 빈 배열 (실제 DB 기준) */
+/** 전체 일반 직원 평균 시계열. 직원이 없거나 데이터 없으면 빈 배열 (실제 DB 기준) */
 export function getAggregateImpactChartData(employees: Employee[]): ImpactDataPoint[] {
   if (employees.length === 0) return [];
   const allPoints = employees.map((e) => getImpactChartData(e)).filter((arr) => arr.length > 0);
@@ -48,13 +48,13 @@ export function getAggregateImpactChartData(employees: Employee[]): ImpactDataPo
   }));
 }
 
-/** 전체 임직원 평균 공시 요약 */
+/** 전체 일반 직원 평균 공시 요약 */
 export function getAggregateDisclosureSummary(employees: Employee[]): DisclosureSummary | null {
   if (employees.length === 0) return null;
   const m = getAggregatePerformanceMetrics(employees);
   if (!m) return null;
   return {
-    narrative: `전체 ${employees.length}명 임직원 평균: 성과 지수 ${m.performanceIndex}점, 지속가능 기여도 ${m.sustainabilityImpact}점으로 산출되었으며, IFRS S1/S2 공시 요건에 부합하는 지표를 확보하였습니다.`,
+    narrative: `전체 ${employees.length}명 일반 직원 평균: 성과 지수 ${m.performanceIndex}점, 지속가능 기여도 ${m.sustainabilityImpact}점으로 산출되었으며, IFRS S1/S2 공시 요건에 부합하는 지표를 확보하였습니다.`,
     ifrsS1Summary:
       "본 인적 자본 공시는 IFRS S1 '지속가능성 관련 재무정보 공시'에 따른 일반 목적 재무제표 보완 정보로, 인력 구성·교육·성과 지표를 포함합니다.",
     ifrsS2Summary:

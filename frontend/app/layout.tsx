@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
 import { RegisterSw } from "@/components/RegisterSw";
+import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
   title: "Success DNA | Enterprise HR Solution",
   description: "엔터프라이즈 HR 솔루션 - Core, Intelligence, Credential, Performance",
+  icons: { icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" },
 };
 
 const themeScript = `
@@ -30,6 +32,7 @@ export default function RootLayout({
         {children}
         <Toaster richColors position="top-right" closeButton duration={1500} />
         <RegisterSw />
+        <RoleSwitcher />
       </body>
     </html>
   );

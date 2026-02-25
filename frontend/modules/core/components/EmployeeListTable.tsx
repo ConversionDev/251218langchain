@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DNABadge, getDNAPersonaTooltip } from "@/modules/shared/components/DNABadge";
+import { CORE_EMPLOYEES_MESSAGES, EMPLOYEE_LIST_MESSAGES } from "@/modules/shared/constants/messages";
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
   regular: "정규직",
@@ -45,6 +46,7 @@ interface EmployeeListTableProps {
 
 export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, onAnalyze }: EmployeeListTableProps) {
   const setSelectedEmployee = useStore((s) => s.setSelectedEmployee);
+  const analyzingEmployeeId = useStore((s) => s.analyzingEmployeeId);
   const [filterDept, setFilterDept] = useState("");
   const [filterName, setFilterName] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -82,9 +84,7 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
     if (onOpenProfile) {
       onOpenProfile(emp);
     } else {
-      const go = window.confirm(
-        `${emp.name} 님을 선택했습니다. 역량 진단 페이지로 이동할까요?`
-      );
+      const go = window.confirm(CORE_EMPLOYEES_MESSAGES.confirm.rowClickToIntelligence(emp.name));
       if (go) window.location.href = "/intelligence";
     }
   };
@@ -102,20 +102,20 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
     <div className="space-y-4">
       <div className="flex flex-wrap gap-4">
         <div className="flex items-center gap-2">
-          <Label htmlFor="filterName" className="text-sm">이름</Label>
+          <Label htmlFor="filterName" className="text-sm">{EMPLOYEE_LIST_MESSAGES.filter.nameLabel}</Label>
           <Input
             id="filterName"
-            placeholder="검색..."
+            placeholder={EMPLOYEE_LIST_MESSAGES.filter.searchPlaceholder}
             value={filterName}
             onChange={(e) => setFilterName(e.target.value)}
             className="h-8 w-40"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Label htmlFor="filterDept" className="text-sm">부서</Label>
+          <Label htmlFor="filterDept" className="text-sm">{EMPLOYEE_LIST_MESSAGES.filter.deptLabel}</Label>
           <Input
             id="filterDept"
-            placeholder="검색..."
+            placeholder={EMPLOYEE_LIST_MESSAGES.filter.searchPlaceholder}
             value={filterDept}
             onChange={(e) => setFilterDept(e.target.value)}
             className="h-8 w-40"
@@ -128,33 +128,33 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
             <TableRow>
               <TableHead>
                 <button type="button" onClick={() => handleSort("name")} className="font-medium">
-                  이름 <SortIcon column="name" />
+                  {EMPLOYEE_LIST_MESSAGES.table.headers.name} <SortIcon column="name" />
                 </button>
               </TableHead>
               <TableHead>
                 <button type="button" onClick={() => handleSort("jobTitle")} className="font-medium">
-                  직급 <SortIcon column="jobTitle" />
+                  {EMPLOYEE_LIST_MESSAGES.table.headers.jobTitle} <SortIcon column="jobTitle" />
                 </button>
               </TableHead>
               <TableHead>
                 <button type="button" onClick={() => handleSort("department")} className="font-medium">
-                  부서 <SortIcon column="department" />
+                  {EMPLOYEE_LIST_MESSAGES.table.headers.department} <SortIcon column="department" />
                 </button>
               </TableHead>
-              <TableHead>성별</TableHead>
-              <TableHead>연령</TableHead>
+              <TableHead>{EMPLOYEE_LIST_MESSAGES.table.headers.gender}</TableHead>
+              <TableHead>{EMPLOYEE_LIST_MESSAGES.table.headers.age}</TableHead>
               <TableHead>
                 <button type="button" onClick={() => handleSort("employmentType")} className="font-medium">
-                  고용형태 <SortIcon column="employmentType" />
+                  {EMPLOYEE_LIST_MESSAGES.table.headers.employmentType} <SortIcon column="employmentType" />
                 </button>
               </TableHead>
               <TableHead>
                 <button type="button" onClick={() => handleSort("trainingHours")} className="font-medium">
-                  교육시간 <SortIcon column="trainingHours" />
+                  {EMPLOYEE_LIST_MESSAGES.table.headers.trainingHours} <SortIcon column="trainingHours" />
                 </button>
               </TableHead>
               {(onEdit || onDelete || onOpenProfile || onAnalyze) && (
-                <TableHead className="w-[6.75rem] whitespace-nowrap px-1.5">작업</TableHead>
+                <TableHead className="w-[260px] whitespace-nowrap text-right">{EMPLOYEE_LIST_MESSAGES.table.headers.actions}</TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -171,7 +171,7 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
                     e.stopPropagation();
                     setSelectedEmployee(emp);
                   }}
-                  title="이름 클릭은 선택만 됩니다. 이력 상세는 행의 다른 영역을 클릭하세요."
+                  title={EMPLOYEE_LIST_MESSAGES.table.rowNameTitle}
                 >
                   <span className="inline-flex items-center gap-2">
                     {emp.name}
@@ -192,53 +192,58 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
                 {(onEdit || onDelete || onOpenProfile || onAnalyze) && (
                   <TableCell
                     onClick={(e) => e.stopPropagation()}
-                    className="whitespace-nowrap px-1.5"
+                    className="w-[260px] whitespace-nowrap text-right align-middle"
                   >
-                    <span className="inline-flex flex-nowrap items-center gap-0.5">
+                    <span className="ml-auto grid w-fit grid-cols-2 gap-1">
                     {onAnalyze && (
                       <Button
                         type="button"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0 p-0"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-[80px] justify-center px-2 text-xs"
+                        disabled={analyzingEmployeeId !== null}
                         onClick={() => onAnalyze(emp)}
-                        aria-label="AI 분석"
-                        title="AI 분석"
+                        title={EMPLOYEE_LIST_MESSAGES.actions.analyze}
                       >
-                        <Sparkles className="h-4 w-4" />
+                        <Sparkles className="mr-1 h-3.5 w-3.5 shrink-0" />
+                        {analyzingEmployeeId === emp.id ? EMPLOYEE_LIST_MESSAGES.actions.analyzing : EMPLOYEE_LIST_MESSAGES.actions.analyze}
                       </Button>
                     )}
                     {onOpenProfile && (
                       <Button
                         type="button"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0 p-0"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-[80px] justify-center px-2 text-xs"
                         onClick={() => onOpenProfile(emp)}
-                        aria-label="상세"
-                        title="이력 상세"
+                        title={EMPLOYEE_LIST_MESSAGES.table.detailTitle}
                       >
-                        <FileText className="h-4 w-4" />
+                        <FileText className="mr-1 h-3.5 w-3.5 shrink-0" />
+                        {EMPLOYEE_LIST_MESSAGES.actions.detail}
                       </Button>
                     )}
                     {onEdit && (
                       <Button
                         type="button"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0 p-0"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-[80px] justify-center px-2 text-xs"
                         onClick={() => onEdit(emp)}
-                        aria-label="수정"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="mr-1 h-3.5 w-3.5 shrink-0" />
+                        {EMPLOYEE_LIST_MESSAGES.actions.edit}
                       </Button>
                     )}
                     {onDelete && (
                       <Button
                         type="button"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-[80px] justify-center px-2 text-xs text-muted-foreground hover:text-destructive"
                         onClick={() => onDelete(emp.id)}
-                        aria-label="삭제"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
+                        {EMPLOYEE_LIST_MESSAGES.actions.delete}
                       </Button>
                     )}
                     </span>

@@ -16,6 +16,8 @@ import {
   FileText,
   ShieldAlert,
 } from "lucide-react";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { useDemoRoleStore } from "@/store/useDemoRoleStore";
 import { cn } from "@/lib/utils";
 
 const navItems: {
@@ -27,7 +29,7 @@ const navItems: {
 }[] = [
   { href: "/", label: "메인", icon: Home, exact: true },
   { href: "/dashboard", label: "전사 현황", icon: LayoutDashboard },
-  { href: "/chat", label: "채팅", icon: MessageCircle },
+  { href: "/chat", label: "AI 질의", icon: MessageCircle },
   { href: "/data-map", label: "데이터 지도", icon: Map },
   { href: "/core/new-hires", label: "신입 관리", icon: UserPlus },
   { href: "/core/employees", label: "기존 직원", icon: Users },
@@ -41,14 +43,24 @@ const navItems: {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const hydrated = useHydrated();
+  const demoRole = useDemoRoleStore((s) => s.demoRole);
+  const isDemoAdmin = hydrated && demoRole === "admin";
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-56 border-r border-slate-200/30 bg-white/80 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-[#0f0f0f]/95">
-      <div className="flex h-16 items-center gap-2 border-b border-slate-200/40 px-4 dark:border-white/10">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white">
-          <LayoutDashboard className="h-5 w-5" />
+      <div className="flex h-16 flex-col justify-center gap-0.5 border-b border-slate-200/40 px-4 dark:border-white/10">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white">
+            <LayoutDashboard className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <span className="block font-semibold text-slate-800 dark:text-slate-100">Success DNA</span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              {isDemoAdmin ? "데모 · 관리자" : "관리자"}
+            </span>
+          </div>
         </div>
-        <span className="font-semibold text-slate-800 dark:text-slate-100">Success DNA</span>
       </div>
       <nav className="flex flex-col gap-1 p-3.5">
         {navItems.map((item) => {

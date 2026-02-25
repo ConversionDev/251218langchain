@@ -7,7 +7,6 @@ import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
 import {
   fetchEmployeesPaginated,
-  fetchEmployees,
   fetchNextEmployeeId,
   createEmployeeApi,
   analyzeEmployeeResumeApi,
@@ -20,13 +19,17 @@ import { EmployeeFormModal } from "@/modules/core/components/EmployeeFormModal";
 import { ProfileSheet } from "@/modules/hr-profile/components";
 import { Button } from "@/components/ui/button";
 import type { Employee } from "@/modules/shared/types";
+import { toast } from "sonner";
+import { CORE_EMPLOYEES_MESSAGES } from "@/modules/shared/constants/messages";
 
 const PAGE_SIZE = 20;
 
 export default function CoreEmployeesPage() {
   const hydrated = useHydrated();
-  const { addEmployee, updateEmployee, deleteEmployee, setSelectedEmployee, setEmployees, selectedEmployee } = useStore();
+  const { addEmployee, updateEmployee, deleteEmployee, setSelectedEmployee, setEmployees, selectedEmployee, setAnalyzingEmployeeId } = useStore();
   const [employees, setEmployeesPage] = useState<Employee[]>([]);
+  const [summaryEmployees, setSummaryEmployees] = useState<Employee[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -37,43 +40,55 @@ export default function CoreEmployeesPage() {
   const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
   const profileEmployee = profileEmployeeId ? employees.find((e) => e.id === profileEmployeeId) ?? null : null;
 
+  const loadRegularSummary = useCallback(async () => {
+    // 백엔드 regular 분류 기준을 단일 소스로 사용해 대시보드/목록 수치 불일치 제거
+    const first = await fetchEmployeesPaginated({ page: 1, pageSize: 100, employmentType: "regular" });
+    const totalCount = first.total ?? 0;
+    const collected: Employee[] = [...(first.items ?? [])];
+    const totalPages = Math.max(1, Math.ceil(totalCount / 100));
+    if (totalPages > 1) {
+      for (let p = 2; p <= totalPages; p++) {
+        const next = await fetchEmployeesPaginated({ page: p, pageSize: 100, employmentType: "regular" });
+        if (next.items?.length) collected.push(...next.items);
+      }
+    }
+    setSummaryEmployees(collected);
+  }, []);
+
+  const loadAllEmployees = useCallback(async () => {
+    const first = await fetchEmployeesPaginated({ page: 1, pageSize: 100 });
+    const totalCount = first.total ?? 0;
+    const collected: Employee[] = [...(first.items ?? [])];
+    const totalPages = Math.max(1, Math.ceil(totalCount / 100));
+    if (totalPages > 1) {
+      for (let p = 2; p <= totalPages; p++) {
+        const next = await fetchEmployeesPaginated({ page: p, pageSize: 100 });
+        if (next.items?.length) collected.push(...next.items);
+      }
+    }
+    setAllEmployees(collected);
+  }, []);
+
   const loadPage = useCallback((p: number) => {
     setLoading(true);
     fetchEmployeesPaginated({ page: p, pageSize: PAGE_SIZE, employmentType: "regular" })
-      .then(async ({ items, total: t }) => {
-        // 백엔드 필터/이관 상태 차이로 regular 결과가 비는 경우를 대비한 프론트 폴백
-        if ((t ?? 0) > 0) {
-          const pageItems = Array.isArray(items) ? items : [];
-          setEmployeesPage(pageItems);
-          setTotal(typeof t === "number" ? t : 0);
-          setEmployees(pageItems);
-          setPage(p);
-          return;
-        }
-        const all = await fetchEmployees();
-        const regular = (all ?? []).filter((e) => {
-          const type = (e.employmentType ?? "").trim().toLowerCase();
-          const status = (e.status ?? "").trim().toLowerCase();
-          if (type === "new_hire") return false;
-          // ATS 후보만 제외. hired는 기존 직원으로 허용.
-          return !["pending", "screening", "rejected"].includes(status);
-        });
-        const start = (p - 1) * PAGE_SIZE;
-        const end = start + PAGE_SIZE;
-        const pageItems = regular.slice(start, end);
+      .then(({ items, total: t }) => {
+        const pageItems = Array.isArray(items) ? items : [];
         setEmployeesPage(pageItems);
-        setTotal(regular.length);
-        setEmployees(regular);
+        setTotal(typeof t === "number" ? t : 0);
+        setEmployees(pageItems);
         setPage(p);
       })
-      .catch(() => { setEmployeesPage([]); setTotal(0); })
+      .catch(() => { setEmployeesPage([]); setSummaryEmployees([]); setTotal(0); })
       .finally(() => setLoading(false));
   }, [setEmployees]);
 
   useEffect(() => {
     if (!hydrated) return;
     loadPage(1);
-  }, [hydrated, loadPage]);
+    loadRegularSummary().catch(() => setSummaryEmployees([]));
+    loadAllEmployees().catch(() => setAllEmployees([]));
+  }, [hydrated, loadPage, loadRegularSummary, loadAllEmployees]);
 
   useEffect(() => {
     if (!hydrated || !selectedEmployee) return;
@@ -98,16 +113,20 @@ export default function CoreEmployeesPage() {
         const updated = await updateEmployeeApi(employee.id, employee);
         updateEmployee(employee.id, updated);
         loadPage(page);
+        loadRegularSummary();
+        loadAllEmployees();
       } else {
         const created = await createEmployeeApi(employee);
         addEmployee(created);
         loadPage(1);
+        loadRegularSummary();
+        loadAllEmployees();
       }
       setEditingEmployee(null);
       setModalOpen(false);
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "저장에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : CORE_EMPLOYEES_MESSAGES.toast.saveFailed);
     }
   };
 
@@ -117,27 +136,34 @@ export default function CoreEmployeesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("이 직원 데이터를 삭제할까요?")) return;
+    if (!window.confirm(CORE_EMPLOYEES_MESSAGES.confirm.deleteEmployee)) return;
     try {
       await deleteEmployeeApi(id);
       deleteEmployee(id);
       setSelectedEmployee(null);
       const nextPage = employees.length <= 1 && page > 1 ? page - 1 : page;
       loadPage(nextPage);
+      loadRegularSummary();
+      loadAllEmployees();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "삭제에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : CORE_EMPLOYEES_MESSAGES.toast.deleteFailed);
     }
   };
 
   const handleAnalyze = async (emp: Employee) => {
+    setAnalyzingEmployeeId(emp.id);
     try {
       await analyzeEmployeeResumeApi(emp.id);
-      alert(`${emp.name} AI 분석이 완료되었습니다.`);
+      toast.success(CORE_EMPLOYEES_MESSAGES.toast.analyzeSuccess(emp.name));
       loadPage(page);
+      loadRegularSummary();
+      loadAllEmployees();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "AI 분석에 실패했습니다.");
+      toast.error(e instanceof Error ? e.message : CORE_EMPLOYEES_MESSAGES.toast.analyzeFailed);
+    } finally {
+      setAnalyzingEmployeeId(null);
     }
   };
 
@@ -166,35 +192,37 @@ export default function CoreEmployeesPage() {
         <div>
           <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
             <Users className="h-3.5 w-3.5 shrink-0" />
-            <span className="text-xs">등록된 직원 목록 · 수정/삭제</span>
+            <span className="text-xs">{CORE_EMPLOYEES_MESSAGES.header.flow}</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">기존 직원 관리</h1>
+          <h1 className="text-2xl font-bold text-foreground">{CORE_EMPLOYEES_MESSAGES.header.title}</h1>
           <p className="mt-1 text-muted-foreground">
-            DB에 등록된 직원의 이력·공시 지표를 조회·수정합니다. 신입은{" "}
+            {CORE_EMPLOYEES_MESSAGES.header.descriptionPrefix}{" "}
             <Link href="/core/new-hires" className="text-primary underline hover:no-underline">
-              신입 관리
+              {CORE_EMPLOYEES_MESSAGES.header.newHireLinkLabel}
             </Link>
-            에서 등록하세요.
+            {CORE_EMPLOYEES_MESSAGES.header.descriptionTail}
           </p>
         </div>
-        <Button onClick={handleAddNew} variant="outline" className="inline-flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          직원 추가
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleAddNew} variant="outline" className="inline-flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            {CORE_EMPLOYEES_MESSAGES.buttons.addEmployee}
+          </Button>
+        </div>
       </div>
 
-      <ISOComplianceDashboard employees={employees} />
+      <ISOComplianceDashboard employees={summaryEmployees} deptEmployees={allEmployees} />
 
       <section className="rounded-xl border border-border bg-card px-5 py-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">직원 리스트</h2>
+            <h2 className="text-lg font-semibold text-foreground">{CORE_EMPLOYEES_MESSAGES.section.listTitle}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              이름을 제외한 행 영역 또는 상세(문서) 버튼을 클릭하면 이력 상세가 열립니다. 수정/삭제는 행 내 버튼을 사용하세요.
+              {CORE_EMPLOYEES_MESSAGES.section.listDescription}
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>전체 {total}명</span>
+            <span>{CORE_EMPLOYEES_MESSAGES.section.totalLabel(total)}</span>
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -223,7 +251,7 @@ export default function CoreEmployeesPage() {
         <div className="mt-4">
           {loading ? (
             <div className="flex h-32 items-center justify-center rounded border border-border bg-muted/20 text-sm text-muted-foreground">
-              로딩 중…
+              {CORE_EMPLOYEES_MESSAGES.section.loading}
             </div>
           ) : (
             <EmployeeListTable

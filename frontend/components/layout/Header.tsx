@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { BriefcaseBusiness, Moon, Sun } from "lucide-react";
+import { BriefcaseBusiness, Moon, Sun, Sparkles } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
+import { backfillEmployeeProfilesApi, refreshEmployeeEmbeddingsApi } from "@/modules/core/services";
+import { CORE_EMPLOYEES_MESSAGES } from "@/modules/shared/constants/messages";
 
 const THEME_KEY = "theme";
 
@@ -78,8 +81,52 @@ function DisclosureModeSwitch() {
 
 export function Header() {
   const hydrated = useHydrated();
+  const pathname = usePathname();
   const selectedEmployee = useStore((s) => s.selectedEmployee);
   const setSelectedEmployee = useStore((s) => s.setSelectedEmployee);
+  const [embeddingLoading, setEmbeddingLoading] = useState(false);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const showBackfillButton = pathname === "/core/employees";
+
+  const handleBackfillProfiles = async () => {
+    setBackfillLoading(true);
+    try {
+      const preview = await backfillEmployeeProfilesApi({ dryRun: true, seed: 42 });
+      const msg = CORE_EMPLOYEES_MESSAGES.confirm.profileBackfill({
+        targetRegularEmployees: preview.targetRegularEmployees,
+        gender: preview.updated.gender,
+        age: preview.updated.age,
+        trainingHours: preview.updated.trainingHours,
+      });
+      const ok = window.confirm(msg);
+      if (!ok) return;
+      const saved = await backfillEmployeeProfilesApi({ dryRun: false, seed: 42 });
+      toast.success(CORE_EMPLOYEES_MESSAGES.toast.backfillCompleted(saved.updated), { duration: 5000 });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : CORE_EMPLOYEES_MESSAGES.toast.backfillFailed, { duration: 5000 });
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
+
+  const handleRefreshEmbeddings = async () => {
+    setEmbeddingLoading(true);
+    try {
+      const result = await refreshEmployeeEmbeddingsApi();
+      const perf = result.performanceUpdated ?? 0;
+      const opts = { duration: 5000 };
+      if (result.updated === 0 && perf === 0) {
+        toast.info("갱신할 대상이 없습니다. 모든 직원·성과 기록에 이미 임베딩이 반영되어 있습니다.", opts);
+        return;
+      }
+      const perfMsg = perf > 0 ? `, 성과 ${perf}건` : "";
+      toast.success(`임베딩 갱신 완료 (직원 ${result.updated}명${perfMsg} 반영). RAG 검색에 반영됩니다.`, opts);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "임베딩 갱신에 실패했습니다.", { duration: 5000 });
+    } finally {
+      setEmbeddingLoading(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/20 bg-white/60 px-8 backdrop-blur-md dark:border-white/10 dark:bg-[#0f0f0f]/90">
@@ -106,6 +153,27 @@ export function Header() {
       </div>
       {hydrated && (
         <div className="flex items-center gap-3">
+          {showBackfillButton && (
+            <button
+              type="button"
+              onClick={handleBackfillProfiles}
+              disabled={backfillLoading}
+              title="기존 직원 결측 프로필 자동 보정"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+            >
+              {backfillLoading ? CORE_EMPLOYEES_MESSAGES.buttons.backfilling : CORE_EMPLOYEES_MESSAGES.buttons.backfill}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleRefreshEmbeddings}
+            disabled={embeddingLoading}
+            title="직원·성과 RAG 임베딩 일괄 갱신"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+          >
+            <Sparkles className="h-4 w-4" />
+            {embeddingLoading ? "갱신 중…" : "임베딩 갱신"}
+          </button>
           <Link
             href="/workspace"
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"

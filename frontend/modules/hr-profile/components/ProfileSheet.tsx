@@ -8,6 +8,7 @@ import {
   YAxis,
   ResponsiveContainer,
   Cell,
+  LabelList,
   RadialBarChart,
   RadialBar,
 } from "recharts";
@@ -163,12 +164,19 @@ export function ProfileSheet({
             {chartData.length > 0 && (
               <div className="shrink-0 border-b border-border px-6 py-4">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">Success DNA 요약</p>
+                <div className="mb-2 grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+                  {chartData.map((d) => (
+                    <div key={`dna-${d.key}`} className="rounded border border-border px-2 py-0.5">
+                      {d.name}: <span className="font-semibold text-foreground">{d.value}점</span>
+                    </div>
+                  ))}
+                </div>
                 <div className="h-32 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={chartData}
                       layout="vertical"
-                      margin={{ top: 0, right: 8, left: 0, bottom: 0 }}
+                      margin={{ top: 0, right: 22, left: 0, bottom: 0 }}
                     >
                       <XAxis type="number" domain={[0, 100]} hide />
                       <YAxis type="category" dataKey="name" width={52} tick={{ fontSize: 10 }} />
@@ -176,6 +184,7 @@ export function ProfileSheet({
                         {chartData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.fill} />
                         ))}
+                        <LabelList dataKey="value" position="right" formatter={(v: unknown) => `${Number(v ?? 0)}점`} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>

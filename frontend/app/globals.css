@@ -71,39 +71,39 @@
 
 /* 공시 리포트 미리보기: 라이트/다크 공통으로 용지 스타일 유지 (잘림 방지 + 다크에서도 가독) */
 .report-preview-modal {
-  background: #e2e8f0 !important;
+  background: hsl(var(--muted)) !important;
 }
 .report-preview-modal .report-paper {
-  background: #ffffff !important;
-  color: #0f172a;
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
 }
 .dark .report-preview-modal .report-paper,
 .dark .report-preview-modal .report-paper * {
-  border-color: #e2e8f0 !important;
+  border-color: hsl(var(--border)) !important;
   color: inherit;
 }
 .dark .report-preview-modal .report-paper h1,
 .dark .report-preview-modal .report-paper h2,
 .dark .report-preview-modal .report-paper .font-bold {
-  color: #0f172a !important;
+  color: hsl(var(--foreground)) !important;
 }
 .dark .report-preview-modal .report-paper p,
 .dark .report-preview-modal .report-paper td,
 .dark .report-preview-modal .report-paper th,
 .dark .report-preview-modal .report-paper span {
-  color: #334155 !important;
+  color: hsl(var(--foreground)) !important;
 }
 .dark .report-preview-modal .report-paper .text-slate-500,
 .dark .report-preview-modal .report-paper .text-slate-400 {
-  color: #64748b !important;
+  color: hsl(var(--muted-foreground)) !important;
 }
 .dark .report-preview-modal .report-paper section .rounded-lg,
 .dark .report-preview-modal .report-paper .bg-slate-50 {
-  background-color: #f1f5f9 !important;
+  background-color: hsl(var(--muted)) !important;
 }
 .dark .report-preview-modal .report-paper .bg-slate-50\/50,
 .dark .report-preview-modal .report-paper .bg-slate-50\/30 {
-  background-color: rgba(248, 250, 252, 0.8) !important;
+  background-color: hsl(var(--muted) / 0.7) !important;
 }
 
 /* 공시 리포트 전용 페이지: 다크 모드 시 테마 색상 적용 (인쇄 시에는 흰 배경 유지) */
@@ -133,7 +133,7 @@
 
 /* 이사회 보고 모드(전체화면): flex 레이아웃 고정, 겹침 방지, 문서형 가독성 */
 .report-mode-fullscreen {
-  background: #ffffff !important;
+  background: hsl(var(--background)) !important;
 }
 .report-mode-fullscreen.report-paper {
   position: relative;

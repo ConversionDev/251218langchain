@@ -136,11 +136,11 @@ export default function PerformancePage() {
     );
   }
 
-  const reportTitle = isAggregate ? "성과·가치 리포트 (전체 임직원 평균)" : "성과·가치 리포트";
+  const reportTitle = isAggregate ? "성과·가치 리포트 (전체 일반 직원 평균)" : "성과·가치 리포트";
   const reportSubtitle = isAggregate
     ? `${regularEmployees.length}명 기준 평균 인적 자본 가치 · 개인 분석은 기존 직원에서 직원 선택`
     : "핵심 인사 · 역량 진단 · 자격 검증 통합 인적 자본 가치";
-  const summaryName = isAggregate ? `전체 임직원 (${regularEmployees.length}명 평균)` : selectedEmployee!.name;
+  const summaryName = isAggregate ? `전체 일반 직원 (${regularEmployees.length}명 평균)` : selectedEmployee!.name;
 
   return (
     <div

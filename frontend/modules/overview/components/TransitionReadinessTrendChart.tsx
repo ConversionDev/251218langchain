@@ -10,33 +10,77 @@ interface TransitionReadinessTrendChartProps {
   employees: Employee[];
 }
 
-/** 실제 DB의 전환 준비도만 사용. 목/합성 분기 데이터 없음 */
-function getQuarterlyTrend(employees: Employee[]): { quarter: string; score: number }[] {
-  if (employees.length === 0) return [];
-  const withScore = employees.filter(
+type TransitionTrendResult = {
+  data: { quarter: string; score: number }[];
+  scoreLabel: string;
+  sourceLabel: string;
+};
+
+/**
+ * 실제 DB 기반 점수 생성.
+ * 1) disclosureMetrics.transitionReadyScore 우선
+ * 2) 없으면 successDna.adaptability 평균으로 대체(연동 확인용)
+ */
+function getQuarterlyTrend(employees: Employee[]): TransitionTrendResult {
+  if (employees.length === 0) {
+    return {
+      data: [],
+      scoreLabel: "전환 준비도",
+      sourceLabel: "",
+    };
+  }
+  const withTransition = employees.filter(
     (e) => getIfrsMetricsView(e.disclosureMetrics)?.transitionReadyScore != null
   );
-  if (withScore.length === 0) return [];
-  const sum = withScore.reduce(
-    (s, e) => s + (getIfrsMetricsView(e.disclosureMetrics)?.transitionReadyScore ?? 0),
-    0
+  if (withTransition.length > 0) {
+    const sum = withTransition.reduce(
+      (s, e) => s + (getIfrsMetricsView(e.disclosureMetrics)?.transitionReadyScore ?? 0),
+      0
+    );
+    const current = Math.round(sum / withTransition.length);
+    return {
+      data: [{ quarter: "현재", score: Math.max(0, Math.min(100, current)) }],
+      scoreLabel: "전환 준비도",
+      sourceLabel: "disclosureMetrics.transitionReadyScore",
+    };
+  }
+
+  const withAdaptability = employees.filter(
+    (e) => typeof e.successDna?.adaptability === "number"
   );
-  const current = Math.round(sum / withScore.length);
-  return [{ quarter: "현재", score: Math.max(0, Math.min(100, current)) }];
+  if (withAdaptability.length > 0) {
+    const sum = withAdaptability.reduce(
+      (s, e) => s + (e.successDna?.adaptability ?? 0),
+      0
+    );
+    const current = Math.round(sum / withAdaptability.length);
+    return {
+      data: [{ quarter: "현재", score: Math.max(0, Math.min(100, current)) }],
+      scoreLabel: "적응력 평균(대체)",
+      sourceLabel: "successDna.adaptability",
+    };
+  }
+
+  return {
+    data: [],
+    scoreLabel: "전환 준비도",
+    sourceLabel: "",
+  };
 }
 
 export function TransitionReadinessTrendChart({ employees }: TransitionReadinessTrendChartProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const data = getQuarterlyTrend(employees);
+  const trend = getQuarterlyTrend(employees);
+  const { data, scoreLabel, sourceLabel } = trend;
 
   if (!mounted) return null;
 
   if (data.length === 0) {
     return (
       <div className="flex h-[280px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
-        전환 준비도 데이터가 없습니다. (실제 DB 기준)
+        전환 준비도/적응력 데이터가 없습니다. (실제 DB 기준)
       </div>
     );
   }
@@ -72,19 +116,22 @@ export function TransitionReadinessTrendChart({ employees }: TransitionReadiness
               border: "1px solid hsl(var(--border))",
               borderRadius: "var(--radius)",
             }}
-            formatter={(value: number | undefined) => [value ?? 0, "전환 준비도"]}
+            formatter={(value: number | undefined) => [value ?? 0, scoreLabel]}
             labelFormatter={(label) => `분기: ${label}`}
           />
           <Area
             type="monotone"
             dataKey="score"
-            name="전환 준비도"
+            name={scoreLabel}
             stroke="hsl(var(--primary))"
             strokeWidth={2}
             fill="url(#transitionReadinessGradient)"
           />
         </AreaChart>
       </ResponsiveContainer>
+      <p className="mt-2 text-xs text-muted-foreground">
+        지표 소스: {sourceLabel}
+      </p>
     </motion.div>
   );
 }

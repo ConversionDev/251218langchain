@@ -24,7 +24,6 @@ export interface StreamEvent {
   content?: string;
   context_preview?: string | null;
   sources?: SourceItem[] | null;
-  semantic_action?: string | null;
   error?: string;
 }
 
@@ -49,6 +48,45 @@ export async function uploadChatFiles(
     const text = await res.text();
     throw new Error(text || `업로드 실패 (${res.status})`);
   }
+  return res.json();
+}
+
+const CHAT_STORAGE_KEY = "chat_thread_id";
+
+/** 저장된 thread_id 반환. 없으면 새로 생성해 저장 후 반환 */
+export function getOrCreateThreadId(): string {
+  if (typeof window === "undefined") return "";
+  let id = sessionStorage.getItem(CHAT_STORAGE_KEY);
+  if (!id) {
+    id = crypto.randomUUID?.() ?? `thread_${Date.now()}`;
+    sessionStorage.setItem(CHAT_STORAGE_KEY, id);
+  }
+  return id;
+}
+
+/** 현재 thread_id만 반환 (없으면 null) */
+export function getStoredThreadId(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(CHAT_STORAGE_KEY);
+}
+
+/** thread_id 저장 (초기화 시 새 ID 저장용) */
+export function setStoredThreadId(threadId: string): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(CHAT_STORAGE_KEY, threadId);
+}
+
+/** 대화 내역 조회. GET /api/agent/threads/:thread_id/history */
+export async function getThreadHistory(threadId: string): Promise<{ thread_id: string; messages: Array<{ role: string; content: string }> }> {
+  const res = await fetch(`${API_BASE}/api/agent/threads/${encodeURIComponent(threadId)}/history`);
+  if (!res.ok) throw new Error(`내역 조회 실패 (${res.status})`);
+  return res.json();
+}
+
+/** 대화 초기화. DELETE /api/agent/threads/:thread_id */
+export async function deleteThread(threadId: string): Promise<{ status: string; thread_id: string }> {
+  const res = await fetch(`${API_BASE}/api/agent/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`삭제 실패 (${res.status})`);
   return res.json();
 }
 
@@ -83,11 +121,13 @@ export async function sendChatMessageStream(
     if (options?.signal?.aborted) return;
     const text = await res.text();
     callbacks.onError?.(`채팅 요청 실패 (${res.status}): ${text}`);
+    callbacks.onDone?.();
     return;
   }
   const reader = res.body?.getReader();
   if (!reader) {
     callbacks.onError?.("스트림을 읽을 수 없습니다.");
+    callbacks.onDone?.();
     return;
   }
   const decoder = new TextDecoder();

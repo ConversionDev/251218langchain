@@ -16,11 +16,11 @@ import type { PerformanceMetrics, ImpactDataPoint } from "../types";
 
 /** PDF/공시 미리보기용 색상 (흰 배경에 맞춤) */
 const REPORT_CHART_COLORS = {
-  primary: "#6366f1",
-  secondary: "#10b981",
-  grid: "#e2e8f0",
-  text: "#64748b",
-  textStrong: "#0f172a",
+  primary: "hsl(var(--primary))",
+  secondary: "hsl(var(--chart-2))",
+  grid: "hsl(var(--border))",
+  text: "hsl(var(--muted-foreground))",
+  textStrong: "hsl(var(--foreground))",
 } as const;
 
 interface ReportPreviewChartsProps {
@@ -35,9 +35,9 @@ export function ReportPreviewCharts({ metrics, chartData, reportMode }: ReportPr
 
   const metricBars = metrics
     ? [
-        { name: "HC ROI", value: Math.min(metrics.humanCapitalROI * 25, 100), label: metrics.humanCapitalROI.toFixed(2) },
-        { name: "Sustainability", value: metrics.sustainabilityImpact, label: `${metrics.sustainabilityImpact}점` },
-        { name: "Performance", value: metrics.performanceIndex, label: `${metrics.performanceIndex}점` },
+        { name: "인적자본 투자수익률", value: Math.min(metrics.humanCapitalROI * 25, 100), label: metrics.humanCapitalROI.toFixed(2) },
+        { name: "지속가능 기여도", value: metrics.sustainabilityImpact, label: `${metrics.sustainabilityImpact}점` },
+        { name: "성과 지수", value: metrics.performanceIndex, label: `${metrics.performanceIndex}점` },
         { name: "교육시간", value: Math.min(metrics.trainingHours * 2.5, 100), label: `${metrics.trainingHours}h` },
       ]
     : [];
@@ -45,8 +45,8 @@ export function ReportPreviewCharts({ metrics, chartData, reportMode }: ReportPr
   return (
     <div className="flex flex-col gap-6">
       {chartData.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <div className="rounded-lg border border-border bg-muted/50 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             성과·미래 가치 추이
           </h3>
           <div className={`mt-3 w-full ${reportMode ? "h-[400px]" : "h-[220px]"}`}>
@@ -64,8 +64,8 @@ export function ReportPreviewCharts({ metrics, chartData, reportMode }: ReportPr
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #e2e8f0",
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
                     borderRadius: "6px",
                     fontSize: "12px",
                   }}
@@ -93,15 +93,15 @@ export function ReportPreviewCharts({ metrics, chartData, reportMode }: ReportPr
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-[10px] text-slate-500">
+          <p className="mt-2 text-[10px] text-muted-foreground">
             Q1–Q4: 실제 성과 · Q5–Q6: AI 예측치
           </p>
         </div>
       )}
 
       {metricBars.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <div className="rounded-lg border border-border bg-muted/50 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             핵심 지표
           </h3>
           <div className={`mt-3 w-full ${reportMode ? "h-[200px]" : "h-[140px]"}`}>
@@ -123,8 +123,8 @@ export function ReportPreviewCharts({ metrics, chartData, reportMode }: ReportPr
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #e2e8f0",
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
                     borderRadius: "6px",
                     fontSize: "11px",
                   }}

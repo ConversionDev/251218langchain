@@ -63,10 +63,10 @@ export default function PerformanceReportPage() {
 
   if (payload === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-background p-8">
-        <div className="rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card p-8 text-center shadow-sm">
-          <p className="text-slate-600 dark:text-foreground">리포트 데이터가 없거나 만료되었습니다.</p>
-          <p className="mt-2 text-sm text-slate-500 dark:text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-muted/30 p-8">
+        <div className="rounded-xl border border-border bg-card p-8 text-center shadow-sm">
+          <p className="text-foreground">리포트 데이터가 없거나 만료되었습니다.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
             Performance 페이지에서 다시 「공시 리포트 다운로드」를 눌러 주세요.
           </p>
           <Button variant="outline" className="mt-4" onClick={handleClose}>
@@ -78,11 +78,11 @@ export default function PerformanceReportPage() {
   }
 
   return (
-    <div className="performance-report-page min-h-screen bg-white dark:bg-background">
+    <div className="performance-report-page min-h-screen bg-background">
       <div className="fixed right-4 top-4 z-10 flex gap-2 print:hidden">
         <Button
           onClick={handlePrint}
-          className="inline-flex items-center gap-2 bg-slate-800 dark:bg-primary text-white hover:bg-slate-700 dark:hover:bg-primary/90"
+          className="inline-flex items-center gap-2"
         >
           <FileDown className="h-4 w-4" />
           PDF 저장
@@ -93,7 +93,7 @@ export default function PerformanceReportPage() {
         </Button>
       </div>
 
-      <main className="performance-report-main mx-auto max-w-4xl bg-white px-6 py-12 pt-20 print:pt-8 sm:px-10 print:bg-white dark:bg-card">
+      <main className="performance-report-main mx-auto max-w-4xl bg-card px-6 py-12 pt-20 print:pt-8 sm:px-10 print:bg-white">
         <ReportContent
           reportTitle={payload.reportTitle}
           summaryName={payload.summaryName}

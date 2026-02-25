@@ -41,9 +41,10 @@ function ChartSkeleton({ className }: { className?: string }) {
 
 interface DashboardVisualizationProps {
   employees: Employee[];
+  compositionEmployees?: Employee[];
 }
 
-export function DashboardVisualization({ employees }: DashboardVisualizationProps) {
+export function DashboardVisualization({ employees, compositionEmployees }: DashboardVisualizationProps) {
   const hydrated = useHydrated();
   const companyAverageDNA = useMemo(
     () => getCompanyAverageDNA(employees),
@@ -121,7 +122,7 @@ export function DashboardVisualization({ employees }: DashboardVisualizationProp
           </p>
         </CardHeader>
         <CardContent>
-          <PeopleCompositionCharts employees={employees} />
+          <PeopleCompositionCharts employees={compositionEmployees ?? employees} />
         </CardContent>
       </Card>
 
@@ -129,7 +130,7 @@ export function DashboardVisualization({ employees }: DashboardVisualizationProp
         <CardHeader>
           <h2 className="text-lg font-semibold text-foreground">조직 역량 성장 추이</h2>
           <p className="text-sm text-muted-foreground">
-            전사 평균 전환 준비도. (실제 DB 기준)
+            전사 평균 전환 준비도(없으면 적응력 평균 대체). (실제 DB 기준)
           </p>
         </CardHeader>
         <CardContent>

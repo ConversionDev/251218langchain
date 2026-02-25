@@ -48,7 +48,7 @@ export default function SettingsPage() {
                 <div>
                   <Label htmlFor="rag-default">RAG 검색 기본 사용</Label>
                   <p className="text-xs text-muted-foreground">
-                    채팅 시 RAG 검색을 기본으로 사용합니다
+                    AI 질의 시 RAG 검색을 기본으로 사용합니다
                   </p>
                 </div>
                 <input type="checkbox" id="rag-default" defaultChecked className="h-4 w-4 rounded border-input" />

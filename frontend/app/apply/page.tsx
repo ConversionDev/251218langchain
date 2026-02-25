@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, Send, Plus, Trash2 } from "lucide-react";
-import { createEmployeeApi } from "@/modules/core/services";
+import { ArrowLeft, Send, Plus, Trash2, Upload, FileText, CheckCircle2, X } from "lucide-react";
+import { createEmployeeApi, checkResumeHashApi } from "@/modules/core/services";
 import type { Employee, EducationEntry, ExperienceEntry } from "@/modules/shared/types";
+import type { ResumeParseResult } from "@/modules/core/services/resumeToBaseline";
+import {
+  computeResumeFileHash,
+  getCachedResumeResult,
+  parseResumeToBaseline,
+} from "@/modules/core/services/resumeToBaseline";
+import { APPLY_MESSAGES } from "@/modules/shared/constants/messages";
+import { RESUME_ACCEPT } from "@/lib/documentExtensions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,18 +41,14 @@ const emptyExperience = (): ExperienceEntry => ({
 const defaultPayload = (): Employee => ({
   id: nextId(),
   name: "",
-  jobTitle: "인턴",
+  jobTitle: APPLY_MESSAGES.form.defaultJobTitle,
   department: "",
   email: "",
   gender: "undisclosed",
   age: undefined,
   employmentType: "new_hire",
-  trainingHours: 0,
-  disclosureMetrics: {
-    transitionReadyScore: 0,
-    skillGap: 0,
-    humanCapitalROI: 0,
-  },
+  trainingHours: undefined,
+  disclosureMetrics: undefined,
   resume: {
     education: [emptyEducation()],
     experience: [emptyExperience()],
@@ -60,10 +64,52 @@ const defaultPayload = (): Employee => ({
   },
 });
 
+const APPLY_RESUME_STORAGE_KEY = "apply_page_resume";
+
+interface StoredApplyResume {
+  fileName: string;
+  result: ResumeParseResult;
+  fileHash: string | null;
+}
+
+function loadStoredApplyResume(): StoredApplyResume | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(APPLY_RESUME_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as StoredApplyResume) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredApplyResume(data: StoredApplyResume): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(APPLY_RESUME_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // ignore
+  }
+}
+
+function clearStoredApplyResume(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(APPLY_RESUME_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export default function ApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState<Employee>(defaultPayload());
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"idle" | "uploading" | "extracting" | "analyzing">("idle");
+  const [lastResumeFileHash, setLastResumeFileHash] = useState<string | null>(null);
+  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [isDuplicateResume, setIsDuplicateResume] = useState(false);
 
   const update = (patch: Partial<Employee>) => setForm((prev) => ({ ...prev, ...patch }));
   const updateResume = (patch: Partial<Employee["resume"]>) =>
@@ -98,10 +144,131 @@ export default function ApplyPage() {
     );
   };
 
+  /** 이력서 분석 결과를 폼에 반영. 학력/경력은 비어 있으면 기본 1칸 유지 */
+  const applyResumeToForm = useCallback((result: ResumeParseResult) => {
+    const eduList =
+      result.resume?.education?.length && result.resume.education.some((e) => (e as { school?: string }).school?.trim())
+        ? result.resume.education.map((e: { school?: string; degree?: string; field?: string; startDate?: string; endDate?: string }) => ({
+            school: e.school ?? "",
+            degree: e.degree ?? "",
+            field: e.field ?? "",
+            startDate: e.startDate ?? "",
+            endDate: e.endDate ?? "",
+          }))
+        : [emptyEducation()];
+    const expList =
+      result.resume?.experience?.length && result.resume.experience.some((x) => (x as { company?: string }).company?.trim())
+        ? result.resume.experience.map((x: { company?: string; role?: string; startDate?: string; endDate?: string; description?: string }) => ({
+            company: x.company ?? "",
+            role: x.role ?? "",
+            startDate: x.startDate ?? "",
+            endDate: x.endDate ?? "",
+            description: x.description ?? "",
+          }))
+        : [emptyExperience()];
+    setForm((prev) => ({
+      ...prev,
+      name: result.name ?? prev.name,
+      jobTitle: result.jobTitle ?? prev.jobTitle,
+      department:
+        (result.department?.includes(APPLY_MESSAGES.form.departmentFallbackKeyword)
+          ? APPLY_MESSAGES.form.departmentFallbackValue
+          : result.department) ?? prev.department,
+      email: result.email ?? prev.email,
+      gender: result.gender ?? prev.gender,
+      age: result.age ?? prev.age,
+      employmentType: result.employmentType ?? "new_hire",
+      resume: {
+        education: eduList,
+        experience: expList,
+        skills: result.resume?.skills ?? prev.resume?.skills ?? [],
+        certifications: result.resume?.certifications ?? prev.resume?.certifications ?? [],
+      },
+    }));
+  }, []);
+
+  const handleResumeFile = useCallback(
+    async (file: File) => {
+      let fileHash: string | null = null;
+      try {
+        fileHash = await computeResumeFileHash(file);
+        setLastResumeFileHash(fileHash);
+      } catch {
+        setLastResumeFileHash(null);
+      }
+      const cached = getCachedResumeResult(file);
+      if (cached) {
+        applyResumeToForm(cached);
+        setAttachedFileName(file.name);
+        saveStoredApplyResume({ fileName: file.name, result: cached, fileHash });
+        toast.success(APPLY_MESSAGES.toast.cachedLoaded);
+        if (fileHash) {
+          checkResumeHashApi(fileHash).then(({ exists }) => {
+            setIsDuplicateResume(!!exists);
+            if (exists) toast.warning(APPLY_MESSAGES.toast.duplicateResume);
+          });
+        } else setIsDuplicateResume(false);
+        return;
+      }
+      setUploadLoading(true);
+      setUploadPhase("uploading");
+      const t1 = window.setTimeout(() => setUploadPhase("extracting"), 600);
+      const t2 = window.setTimeout(() => setUploadPhase("analyzing"), 2200);
+      try {
+        const { result } = await parseResumeToBaseline(file);
+        applyResumeToForm(result);
+        setAttachedFileName(file.name);
+        saveStoredApplyResume({ fileName: file.name, result, fileHash });
+        toast.success(APPLY_MESSAGES.toast.analyzed);
+        if (fileHash) {
+          checkResumeHashApi(fileHash).then(({ exists }) => {
+            setIsDuplicateResume(!!exists);
+            if (exists) toast.warning(APPLY_MESSAGES.toast.duplicateResume);
+          });
+        } else setIsDuplicateResume(false);
+      } catch {
+        toast.error(APPLY_MESSAGES.toast.uploadFailed);
+      } finally {
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
+        setUploadLoading(false);
+        setUploadPhase("idle");
+      }
+    },
+    [applyResumeToForm]
+  );
+
+  /** 다른 화면 갔다 와도 저장된 이력서 복원 */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!hydrated) return;
+    const stored = loadStoredApplyResume();
+    if (stored?.result) {
+      applyResumeToForm(stored.result);
+      setAttachedFileName(stored.fileName);
+      if (stored.fileHash) setLastResumeFileHash(stored.fileHash);
+      if (stored.fileHash) {
+        checkResumeHashApi(stored.fileHash).then(({ exists }) => setIsDuplicateResume(!!exists));
+      } else setIsDuplicateResume(false);
+    }
+  }, [hydrated, applyResumeToForm]);
+
+  const removeAttachment = useCallback(() => {
+    clearStoredApplyResume();
+    setForm(defaultPayload());
+    setAttachedFileName(null);
+    setLastResumeFileHash(null);
+    setIsDuplicateResume(false);
+    toast.info(APPLY_MESSAGES.toast.attachmentRemoved);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name?.trim() || !form.email?.trim() || !form.department?.trim()) {
-      toast.error("이름, 이메일, 희망 부서를 입력해 주세요.");
+      toast.error(APPLY_MESSAGES.form.requiredFieldError);
       return;
     }
     setSubmitting(true);
@@ -116,6 +283,7 @@ export default function ApplyPage() {
         joinedAt: undefined as string | undefined,
         successDna: undefined,
         successDnaReason: undefined,
+        resumeFileHash: lastResumeFileHash ?? undefined,
         resume: {
           education: education.filter((e) => e.school?.trim()),
           experience: experience.filter((x) => x.company?.trim()),
@@ -125,9 +293,14 @@ export default function ApplyPage() {
       };
       await createEmployeeApi(payload);
       setSubmitted(true);
-      toast.success("지원서가 접수되었습니다.");
+      clearStoredApplyResume();
+      toast.success(APPLY_MESSAGES.toast.submitted);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "제출에 실패했습니다.";
+      console.error("[지원서 제출 오류]", err);
+      const message = err instanceof Error ? err.message : APPLY_MESSAGES.toast.submitFailed;
+      if (message.includes("이미 등록") || (err as Error & { existing?: unknown }).existing) {
+        setIsDuplicateResume(true);
+      }
       toast.error(message);
     } finally {
       setSubmitting(false);
@@ -141,16 +314,16 @@ export default function ApplyPage() {
           <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
             <Send className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">지원이 완료되었습니다</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{APPLY_MESSAGES.page.submittedTitle}</h1>
           <p className="mt-2 text-slate-600 dark:text-slate-400">
-            입력하신 내용이 정상적으로 접수되었습니다. 검토 후 연락드리겠습니다.
+            {APPLY_MESSAGES.page.submittedDescription}
           </p>
           <Link
             href="/"
             className="mt-8 inline-flex items-center gap-2 rounded-xl border-2 border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-white/20 dark:bg-[#171717] dark:text-slate-200 dark:hover:border-emerald-500/80 dark:hover:bg-white/10"
           >
             <ArrowLeft className="h-4 w-4" />
-            메인으로 돌아가기
+            {APPLY_MESSAGES.page.backToMain}
           </Link>
         </div>
       </div>
@@ -159,44 +332,136 @@ export default function ApplyPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-200/60 via-teal-100/80 to-emerald-200/60 dark:from-[#0a0a0a] dark:via-[#0f0f0f] dark:to-[#0a0a0a]">
+      <div className="sticky top-0 z-10 border-b border-slate-200/20 bg-white/60 backdrop-blur-md dark:border-white/10 dark:bg-[#0f0f0f]/90">
+        <div className="mx-auto flex h-12 max-w-3xl items-center justify-between px-4 sm:px-6">
+          <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" aria-hidden>
+            채용·지원
+          </span>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {APPLY_MESSAGES.page.toMain}
+          </Link>
+        </div>
+      </div>
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        <Link
-          href="/"
-          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          메인으로
-        </Link>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-lg dark:border-white/10 dark:bg-[#171717] sm:p-8">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">이력서 지원</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{APPLY_MESSAGES.form.title}</h1>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              아래 항목을 작성한 뒤 제출해 주세요. 검토 후 연락드리겠습니다.
+              {APPLY_MESSAGES.form.description}
             </p>
           </div>
+
+          {/* 이력서 업로드 — 첨부 시 표시 + 다른 화면 갔다 와도 복원 */}
+          <section className="mb-8">
+            <h2 className="mb-3 flex items-center gap-2 border-b border-slate-200 pb-2 text-sm font-semibold text-slate-700 dark:border-white/10 dark:text-slate-300">
+              <FileText className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+              {APPLY_MESSAGES.uploadSection.title}
+            </h2>
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              {APPLY_MESSAGES.uploadSection.description}
+            </p>
+
+            {attachedFileName ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 dark:border-emerald-800/60 dark:bg-emerald-950/40">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <span className="truncate text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                      {APPLY_MESSAGES.uploadSection.attachedPrefix} {attachedFileName}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={removeAttachment}
+                    className="shrink-0 gap-1.5 text-slate-600 hover:bg-emerald-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-emerald-900/60"
+                    aria-label={APPLY_MESSAGES.uploadSection.removeAriaLabel}
+                  >
+                    <X className="h-4 w-4" />
+                    {APPLY_MESSAGES.uploadSection.removeButton}
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {APPLY_MESSAGES.uploadSection.autofilledHint}
+                </p>
+              </div>
+            ) : null}
+
+            <div
+              onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer?.files?.[0];
+                if (file) handleResumeFile(file);
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              className={`mt-3 flex min-h-[120px] flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+                uploadLoading
+                  ? "cursor-wait border-sky-300 bg-sky-50/80 dark:border-sky-600/50 dark:bg-sky-950/30"
+                  : "border-slate-200 bg-slate-50/60 hover:border-sky-400 hover:bg-sky-50/50 dark:border-white/15 dark:bg-white/5 dark:hover:border-sky-500/60 dark:hover:bg-sky-950/20"
+              } ${attachedFileName ? "min-h-[80px] p-4" : ""}`}
+            >
+              <input
+                type="file"
+                accept={RESUME_ACCEPT}
+                className="hidden"
+                id="apply-resume-upload"
+                disabled={uploadLoading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleResumeFile(f);
+                  e.target.value = "";
+                }}
+              />
+              <label
+                htmlFor="apply-resume-upload"
+                className={uploadLoading ? "pointer-events-none cursor-wait" : "cursor-pointer"}
+              >
+                <Upload className={`mx-auto text-slate-400 dark:text-slate-500 ${attachedFileName ? "h-7 w-7" : "h-10 w-10"}`} />
+                <p className={`mt-2 font-medium text-slate-700 dark:text-slate-300 ${attachedFileName ? "text-sm" : ""}`}>
+                  {uploadLoading
+                    ? uploadPhase === "uploading"
+                      ? APPLY_MESSAGES.upload.phaseUploading
+                      : uploadPhase === "extracting"
+                        ? APPLY_MESSAGES.upload.phaseExtracting
+                        : APPLY_MESSAGES.upload.phaseAnalyzing
+                    : attachedFileName
+                      ? APPLY_MESSAGES.upload.switchResume
+                      : APPLY_MESSAGES.upload.idle}
+                </p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  PDF, Word(.docx), HWP(.hwp), TXT
+                </p>
+              </label>
+            </div>
+          </section>
 
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* 기본 정보 - 2열 그리드, 모바일 1열 */}
             <section>
               <h2 className="mb-4 border-b border-slate-200 pb-2 text-sm font-semibold text-slate-700 dark:border-white/10 dark:text-slate-300">
-                기본 정보
+                {APPLY_MESSAGES.form.basicInfoTitle}
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="name">이름 *</Label>
+                  <Label htmlFor="name">{APPLY_MESSAGES.form.nameLabel}</Label>
                   <Input
                     id="name"
                     value={form.name}
                     onChange={(e) => update({ name: e.target.value })}
-                    placeholder="홍길동"
+                    placeholder={APPLY_MESSAGES.form.namePlaceholder}
                     required
                     className="mt-1"
                     aria-required="true"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email">이메일 *</Label>
+                  <Label htmlFor="email">{APPLY_MESSAGES.form.emailLabel}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -209,44 +474,44 @@ export default function ApplyPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="department">희망 부서 *</Label>
+                  <Label htmlFor="department">{APPLY_MESSAGES.form.departmentLabel}</Label>
                   <Input
                     id="department"
                     value={form.department}
                     onChange={(e) => update({ department: e.target.value })}
-                    placeholder="예: 개발, 마케팅, 컨설팅"
+                    placeholder={APPLY_MESSAGES.form.departmentPlaceholder}
                     required
                     className="mt-1"
                     aria-required="true"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="jobTitle">지원 직급</Label>
+                  <Label htmlFor="jobTitle">{APPLY_MESSAGES.form.jobTitleLabel}</Label>
                   <select
                     id="jobTitle"
                     value={form.jobTitle}
                     onChange={(e) => update({ jobTitle: e.target.value })}
                     className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   >
-                    <option value="인턴">인턴</option>
-                    <option value="사원">사원</option>
+                    <option value={APPLY_MESSAGES.form.jobTitleIntern}>{APPLY_MESSAGES.form.jobTitleIntern}</option>
+                    <option value={APPLY_MESSAGES.form.jobTitleStaff}>{APPLY_MESSAGES.form.jobTitleStaff}</option>
                   </select>
                 </div>
                 <div>
-                  <Label htmlFor="gender">성별</Label>
+                  <Label htmlFor="gender">{APPLY_MESSAGES.form.genderLabel}</Label>
                   <select
                     id="gender"
                     value={form.gender ?? "undisclosed"}
                     onChange={(e) => update({ gender: e.target.value as Employee["gender"] })}
                     className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   >
-                    <option value="undisclosed">미기입</option>
-                    <option value="male">남</option>
-                    <option value="female">여</option>
+                    <option value="undisclosed">{APPLY_MESSAGES.form.genderUndisclosed}</option>
+                    <option value="male">{APPLY_MESSAGES.form.genderMale}</option>
+                    <option value="female">{APPLY_MESSAGES.form.genderFemale}</option>
                   </select>
                 </div>
                 <div>
-                  <Label htmlFor="age">만 나이 (선택)</Label>
+                  <Label htmlFor="age">{APPLY_MESSAGES.form.ageLabel}</Label>
                   <Input
                     id="age"
                     type="number"
@@ -256,7 +521,7 @@ export default function ApplyPage() {
                     onChange={(e) =>
                       update({ age: e.target.value ? parseInt(e.target.value, 10) : undefined })
                     }
-                    placeholder="25"
+                    placeholder={APPLY_MESSAGES.form.agePlaceholder}
                     className="mt-1"
                   />
                 </div>
@@ -266,10 +531,10 @@ export default function ApplyPage() {
             {/* 학력 - 동적 리스트 */}
             <section>
               <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2 dark:border-white/10">
-                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">학력</h2>
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{APPLY_MESSAGES.educationSection.title}</h2>
                 <Button type="button" variant="outline" size="sm" onClick={addEducation} className="gap-1">
                   <Plus className="h-3.5 w-3.5" />
-                  추가
+                  {APPLY_MESSAGES.common.add}
                 </Button>
               </div>
               <div className="space-y-6">
@@ -280,7 +545,7 @@ export default function ApplyPage() {
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        학력 {index + 1}
+                        {APPLY_MESSAGES.educationSection.itemLabel(index)}
                       </span>
                       {education.length > 1 && (
                         <Button
@@ -291,31 +556,31 @@ export default function ApplyPage() {
                           className="h-8 gap-1 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          삭제
+                          {APPLY_MESSAGES.common.remove}
                         </Button>
                       )}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="sm:col-span-2">
-                        <Label>학교명</Label>
+                        <Label>{APPLY_MESSAGES.educationSection.schoolLabel}</Label>
                         <Input
                           value={edu.school ?? ""}
                           onChange={(e) => updateEdu(index, { school: e.target.value })}
-                          placeholder="OO대학교"
+                          placeholder={APPLY_MESSAGES.educationSection.schoolPlaceholder}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <Label>학위 / 전공</Label>
+                        <Label>{APPLY_MESSAGES.educationSection.degreeLabel}</Label>
                         <Input
                           value={edu.degree ?? ""}
                           onChange={(e) => updateEdu(index, { degree: e.target.value })}
-                          placeholder="예: 컴퓨터공학 학사"
+                          placeholder={APPLY_MESSAGES.educationSection.degreePlaceholder}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <Label>졸업일 (YYYY-MM)</Label>
+                        <Label>{APPLY_MESSAGES.educationSection.graduationLabel}</Label>
                         <Input
                           type="month"
                           value={edu.endDate ?? ""}
@@ -332,10 +597,10 @@ export default function ApplyPage() {
             {/* 경력/활동 - 동적 리스트 */}
             <section>
               <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2 dark:border-white/10">
-                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">경력 / 활동 (선택)</h2>
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{APPLY_MESSAGES.experienceSection.title}</h2>
                 <Button type="button" variant="outline" size="sm" onClick={addExperience} className="gap-1">
                   <Plus className="h-3.5 w-3.5" />
-                  추가
+                  {APPLY_MESSAGES.common.add}
                 </Button>
               </div>
               <div className="space-y-6">
@@ -346,7 +611,7 @@ export default function ApplyPage() {
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        경력 {index + 1}
+                        {APPLY_MESSAGES.experienceSection.itemLabel(index)}
                       </span>
                       {experience.length > 1 && (
                         <Button
@@ -357,31 +622,31 @@ export default function ApplyPage() {
                           className="h-8 gap-1 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          삭제
+                          {APPLY_MESSAGES.common.remove}
                         </Button>
                       )}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <Label>회사 / 단체명</Label>
+                        <Label>{APPLY_MESSAGES.experienceSection.companyLabel}</Label>
                         <Input
                           value={exp.company ?? ""}
                           onChange={(e) => updateExp(index, { company: e.target.value })}
-                          placeholder="예: 스타트업, 동아리"
+                          placeholder={APPLY_MESSAGES.experienceSection.companyPlaceholder}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <Label>역할</Label>
+                        <Label>{APPLY_MESSAGES.experienceSection.roleLabel}</Label>
                         <Input
                           value={exp.role ?? ""}
                           onChange={(e) => updateExp(index, { role: e.target.value })}
-                          placeholder="예: 인턴, 팀장"
+                          placeholder={APPLY_MESSAGES.experienceSection.rolePlaceholder}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <Label>시작일 (YYYY-MM)</Label>
+                        <Label>{APPLY_MESSAGES.experienceSection.startDateLabel}</Label>
                         <Input
                           type="month"
                           value={exp.startDate ?? ""}
@@ -390,21 +655,21 @@ export default function ApplyPage() {
                         />
                       </div>
                       <div>
-                        <Label>종료일 (YYYY-MM)</Label>
+                        <Label>{APPLY_MESSAGES.experienceSection.endDateLabel}</Label>
                         <Input
                           type="month"
                           value={exp.endDate ?? ""}
                           onChange={(e) => updateExp(index, { endDate: e.target.value })}
-                          placeholder="재직 중"
+                          placeholder={APPLY_MESSAGES.experienceSection.endDatePlaceholder}
                           className="mt-1"
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <Label>업무 설명 (선택)</Label>
+                        <Label>{APPLY_MESSAGES.experienceSection.descriptionLabel}</Label>
                         <Input
                           value={exp.description ?? ""}
                           onChange={(e) => updateExp(index, { description: e.target.value })}
-                          placeholder="담당 업무 요약"
+                          placeholder={APPLY_MESSAGES.experienceSection.descriptionPlaceholder}
                           className="mt-1"
                         />
                       </div>
@@ -415,13 +680,22 @@ export default function ApplyPage() {
             </section>
 
             <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6 dark:border-white/10">
-              <Button type="submit" disabled={submitting} className="gap-2">
-                {submitting ? "제출 중..." : "지원서 제출"}
+              {isDuplicateResume && (
+                <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
+                  {APPLY_MESSAGES.duplicateBlockNotice}
+                </p>
+              )}
+              <Button type="submit" disabled={submitting || isDuplicateResume} className="gap-2">
+                {submitting
+                  ? APPLY_MESSAGES.submitButton.submitting
+                  : isDuplicateResume
+                    ? APPLY_MESSAGES.submitButton.blockedDuplicate
+                    : APPLY_MESSAGES.submitButton.submit}
                 <Send className="h-4 w-4" />
               </Button>
               <Link href="/">
                 <Button type="button" variant="outline">
-                  취소
+                  {APPLY_MESSAGES.common.cancel}
                 </Button>
               </Link>
             </div>

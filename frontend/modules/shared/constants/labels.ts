@@ -27,7 +27,7 @@ export const AGE_BAND_LABELS: Record<string, string> = {
 };
 
 /** 연령대 BarChart용 그룹 순서 및 라벨 */
-export const AGE_GROUP_ORDER = ["20대", "30대", "40대", "50대 이상"] as const;
+export const AGE_GROUP_ORDER = ["20대", "30대", "40대", "50대 이상", "미기입"] as const;
 export type AgeGroupLabel = (typeof AGE_GROUP_ORDER)[number];
 
 /** ageBand(API/스토어 값) → 20대/30대/40대/50대 이상 */
@@ -35,7 +35,8 @@ export function toAgeGroup(ageBand: string): AgeGroupLabel {
   if (ageBand === "under30") return "20대";
   if (ageBand === "30-39") return "30대";
   if (ageBand === "40-49") return "40대";
-  return "50대 이상";
+  if (ageBand === "50-59" || ageBand === "60over") return "50대 이상";
+  return "미기입";
 }
 
 /** 연령(만 나이) → 20대/30대/40대/50대 이상 */

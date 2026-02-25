@@ -8,12 +8,12 @@ import {
   Cell,
   BarChart,
   Bar,
+  LabelList,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 import type { Employee } from "@/modules/shared/types";
 import { PIE_PALETTE_INDIGO_EMERALD, DEPARTMENT_BAR_COLORS } from "@/modules/shared/constants/chartColors";
@@ -36,6 +36,8 @@ export function PeopleCompositionCharts({ employees }: PeopleCompositionChartsPr
   const departmentData = getDepartmentHeadcount(employees)
     .map((d) => ({ name: d.department, 인원: d.총인원 }))
     .sort((a, b) => b.인원 - a.인원);
+  const genderTotal = genderData.reduce((s, d) => s + d.value, 0);
+  const employmentTotal = employmentData.reduce((s, d) => s + d.value, 0);
 
   if (!mounted) return null;
 
@@ -47,113 +49,113 @@ export function PeopleCompositionCharts({ employees }: PeopleCompositionChartsPr
     );
   }
 
-  const legendStyle = { paddingTop: 8, fontSize: 11 };
-  const pieMargin = { top: 16, right: 16, bottom: 48, left: 16 };
-  const pieRadius = { inner: 40, outer: 62 };
+  const pieMargin = { top: 8, right: 8, bottom: 8, left: 8 };
+  const pieRadius = { inner: 44, outer: 70 };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="space-y-4">
-        <h3 className="text-sm font-medium text-muted-foreground">성별 · 고용 형태</h3>
-        <div className="grid grid-cols-2 gap-4">
-          {/* 성별 도넛: 여백 확보로 잘림 방지, 범례 스타일 통일 */}
-          <div className="min-w-0 overflow-hidden">
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart margin={pieMargin}>
-                <Pie
-                  data={genderData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="42%"
-                  innerRadius={pieRadius.inner}
-                  outerRadius={pieRadius.outer}
-                  paddingAngle={2}
-                >
-                  {genderData.map((_, i) => (
-                    <Cell key={i} fill={PIE_PALETTE_INDIGO_EMERALD[i % PIE_PALETTE_INDIGO_EMERALD.length]} />
-                  ))}
-                </Pie>
-                <Legend
-                  layout="horizontal"
-                  align="center"
-                  verticalAlign="bottom"
-                  wrapperStyle={legendStyle}
-                  iconSize={8}
-                  formatter={(value) => {
-                    const item = genderData.find((d) => d.name === value);
-                    const total = genderData.reduce((s, d) => s + d.value, 0);
-                    const pct = item && total ? Math.round((item.value / total) * 100) : 0;
-                    return `${value} ${pct}%`;
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--chart-tooltip-bg))",
-                    border: "1px solid hsl(var(--chart-tooltip-border))",
-                    borderRadius: "var(--radius)",
-                  }}
-                  cursor={{ fill: "hsl(var(--chart-cursor-fill) / var(--chart-cursor-opacity))" }}
-                  formatter={(value: number | undefined) => [value ?? 0, "명"]}
-                  position={{ y: 0 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          {/* 고용형태 도넛: 동일 여백·반경·범례 스타일 */}
-          <div className="min-w-0 overflow-hidden">
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart margin={pieMargin}>
-                <Pie
-                  data={employmentData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="42%"
-                  innerRadius={pieRadius.inner}
-                  outerRadius={pieRadius.outer}
-                  paddingAngle={2}
-                >
-                  {employmentData.map((_, i) => (
-                    <Cell key={i} fill={PIE_PALETTE_INDIGO_EMERALD[i % PIE_PALETTE_INDIGO_EMERALD.length]} />
-                  ))}
-                </Pie>
-                <Legend
-                  layout="horizontal"
-                  align="center"
-                  verticalAlign="bottom"
-                  wrapperStyle={legendStyle}
-                  iconSize={8}
-                  formatter={(value) => {
-                    const item = employmentData.find((d) => d.name === value);
-                    const total = employmentData.reduce((s, d) => s + d.value, 0);
-                    const pct = item && total ? Math.round((item.value / total) * 100) : 0;
-                    return `${value} ${pct}%`;
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--chart-tooltip-bg))",
-                    border: "1px solid hsl(var(--chart-tooltip-border))",
-                    borderRadius: "var(--radius)",
-                  }}
-                  cursor={{ fill: "hsl(var(--chart-cursor-fill) / var(--chart-cursor-opacity))" }}
-                  formatter={(value: number | undefined) => [value ?? 0, "명"]}
-                  position={{ y: 0 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+    <div className="grid gap-4 lg:grid-cols-3">
+      <div className="min-w-0 rounded-lg border border-border bg-card p-3">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">성별 분포</p>
+        <div className="mb-2 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
+          {genderData.map((d) => {
+            const pct = genderTotal ? Math.round((d.value / genderTotal) * 100) : 0;
+            return (
+              <span key={`g-${d.name}`} className="rounded border border-border px-1.5 py-0.5">
+                {d.name} {d.value}명 ({pct}%)
+              </span>
+            );
+          })}
         </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart margin={pieMargin}>
+            <Pie
+              data={genderData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={pieRadius.inner}
+              outerRadius={pieRadius.outer}
+              paddingAngle={1.5}
+              labelLine={false}
+            >
+              {genderData.map((_, i) => (
+                <Cell key={i} fill={PIE_PALETTE_INDIGO_EMERALD[i % PIE_PALETTE_INDIGO_EMERALD.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--chart-tooltip-bg))",
+                border: "1px solid hsl(var(--chart-tooltip-border))",
+                borderRadius: "var(--radius)",
+              }}
+              cursor={{ fill: "hsl(var(--chart-cursor-fill) / var(--chart-cursor-opacity))" }}
+              formatter={(value: number | undefined) => {
+                const n = value ?? 0;
+                const pct = genderTotal ? Math.round((n / genderTotal) * 100) : 0;
+                return [`${n}명 (${pct}%)`, "성별"];
+              }}
+              position={{ y: 0 }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
       </div>
+
+      <div className="min-w-0 rounded-lg border border-border bg-card p-3">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">고용형태 분포</p>
+        <div className="mb-2 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
+          {employmentData.map((d) => {
+            const pct = employmentTotal ? Math.round((d.value / employmentTotal) * 100) : 0;
+            return (
+              <span key={`e-${d.name}`} className="rounded border border-border px-1.5 py-0.5">
+                {d.name} {d.value}명 ({pct}%)
+              </span>
+            );
+          })}
+        </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart margin={pieMargin}>
+            <Pie
+              data={employmentData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={pieRadius.inner}
+              outerRadius={pieRadius.outer}
+              paddingAngle={1.5}
+              labelLine={false}
+            >
+              {employmentData.map((_, i) => (
+                <Cell key={i} fill={PIE_PALETTE_INDIGO_EMERALD[i % PIE_PALETTE_INDIGO_EMERALD.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--chart-tooltip-bg))",
+                border: "1px solid hsl(var(--chart-tooltip-border))",
+                borderRadius: "var(--radius)",
+              }}
+              cursor={{ fill: "hsl(var(--chart-cursor-fill) / var(--chart-cursor-opacity))" }}
+              formatter={(value: number | undefined) => {
+                const n = value ?? 0;
+                const pct = employmentTotal ? Math.round((n / employmentTotal) * 100) : 0;
+                return [`${n}명 (${pct}%)`, "고용형태"];
+              }}
+              position={{ y: 0 }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="min-w-0 overflow-hidden"
+        className="min-w-0 rounded-lg border border-border bg-card p-3"
       >
-        <h3 className="mb-4 text-sm font-medium text-muted-foreground">부서별 인원 현황</h3>
-        <ResponsiveContainer width="100%" height={240}>
+        <h3 className="mb-2 text-xs font-medium text-muted-foreground">부서별 인원 현황</h3>
+        <ResponsiveContainer width="100%" height={220}>
           <BarChart data={departmentData} layout="vertical" margin={{ top: 8, right: 32, left: 64, bottom: 8 }}>
             <CartesianGrid
               strokeDasharray="3 3"
@@ -190,6 +192,7 @@ export function PeopleCompositionCharts({ employees }: PeopleCompositionChartsPr
               {departmentData.map((_, i) => (
                 <Cell key={i} fill={DEPARTMENT_BAR_COLORS[i % DEPARTMENT_BAR_COLORS.length]} />
               ))}
+              <LabelList dataKey="인원" position="right" formatter={(v: unknown) => `${Number(v ?? 0)}명`} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

@@ -11,4 +11,5 @@
 | [db-and-migrations.md](db-and-migrations.md) | Alembic 통합 스쿼시 사용법, disclosures 테이블 재생성 절차 |
 | [extraction-and-data.md](extraction-and-data.md) | PDF/엑셀 추출 전략(전략 매트릭스·라우팅), competency_anchors 통합 스키마·구현 위치 |
 | [exaone-tool-calling-design.md](exaone-tool-calling-design.md) | EXAONE 도구 바인딩 시 답변 품질 이슈(원인·개선 후보) |
+| [chat-rag-strategy.md](chat-rag-strategy.md) | **채팅 RAG 전략** — 채팅 정상화, 1턴 구조, RAG·도구·GPU 메모리 전략, 공시 카운트, 검증 요약 |
 | [runbook.md](runbook.md) | 프론트엔드 실행·환경 변수, 데이터 폴더 구조·도메인·출력 경로 |

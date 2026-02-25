@@ -23,6 +23,5 @@ export interface AgentResponse {
   provider: string;
   used_rag: boolean;
   thread_id?: string;
-  semantic_action?: string;
   context_preview?: string;
 }

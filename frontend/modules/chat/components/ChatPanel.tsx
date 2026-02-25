@@ -1,24 +1,52 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Square, X, Plus, Paperclip, FileText, Sparkles } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Send, Loader2, Square, X, Plus, Paperclip, FileText, Sparkles, RotateCcw } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DOCUMENT_ACCEPT } from "@/lib/documentExtensions";
-import { sendChatMessageStream, uploadChatFiles, type SourceItem } from "../services";
+import { sendChatMessageStream, uploadChatFiles, getThreadHistory, deleteThread, getOrCreateThreadId, setStoredThreadId, type SourceItem } from "../services";
 import type { MessageItem } from "../types";
 
-/** 개발/테스트용 추천 질문 (RAG·직원·공시·이력서 등) */
-const RECOMMENDED_QUESTIONS = [
-  "어떤 직원이 SAP FI 경험이 있나요?",
-  "ISO 30414의 다양성 지표는 무엇인가요?",
-  "IFRS S2 전환 준비도가 뭔가요?",
-  "최근 입사한 직원들의 평균 연령은?",
-  "전체 임직원 수와 공시 완성도 알려줘",
-  "이 이력서를 분석해 주세요",
-  "RAG에 어떤 문서가 등록되어 있나요?",
-  "교육훈련 시간을 공시 지표로 어떻게 집계하나요?",
+/** 추천 질문: eval 12개 + 변경 검증 6개 = 18개 (2문항씩 9그룹) */
+const RECOMMENDED_QUESTION_CASES: { label: string; questions: [string, string] }[] = [
+  {
+    label: "직원 목록/수",
+    questions: ["기존 직원만 보여줘", "전체 직원이 몇 명이야"],
+  },
+  {
+    label: "개인 정보/성과",
+    questions: ["강경구의 직급과 부서를 알려줘", "강경구의 최근 성과 활동을 요약해줘"],
+  },
+  {
+    label: "지표/고성과",
+    questions: ["강경구의 5대 지표를 알고 싶어", "고성과자가 누구야"],
+  },
+  {
+    label: "공시 기준",
+    questions: ["IFRS S2 전환 준비도 핵심 지표를 알려줘", "ISO 30414 인적자본 공시 기준을 설명해줘"],
+  },
+  {
+    label: "역량/복합",
+    questions: ["역량 anchor 기준으로 문제해결 역량 설명해줘", "ESG 공시 기준과 관련 역량을 함께 설명해줘"],
+  },
+  {
+    label: "요약/범위 밖",
+    questions: ["전체 직원 수와 일반 직원 수, 공시 완성도 알려줘", "오늘 서울 날씨 어때?"],
+  },
+  {
+    label: "전체 명단/부서",
+    questions: ["등록된 직원 전체 명단 알려줘", "개발·IT 부서 직원 목록 보여줘"],
+  },
+  {
+    label: "고성과/신입",
+    questions: ["고성과자 목록 보여줘", "신입 지원자 목록 알려줘"],
+  },
+  {
+    label: "RAG/비율",
+    questions: ["RAG에 어떤 문서가 등록되어 있나요?", "고성과자 수와 전체 직원 대비 비율 알려줘"],
+  },
 ];
 
 type AttachmentItem =
@@ -48,17 +76,52 @@ function buildSelectedEmployeeContext(employee: { id: string; name?: string | nu
 
 export function ChatPanel() {
   const selectedEmployee = useStore((s) => s.selectedEmployee);
+  const [threadId, setThreadId] = useState<string>("");
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const plusRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showRecommended, setShowRecommended] = useState(true);
+
+  // thread_id 확보 및 화면 복귀 시 대화 내역 복원
+  useEffect(() => {
+    const id = getOrCreateThreadId();
+    setThreadId(id);
+  }, []);
+
+  useEffect(() => {
+    if (!threadId || historyLoaded) return;
+    setHistoryLoaded(true);
+    getThreadHistory(threadId)
+      .then((res) => {
+        const list = (res.messages || [])
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content || "" }));
+        if (list.length > 0) setMessages(list);
+      })
+      .catch(() => {});
+  }, [threadId, historyLoaded]);
+
+  const handleResetChat = useCallback(() => {
+    if (!threadId) return;
+    deleteThread(threadId)
+      .then(() => {
+        const newId = crypto.randomUUID?.() ?? `thread_${Date.now()}`;
+        setStoredThreadId(newId);
+        setThreadId(newId);
+        setMessages([]);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "초기화 실패"));
+  }, [threadId]);
 
   useEffect(() => {
     if (!plusOpen) return;
@@ -173,7 +236,8 @@ export function ChatPanel() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    const chatHistory: MessageItem[] = [...messages, userMessage].map((m) => ({
+    // 이전 대화만 전송 (현재 메시지는 message로 별도 전달)
+    const chatHistory: MessageItem[] = messages.map((m) => ({
       role: m.role,
       content: m.content,
     }));
@@ -211,7 +275,8 @@ export function ChatPanel() {
         {
           message: text || (hadAttachments ? "[이미지·파일 첨부]" : ""),
           use_rag: true,
-          chat_history: chatHistory.slice(0, -1),
+          chat_history: chatHistory.length > 0 ? chatHistory : undefined,
+          thread_id: threadId || undefined,
           ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
           ...(fileIds?.length ? { file_ids: fileIds, file_names: fileNames } : {}),
         },
@@ -261,9 +326,10 @@ export function ChatPanel() {
         },
         { signal: controller.signal }
       );
-    } catch {
+    } catch (err) {
       abortControllerRef.current = null;
       setLoading(false);
+      setError(err instanceof Error ? err.message : "전송 중 오류가 발생했습니다.");
     }
   };
 
@@ -273,6 +339,81 @@ export function ChatPanel() {
       abortControllerRef.current = null;
     }
     setLoading(false);
+  };
+
+  /** 추천 질문 클릭 시 해당 질문으로 바로 전송 (스트리밍 유지) */
+  const handleRecommendedClick = async (q: string) => {
+    const text = q.trim();
+    if (!text || loading) return;
+    setError(null);
+    const userMessage: DisplayMessage = { role: "user", content: text };
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      { role: "assistant", content: "", contextPreview: undefined },
+    ]);
+    setLoading(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    // 이전 대화만 전송 (현재 질문은 message로 별도 전달)
+    const chatHistory: MessageItem[] = messages.map((m) => ({ role: m.role, content: m.content }));
+    const systemPrompt = selectedEmployee ? buildSelectedEmployeeContext(selectedEmployee) : undefined;
+    try {
+      await sendChatMessageStream(
+        {
+          message: text,
+          use_rag: true,
+          chat_history: chatHistory.length > 0 ? chatHistory : undefined,
+          thread_id: threadId || undefined,
+          ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
+        },
+        {
+          onChunk(content) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") next[next.length - 1] = { ...last, content: last.content + content };
+              return next;
+            });
+          },
+          onContextPreview(preview) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") next[next.length - 1] = { ...last, contextPreview: preview ?? undefined };
+              return next;
+            });
+          },
+          onSources(sources) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") next[next.length - 1] = { ...last, sources: sources ?? undefined };
+              return next;
+            });
+          },
+          onDone() {
+            abortControllerRef.current = null;
+            setLoading(false);
+          },
+          onError(msg) {
+            setError(msg);
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") next[next.length - 1] = { ...last, content: last.content || `오류: ${msg}` };
+              return next;
+            });
+            setLoading(false);
+          },
+        },
+        { signal: controller.signal }
+      );
+    } catch (err) {
+      abortControllerRef.current = null;
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "전송 중 오류가 발생했습니다.");
+    }
   };
 
   return (
@@ -286,7 +427,7 @@ export function ChatPanel() {
         <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-emerald-400 bg-white/95 text-center dark:bg-[#0f0f0f]/95">
           <div>
             <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">파일을 여기에 놓으세요</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">이미지·문서는 채팅에 첨부됩니다</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">이미지·문서는 AI 질의에 첨부됩니다</p>
           </div>
         </div>
       )}
@@ -302,27 +443,55 @@ export function ChatPanel() {
               : "이력서·공시·역량 데이터 검색 및 답변"}
           </p>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={handleResetChat}
+          disabled={loading}
+          aria-label="대화 초기화"
+        >
+          <RotateCcw className="mr-1.5 h-4 w-4" />
+          새 대화
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="mb-4 rounded-xl border border-slate-200/60 bg-white/60 p-4 dark:border-white/10 dark:bg-[#171717]/80">
-            <p className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-300">추천 질문</p>
-            <ul className="flex flex-wrap gap-2">
-              {RECOMMENDED_QUESTIONS.map((q) => (
-                <li key={q}>
-                  <button
-                    type="button"
-                    onClick={() => setInput(q)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 dark:border-white/10 dark:bg-[#171717] dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/40"
-                  >
-                    {q}
-                  </button>
-                </li>
-              ))}
-            </ul>
+        <div className="mb-4 rounded-xl border border-slate-200/60 bg-white/60 p-4 dark:border-white/10 dark:bg-[#171717]/80">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">추천 질문</p>
+            <button
+              type="button"
+              onClick={() => setShowRecommended((v) => !v)}
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              {showRecommended ? "접기" : "펼치기"}
+            </button>
           </div>
-        )}
+          {showRecommended && (
+            <div className="grid gap-3 md:grid-cols-2">
+              {RECOMMENDED_QUESTION_CASES.map((c) => (
+                <div key={c.label} className="rounded-lg border border-slate-200/80 bg-white/70 p-2.5 dark:border-white/10 dark:bg-[#171717]/80">
+                  <p className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-400">{c.label}</p>
+                  <div className="flex flex-col gap-2">
+                    {c.questions.map((q) => (
+                      <button
+                        key={`${c.label}-${q}`}
+                        type="button"
+                        disabled={loading}
+                        onClick={() => handleRecommendedClick(q)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 disabled:pointer-events-none disabled:opacity-60 dark:border-white/10 dark:bg-[#171717] dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/40"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {messages.map((msg, i) => (
           <div
             key={i}
