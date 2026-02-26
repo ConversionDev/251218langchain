@@ -110,7 +110,7 @@ class Settings(BaseSettings):
 
     default_embedding_model: str = Field(
         default="BAAI/bge-m3",
-        description="RAG·임베딩 공용 모델 (Soccer·Disclosure, FlagEmbedding BGE-m3)",
+        description="RAG·임베딩 공용 모델 (Disclosure 등, FlagEmbedding BGE-m3)",
     )
 
     # ===================
@@ -230,14 +230,6 @@ class Settings(BaseSettings):
     spam_spoke_mcp_url: str = Field(
         default="http://127.0.0.1:9022/server",
         description="Spam Spoke MCP URL (Spam MCP가 call_tool로 호출)",
-    )
-    soccer_mcp_url: str = Field(
-        default="http://127.0.0.1:9031/server",
-        description="Soccer MCP 서버 URL (Central이 call_tool로 호출)",
-    )
-    soccer_spoke_mcp_url: str = Field(
-        default="http://127.0.0.1:9032/server",
-        description="Soccer Spoke MCP URL (Soccer MCP가 call_tool로 호출)",
     )
 
 

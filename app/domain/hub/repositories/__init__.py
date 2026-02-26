@@ -16,18 +16,8 @@ from .disclosure_repository import (  # type: ignore
     save_batch as disclosure_save_batch,
     search_disclosures,
 )
-from .soccer_repository import (  # type: ignore
-    PlayerRepository,
-    ScheduleRepository,
-    StadiumRepository,
-    TeamRepository,
-)
 
 __all__ = [
-    "PlayerRepository",
-    "ScheduleRepository",
-    "StadiumRepository",
-    "TeamRepository",
     "competency_anchor_save_batch_upsert",
     "disclosure_save_batch",
     "fill_embeddings_for_anchors",

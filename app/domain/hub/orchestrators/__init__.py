@@ -4,7 +4,6 @@ Hub Orchestrators — v1 실행 진입점
 - chat_orchestrator: 채팅 그래프 실행 (run_agent, run_agent_stream)
 - spam_orchestrator: 스팸 감지 워크플로우 (run_spam_detection, SpamGatewayService, 그래프)
 - graph_orchestrator: 채팅 그래프 빌더 (도구·노드·체크포인터)
-- soccer_orchestrator: 축구 데이터 처리 (Player, Stadium, Team, Schedule)
 - disclosure_orchestrator: ISO 30414 disclosure RAG 적재 (LangGraph)
 """
 
@@ -36,23 +35,7 @@ from .disclosure_orchestrator import (
     get_disclosure_prepared_dir,
     run_disclosure_ingest_orchestrate,
 )
-from .soccer_orchestrator import (
-    PlayerOrchestrator,
-    ScheduleOrchestrator,
-    StadiumOrchestrator,
-    TeamOrchestrator,
-    build_player_graph,
-    build_schedule_graph,
-    build_soccer_upload_ingest_graph,
-    build_stadium_graph,
-    build_team_graph,
-    get_player_graph,
-    get_schedule_graph,
-    get_soccer_upload_ingest_graph,
-    get_stadium_graph,
-    get_team_graph,
-    run_soccer_upload_orchestrate,
-)
+from .email_classify_orchestrator import run_email_classify_and_record
 
 __all__ = [
     # disclosure
@@ -79,20 +62,6 @@ __all__ = [
     "should_use_tools",
     "TOOLS",
     "TOOL_MAP",
-    # soccer
-    "PlayerOrchestrator",
-    "ScheduleOrchestrator",
-    "StadiumOrchestrator",
-    "TeamOrchestrator",
-    "build_player_graph",
-    "build_schedule_graph",
-    "build_soccer_upload_ingest_graph",
-    "build_stadium_graph",
-    "build_team_graph",
-    "get_player_graph",
-    "get_schedule_graph",
-    "get_soccer_upload_ingest_graph",
-    "get_stadium_graph",
-    "get_team_graph",
-    "run_soccer_upload_orchestrate",
+    # email classify
+    "run_email_classify_and_record",
 ]

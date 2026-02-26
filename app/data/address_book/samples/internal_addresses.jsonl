@@ -1,0 +1,5 @@
+{"id": "addr-support", "type": "shared", "display_name": "경영지원팀", "email": "support@company.com", "department": "경영지원"}
+{"id": "addr-hr", "type": "shared", "display_name": "인사팀", "email": "hr@company.com", "department": "인사"}
+{"id": "addr-it", "type": "shared", "display_name": "IT운영팀", "email": "it@company.com", "department": "기술"}
+{"id": "addr-sales", "type": "group", "display_name": "영업부 전체", "email": "sales@company.com", "department": "영업", "metadata": {"member_ids": []}}
+{"id": "addr-project-alpha", "type": "group", "display_name": "프로젝트 알파", "email": "project-alpha@company.com", "department": "", "metadata": {"member_ids": []}}

@@ -2,9 +2,9 @@
 게이트웨이 라우트 등록.
 
 역할:
-- /api 하위 REST 라우터 등록 (chat, email, soccer)
+- /api 하위 REST 라우터 등록 (chat, email 등)
 - /mcp 하위 FastMCP 중앙 허브 마운트
-- /internal 하위 hub/mcp Llama·ExaOne·Soccer HTTP 서비스 (spokes가 호출)
+- /internal 하위 hub/mcp Llama·ExaOne HTTP 서비스 (spokes가 호출)
 - /static/clustering: 클러스터 시각화 HTML (데이터 지도)
 """
 
@@ -18,6 +18,7 @@ def register_routes(
     mcp_app,
     *,
     activity_router,
+    address_book_router,
     audit_router,
     chat_router,
     disclosure_router,
@@ -25,7 +26,6 @@ def register_routes(
     email_router,
     employee_router,
     resume_router,
-    soccer_router,
 ) -> None:
     """REST 라우터와 MCP 앱을 앱에 등록합니다."""
     # Fast MCP 통일: /mcp/health + /mcp/server 한 앱으로 마운트
@@ -41,6 +41,7 @@ def register_routes(
 
     # 통합 API: prefix /api 로 일원화
     app.include_router(activity_router, prefix="/api")  # /api/activity-records (성과 활동 통합)
+    app.include_router(address_book_router, prefix="/api")  # /api/address-book (사내 주소록)
     app.include_router(audit_router, prefix="/api")  # /api/audit/logs
     app.include_router(chat_router, prefix="/api")  # /api/agent/...
     app.include_router(disclosure_router, prefix="/api")  # /api/disclosure/...
@@ -48,14 +49,11 @@ def register_routes(
     app.include_router(email_router, prefix="/api")  # /api/mail/...
     app.include_router(employee_router, prefix="/api")  # /api/employees
     app.include_router(resume_router, prefix="/api")  # /api/resume/...
-    app.include_router(soccer_router, prefix="/api")  # /api/soccer/...
 
     # Hub MCP: Llama·ExaOne 호출 수신 (spokes가 HTTP로 호출)
     from api.routers.hub_llm_router import router as hub_llm_router  # type: ignore
-    from api.routers.soccer_router import internal_soccer_router  # type: ignore
 
     app.include_router(hub_llm_router)
-    app.include_router(internal_soccer_router)
 
     # 클러스터 시각화 HTML (데이터 지도): iframe 삽입 허용 헤더로 서빙
     from core.paths import get_clustering_dir  # type: ignore

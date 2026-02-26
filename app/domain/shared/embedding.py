@@ -1,7 +1,7 @@
 """
 도메인 공통 임베딩 — FlagEmbedding + BGE-m3.
 
-Soccer·Disclosure 등에서 공통 사용. 설정은 core.config에서 읽음.
+Disclosure 등에서 공통 사용. 설정은 core.config에서 읽음.
 LangChain Embeddings 인터페이스(embed_documents, embed_query) 제공.
 """
 
@@ -110,7 +110,7 @@ def get_embedding_model(
     batch_size: int = 512,
 ) -> FlagEmbeddingWrapper:
     """
-    Soccer·Disclosure 공통 임베딩 모델 (FlagEmbedding BGE-m3).
+    Disclosure 등 공통 임베딩 모델 (FlagEmbedding BGE-m3).
     동일 인자로 호출 시 캐시된 인스턴스 반환(재로딩 없음).
     devices: None이면 CUDA 사용 가능 시 cuda:0, 아니면 라이브러리 기본.
     batch_size: encode_corpus 내부 배치 크기(기본 512, GPU 메모리 부족 시 줄이기).

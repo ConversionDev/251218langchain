@@ -6,7 +6,6 @@ app/data — 도메인별 데이터 패키지.
 
 서브패키지:
 - disclosure: 공시 문서 (prepared 텍스트 등)
-- soccer: 수업/데모용 (raw JSONL, sft 학습 데이터)
 - email: 이메일 SFT 파이프라인 (raw → sft, sft/processed, sft/filtered)
 - competency_anchors: 역량 앵커
 """

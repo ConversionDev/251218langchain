@@ -2,7 +2,6 @@
 Upstash Redis + JWT access token + BullMQ 연동 (단일 파일).
 
 - UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN: Redis 클라이언트 및 BullMQ(Node)와 동일 인스턴스 공유.
-- Soccer 임베딩 job 상태: soccer:embedding:status:{job_id} (create_embedding_job_inline + BackgroundTasks)
 """
 
 import os
@@ -16,7 +15,7 @@ from typing import Any, Dict, Optional
 
 _redis: Optional[Any] = None
 
-EMBEDDING_STATUS_KEY_PREFIX = "soccer:embedding:status:"
+EMBEDDING_STATUS_KEY_PREFIX = "embedding:status:"
 EMBEDDING_STATUS_TTL = 86400
 
 
@@ -63,7 +62,7 @@ def is_redis_token_valid() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Soccer 임베딩 job 큐·상태
+# 임베딩 job 상태 (범용)
 # ---------------------------------------------------------------------------
 
 def create_embedding_job_inline(entities: Optional[list] = None) -> Optional[str]:

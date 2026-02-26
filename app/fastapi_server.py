@@ -97,7 +97,7 @@ _rag_initialized = False
 
 
 def init_db() -> None:
-    """DB 초기화: Alembic 마이그레이션으로 Soccer 등 관계형 테이블 자동 생성·업데이트."""
+    """DB 초기화: Alembic 마이그레이션으로 관계형 테이블 자동 생성·업데이트."""
     try:
         # 설정 가져오기
         current_settings = get_settings()
@@ -113,12 +113,6 @@ def init_db() -> None:
             # Alembic 설정
             from alembic.config import Config  # type: ignore
             from core.database import get_engine  # type: ignore
-            from domain.models.bases.soccer import (  # noqa: F401
-                Player,
-                Schedule,
-                Stadium,
-                Team,
-            )
             from sqlalchemy import inspect  # type: ignore[import-untyped]
 
             app_dir = Path(__file__).parent
@@ -140,21 +134,8 @@ def init_db() -> None:
                     command.upgrade(alembic_cfg, current_settings.migration_revision)
                     logging.info("✓ DB 마이그레이션 완료")
                 except Exception as upgrade_error:
-                    # 마이그레이션 실패 시에만 테이블 확인
                     logging.error(f"마이그레이션 실행 실패: {upgrade_error}")
-                    try:
-                        engine = get_engine()
-                        inspector = inspect(engine)
-                        existing_tables = inspector.get_table_names()
-                        expected_tables = ["players", "teams", "schedules", "stadiums"]
-                        created_tables = [name for name in expected_tables if name in existing_tables]
-
-                        if len(created_tables) != len(expected_tables):
-                            missing_tables = [name for name in expected_tables if name not in existing_tables]
-                            logging.warning(f"일부 테이블이 생성되지 않았습니다: {missing_tables}")
-                    except Exception:
-                        pass  # 테이블 확인 실패는 무시
-                    raise  # 마이그레이션 실패는 재발생
+                    raise
             else:
                 logging.warning("자동 마이그레이션이 비활성화되어 있습니다. (AUTO_MIGRATE=false)")
                 logging.warning("테이블을 생성하려면 마이그레이션을 수동으로 실행하거나 AUTO_MIGRATE=true로 설정하세요.")
@@ -165,7 +146,7 @@ def init_db() -> None:
             logging.error(traceback.format_exc())
             raise  # 테이블 생성 실패는 치명적 오류이므로 재발생
 
-        # Soccer 등 데이터는 JSONL 업로드를 통해 LangGraph 휴리스틱 처리로 로드됩니다.
+        # Disclosure 등 데이터는 JSONL 업로드를 통해 LangGraph 휴리스틱 처리로 로드됩니다.
         logging.info("✓ DB 초기화 완료")
     except Exception as e:
         logging.error(f"DB 초기화 실패: {e}")
@@ -259,6 +240,7 @@ def ensure_rag_initialized() -> None:
 # 게이트웨이: 라우터/MCP 등록 (통합: api/routers + MCP)
 from api.routers import (  # type: ignore  # noqa: E402
     activity_router,
+    address_book_router,
     audit_router,
     chat_router,
     disclosure_router,
@@ -266,7 +248,6 @@ from api.routers import (  # type: ignore  # noqa: E402
     email_router,
     employee_router,
     resume_router,
-    soccer_router,
 )
 from gateway import register_routes  # type: ignore  # noqa: E402
 
@@ -274,6 +255,7 @@ register_routes(
     app,
     mcp_app,
     activity_router=activity_router,
+    address_book_router=address_book_router,
     audit_router=audit_router,
     chat_router=chat_router,
     disclosure_router=disclosure_router,
@@ -281,7 +263,6 @@ register_routes(
     email_router=email_router,
     employee_router=employee_router,
     resume_router=resume_router,
-    soccer_router=soccer_router,
 )
 
 

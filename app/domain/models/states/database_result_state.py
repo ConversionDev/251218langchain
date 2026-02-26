@@ -1,7 +1,7 @@
 """
 데이터베이스 저장 결과 상태 스키마.
 
-Player, Team, Stadium, Schedule 등 soccer 도메인에서
+DB 저장 결과 공통 필드 (disclosure 등 도메인에서
 state["result"]에 넣는 DB 저장 결과를 표현하는 공통 TypedDict.
 현재 finalize_node의 { db, vector, processed, total } 형태와 호환하고,
 추후 상세 결과(success_ids, failure_ids 등)를 쓸 수 있도록 확장 가능.
@@ -13,7 +13,7 @@ from typing import Any, Dict, List, TypedDict
 class DatabaseResult(TypedDict, total=False):
     """데이터베이스 저장 결과.
 
-    - 현재 사용: db, vector, processed, total (finalize_node / soccer_router)
+    - 현재 사용: db, vector, processed, total (finalize_node 등)
     - 확장 시: success_count, failure_count, success_ids, failure_ids, errors
     """
 

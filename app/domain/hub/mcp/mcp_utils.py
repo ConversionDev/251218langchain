@@ -40,14 +40,6 @@ def get_spam_mcp_url() -> str:
         return os.getenv("SPAM_MCP_URL", "http://127.0.0.1:9021/server")
 
 
-def get_soccer_mcp_url() -> str:
-    try:
-        from core.config import get_settings  # type: ignore
-        return get_settings().soccer_mcp_url
-    except Exception:
-        return os.getenv("SOCCER_MCP_URL", "http://127.0.0.1:9031/server")
-
-
 def get_chat_spoke_mcp_url() -> str:
     try:
         from core.config import get_settings  # type: ignore
@@ -62,11 +54,3 @@ def get_spam_spoke_mcp_url() -> str:
         return get_settings().spam_spoke_mcp_url
     except Exception:
         return os.getenv("SPAM_SPOKE_MCP_URL", "http://127.0.0.1:9022/server")
-
-
-def get_soccer_spoke_mcp_url() -> str:
-    try:
-        from core.config import get_settings  # type: ignore
-        return get_settings().soccer_spoke_mcp_url
-    except Exception:
-        return os.getenv("SOCCER_SPOKE_MCP_URL", "http://127.0.0.1:9032/server")

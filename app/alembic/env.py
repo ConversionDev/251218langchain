@@ -2,7 +2,6 @@
 Alembic 환경 설정
 
 데이터베이스 마이그레이션을 관리합니다.
-- Alembic이 모든 테이블 생성/관리: 일반(players, teams, schedules, stadiums) + ExaOne 임베딩(*_embeddings).
 - alembic upgrade head 한 번으로 전체 스키마 적용.
 """
 
@@ -16,7 +15,6 @@ from sqlalchemy.exc import SAWarning
 
 from alembic import context
 
-# stadiums ↔ teams 순환 FK: use_alter로 모델에서 처리. 남는 SAWarning만 무시
 import warnings
 warnings.filterwarnings("ignore", message=".*unresolvable cycles.*", category=SAWarning)
 
@@ -32,12 +30,8 @@ from domain.models.bases.competency_anchor import CompetencyAnchor  # noqa: F401
 from domain.models.bases.disclosure import Disclosure  # noqa: F401
 from domain.models.bases.employee import Employee  # noqa: F401
 from domain.models.bases.performance_record import PerformanceRecord  # noqa: F401
-from domain.models.bases.soccer import (  # noqa: F401
-    Player,
-    Schedule,
-    Stadium,
-    Team,
-)
+from domain.models.bases.internal_address import InternalAddress  # noqa: F401
+from domain.models.bases.mail_item import MailItem  # noqa: F401
 
 # 데이터베이스 설정
 from core.config import get_settings  # type: ignore
