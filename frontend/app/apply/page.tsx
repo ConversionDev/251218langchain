@@ -333,7 +333,7 @@ export default function ApplyPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#e8f5ef] to-[#f0f5f0] dark:bg-background">
       {/* 헤더: 로고(왼쪽) + 채용 공고(가운데), 메인 링크 없음 — 로고 클릭 시 메인 이동 */}
-      <header className="sticky top-0 z-10 flex min-h-[4.5rem] items-center justify-between border-b border-white/30 bg-white/75 px-6 py-3 backdrop-blur-md dark:border-white/10 dark:bg-background/75 md:px-8 md:py-4">
+      <header className="sticky top-0 z-10 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
         <Link href="/" className="flex items-baseline gap-1.5 shrink-0">
           <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
             AI Powered HR Intelligence

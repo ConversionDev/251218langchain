@@ -129,7 +129,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#a8d5c4]/40 bg-white/70 px-8 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90">
+    <header className="sticky top-0 z-30 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-semibold text-foreground">Success DNA</h1>
         {hydrated && selectedEmployee !== null && (

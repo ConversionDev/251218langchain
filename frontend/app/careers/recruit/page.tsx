@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText, Search } from "lucide-react";
+import { ExternalLink, FileText, Search } from "lucide-react";
 
 /** 채용 공고 — 일반 부서 기준(인사·재무·영업·마케팅·개발·IT·경영지원·전략·기획), 한글 메뉴 */
 
@@ -52,7 +52,7 @@ export default function CareersRecruitPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white dark:bg-background">
       {/* 헤더: 채용 홈과 동일 — 채용지원 배지 + 한 줄 로고 + nav + 메인 */}
-      <header className="sticky top-0 z-50 flex min-h-[4.5rem] items-center justify-between border-b border-white/30 bg-white/75 px-6 py-3 backdrop-blur-md dark:border-white/10 dark:bg-background/75 md:px-8 md:py-4">
+      <header className="sticky top-0 z-50 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
         <div className="flex flex-1 items-center gap-3 md:gap-4">
           <Link href="/" className="flex items-baseline gap-1.5 shrink-0">
             <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -86,14 +86,15 @@ export default function CareersRecruitPage() {
         </div>
         <Link
           href="/"
-          className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base shrink-0"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base shrink-0 dark:text-slate-300 dark:hover:text-slate-100"
         >
+          <ExternalLink className="h-4 w-4" />
           메인
         </Link>
       </header>
 
-      {/* 탭 + 검색 — 배경 흰색, 탭은 테두리로만 구분 */}
-      <div className="border-b border-slate-200/80 bg-white dark:border-white/10 dark:bg-[#171717]">
+      {/* 탭 + 검색 — 배경 흰색, 탭은 사이트 컬러 테두리로 구분 */}
+      <div className="border-b border-[#a8d5c4]/40 bg-white dark:border-primary/20 dark:bg-[#171717]">
         <div className="mx-auto flex max-w-5xl flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-1">
             {tabs.map((t) => (

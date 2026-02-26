@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, BarChart3, Database } from "lucide-react";
+import { Search, BarChart3, Database, ChevronDown } from "lucide-react";
 
 const FEATURES_ID = "features";
 
@@ -34,10 +34,10 @@ export default function LandingPage() {
 
   return (
     <div className="font-sans relative min-h-screen overflow-hidden bg-[#f5f5f5]">
-      {/* 히어로 블록: 헤더가 위에 겹쳐져 하나의 영역으로 보이게 */}
-      <section className="relative min-h-screen w-full overflow-hidden flex flex-col">
+      {/* 히어로 블록: 높이 제한으로 아래 섹션이 살짝 보이게 + 스크롤 유도 */}
+      <section className="relative h-[72vh] min-h-[420px] max-h-[720px] w-full overflow-hidden flex flex-col">
         {/* 헤더: 살짝 축소 — 영역·글자 크기 약간 줄임 */}
-        <header className="absolute top-0 left-0 right-0 z-20 flex min-h-[4.5rem] items-center justify-between items-center justify-between border-b border-white/30 bg-white/75 px-6 py-3 backdrop-blur-md md:px-8 md:py-4">
+        <header className="absolute top-0 left-0 right-0 z-20 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
           <div className="flex flex-1 items-center gap-8 md:gap-10">
             <Link href="/" className="flex flex-col leading-tight shrink-0">
               <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
@@ -149,21 +149,31 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* 4) 슬라이더 인디케이터 — 바디 하단 그라데이션(#e8f5ef → #f0f5f0) 톤에 맞춤 */}
-        <div className="relative z-10 flex justify-center gap-3 pb-10" aria-label="슬라이드 선택">
-          {HERO_BG_IMAGES.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setHeroSlide(i)}
-              className="h-3 w-3 rounded-full border-2 border-[#a8d5c4] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a8d5c4] focus-visible:ring-offset-2"
-              style={{
-                backgroundColor: i === heroSlide ? "#e8f5ef" : "transparent",
-              }}
-              aria-label={`${i + 1}번째 슬라이드`}
-              aria-current={i === heroSlide ? "true" : undefined}
-            />
-          ))}
+        {/* 4) 슬라이더 인디케이터 + 스크롤 유도 */}
+        <div className="relative z-10 flex flex-col items-center gap-4 pb-6" aria-label="슬라이드 선택">
+          <div className="flex justify-center gap-3">
+            {HERO_BG_IMAGES.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setHeroSlide(i)}
+                className="h-3 w-3 rounded-full border-2 border-[#a8d5c4] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a8d5c4] focus-visible:ring-offset-2"
+                style={{
+                  backgroundColor: i === heroSlide ? "#e8f5ef" : "transparent",
+                }}
+                aria-label={`${i + 1}번째 슬라이드`}
+                aria-current={i === heroSlide ? "true" : undefined}
+              />
+            ))}
+          </div>
+          <a
+            href={`#${FEATURES_ID}`}
+            className="flex flex-col items-center gap-1 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+            aria-label="아래 섹션으로 스크롤"
+          >
+            <span>더 보기</span>
+            <ChevronDown className="h-5 w-5 animate-bounce" />
+          </a>
         </div>
       </section>
 

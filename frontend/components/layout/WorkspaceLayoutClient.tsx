@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ExternalLink } from "lucide-react";
-import { useHydrated } from "@/hooks/use-hydrated";
-import { useDemoRoleStore } from "@/store/useDemoRoleStore";
 
 export function WorkspaceLayoutClient({
   children,
@@ -12,10 +10,7 @@ export function WorkspaceLayoutClient({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const hydrated = useHydrated();
-  const demoRole = useDemoRoleStore((s) => s.demoRole);
   const isWorkspacePortal = pathname === "/workspace";
-  const isDemoEmployee = hydrated && demoRole === "employee";
 
   if (isWorkspacePortal) {
     return <div className="min-h-screen bg-[#08130e] dark:bg-[#050907]">{children}</div>;
@@ -23,24 +18,24 @@ export function WorkspaceLayoutClient({
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f0f5f0] dark:bg-[#0b0b0c]">
-      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-[#a8d5c4]/50 bg-white/90 px-4 py-2.5 md:px-6 dark:border-primary/20 dark:bg-[#111214]">
-        <div className="flex items-center gap-3">
-          <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
-            {isDemoEmployee ? "데모 · 직원 포털" : "직원 포털"}
-          </span>
-          <Link href="/workspace" className="flex items-center gap-2 text-sm">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-[#707A8A] dark:text-slate-400">
-              AI POWERED HR INTELLIGENCE
+      <header className="sticky top-0 z-20 flex min-h-[4.5rem] shrink-0 items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
+        <div className="flex flex-1 items-center gap-3 md:gap-4">
+          <Link href="/workspace" className="flex items-baseline gap-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              AI Powered HR Intelligence
             </span>
-            <span className="font-bold tracking-tight">
-              <span className="text-[#3D7D3D] dark:text-emerald-700">HR</span>
-              <span className="text-[#27B39E] dark:text-teal-400">Insight</span>
+            <span className="text-base font-bold tracking-tight text-[#14532d] dark:text-emerald-800 md:text-lg">HR</span>
+            <span
+              className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-base font-bold tracking-tight text-transparent dark:from-teal-400 dark:to-emerald-400 md:text-lg"
+              style={{ WebkitBackgroundClip: "text" }}
+            >
+              Insight
             </span>
           </Link>
         </div>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-slate-500 transition-colors hover:bg-[#e8f5ef]/80 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-primary/10 dark:hover:text-slate-200"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base shrink-0 dark:text-slate-300 dark:hover:text-slate-100"
         >
           <ExternalLink className="h-4 w-4" />
           메인으로

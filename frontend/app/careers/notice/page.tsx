@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText } from "lucide-react";
+import { ExternalLink, FileText } from "lucide-react";
 
 /** 공지 — 한글 메뉴, 깔끔한 목록 */
 function CareersLogoIcon({ className }: { className?: string }) {
@@ -32,8 +32,8 @@ const NOTICE_ITEMS = [
 export default function CareersNoticePage() {
   return (
     <div className="min-h-screen bg-white dark:bg-[#0f0f0f]">
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white dark:border-white/10 dark:bg-[#0f0f0f]">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
+      <header className="sticky top-0 z-50 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between">
           <Link href="/careers" className="flex items-center gap-3">
             <CareersLogoIcon />
             <span className="font-semibold tracking-tight text-slate-800 dark:text-slate-100">HRInsight 채용 · 공지</span>
@@ -44,7 +44,10 @@ export default function CareersNoticePage() {
             <Link href="/resumes" className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
               <FileText className="h-4 w-4" /> 지원내역
             </Link>
-            <Link href="/" className="text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">메인</Link>
+            <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
+              <ExternalLink className="h-4 w-4" />
+              메인
+            </Link>
           </nav>
         </div>
       </header>
