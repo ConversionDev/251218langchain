@@ -7,10 +7,11 @@ import { Search, BarChart3, Database, ChevronDown } from "lucide-react";
 
 const FEATURES_ID = "features";
 
-/** 메인 히어로 슬로건 (옵션 A: 결과 중심적) — 슬라이드 전환과 관계없이 동일 문구 고정 */
+/** 메인 히어로 슬로건 — 1줄 + 2줄(통해 다음 줄바꿈) */
 const HERO_SLOGAN = {
   main: "인사(HR)의 직관을 데이터의 확신으로 바꾸다",
-  sub: "리더십부터 적응력까지, AI가 분석한 5대 핵심 역량 지표를 통해 오차 없는 인재 배치와 성과 예측을 경험하세요.",
+  sub1: "리더십부터 적응력까지, AI가 분석한 5대 핵심 역량 지표를 통해",
+  sub2: "오차 없는 인재 배치와 성과 예측을 경험하세요.",
 } as const;
 
 /** 배경 캐러셀용 플레이스홀더 이미지 (추후 기업 신뢰 이미지로 교체) */
@@ -135,15 +136,17 @@ export default function LandingPage() {
           ))}
         </div>
 
-        {/* 3) 글자: 슬로건 (배경 캐러셀 앞에 표시, 헤더 높이만큼 위 여백) */}
-        <div className="relative z-10 flex flex-1 items-center justify-end px-6 pt-24 pb-16 md:px-12 md:pt-28 lg:px-16">
-          <div className="mx-auto w-full max-w-6xl flex justify-end">
-            <div className="max-w-xl text-right">
-              <h2 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 md:text-4xl">
+        {/* 3) 글자: 슬로건 — 왼쪽 정렬, 1줄 + (통해|오차 없는~) 2줄, 평면 스타일 */}
+        <div className="relative z-10 flex flex-1 items-center justify-start px-6 pt-24 pb-16 md:px-12 md:pt-28 lg:px-16">
+          <div className="mx-auto w-full max-w-6xl flex justify-start">
+            <div className="max-w-3xl text-left">
+              <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 md:whitespace-nowrap md:text-4xl">
                 {HERO_SLOGAN.main}
               </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-700 md:text-lg">
-                {HERO_SLOGAN.sub}
+              <p className="mt-4 text-base leading-snug text-slate-700 md:text-lg md:leading-snug">
+                {HERO_SLOGAN.sub1}
+                <br />
+                {HERO_SLOGAN.sub2}
               </p>
             </div>
           </div>
