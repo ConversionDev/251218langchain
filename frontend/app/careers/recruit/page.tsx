@@ -29,25 +29,6 @@ const MOCK_JOBS: JobPosting[] = [
   { id: "7", type: "경력", department: "전략·기획", title: "전략·기획 부서 기획 담당", startDate: "2026-02-01", endDate: "2026-02-28", endTime: "23:59", daysLeft: 9 },
 ];
 
-function CareersLogoIcon({ className }: { className?: string }) {
-  return (
-    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 ${className ?? ""}`} aria-hidden>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
-        <circle cx="6" cy="8" r="1.8" fill="currentColor" />
-        <line x1="6" y1="8" x2="18" y2="8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="18" cy="8" r="1.8" fill="currentColor" />
-        <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-        <circle cx="6" cy="16" r="1.8" fill="currentColor" />
-        <line x1="6" y1="16" x2="18" y2="16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="18" cy="16" r="1.8" fill="currentColor" />
-        <line x1="12" y1="16" x2="12" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="12" cy="20" r="1.8" fill="currentColor" />
-      </svg>
-    </span>
-  );
-}
-
 export default function CareersRecruitPage() {
   const [tab, setTab] = useState<TabId>("전체");
   const [search, setSearch] = useState("");
@@ -69,39 +50,50 @@ export default function CareersRecruitPage() {
   const tabs: TabId[] = ["전체", "신입", "경력"];
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0f0f0f]">
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white dark:border-white/10 dark:bg-[#0f0f0f]">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
-          <Link href="/careers" className="flex items-center gap-3">
-            <CareersLogoIcon />
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">HRInsight 채용</span>
-              <span className="font-semibold tracking-tight text-slate-800 dark:text-slate-100">채용</span>
-            </div>
+    <div className="flex min-h-screen flex-col bg-white dark:bg-background">
+      {/* 헤더: 채용 홈과 동일 — 채용지원 배지 + 한 줄 로고 + nav + 메인 */}
+      <header className="sticky top-0 z-50 flex min-h-[4.5rem] items-center justify-between border-b border-white/30 bg-white/75 px-6 py-3 backdrop-blur-md dark:border-white/10 dark:bg-background/75 md:px-8 md:py-4">
+        <div className="flex flex-1 items-center gap-3 md:gap-4">
+          <Link href="/" className="flex items-baseline gap-1.5 shrink-0">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              AI Powered HR Intelligence
+            </span>
+            <span className="text-base font-bold tracking-tight text-[#14532d] dark:text-emerald-800 md:text-lg">HR</span>
+            <span
+              className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-base font-bold tracking-tight text-transparent dark:from-teal-400 dark:to-emerald-400 md:text-lg"
+              style={{ WebkitBackgroundClip: "text" }}
+            >
+              Insight
+            </span>
           </Link>
-          <nav className="flex items-center gap-5">
-            <Link href="/resumes" className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+          <nav aria-label="채용 메뉴" className="flex items-center gap-6 md:gap-8">
+            <Link href="/careers" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+              채용 홈
+            </Link>
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 md:text-base">
+              채용 공고
+            </span>
+            <Link href="/careers/notice" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+              공지
+            </Link>
+            <Link href="/careers/faq" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+              질의사항
+            </Link>
+            <Link href="/resumes" className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
               <FileText className="h-4 w-4" /> 지원내역
             </Link>
-            <Link href="/careers/notice" className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">공지</Link>
-            <Link href="/careers/faq" className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">질의사항</Link>
-            <Link href="/careers" className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">채용 홈</Link>
-            <Link href="/" className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">메인</Link>
           </nav>
         </div>
+        <Link
+          href="/"
+          className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base shrink-0"
+        >
+          메인
+        </Link>
       </header>
 
-      {/* Breadcrumb */}
-      <div className="border-b border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-[#0a0a0a]/50">
-        <div className="mx-auto flex h-10 max-w-5xl items-center gap-2 px-6 text-sm text-slate-600 dark:text-slate-400">
-          <Link href="/careers" className="hover:text-slate-900 dark:hover:text-slate-100">채용 홈</Link>
-          <span aria-hidden>/</span>
-          <span className="font-medium text-slate-800 dark:text-slate-200">채용 공고</span>
-        </div>
-      </div>
-
-      {/* 탭 + 검색 — 예시처럼 */}
-      <div className="border-b border-slate-200 dark:border-white/10">
+      {/* 탭 + 검색 — 배경 흰색, 탭은 테두리로만 구분 */}
+      <div className="border-b border-slate-200/80 bg-white dark:border-white/10 dark:bg-[#171717]">
         <div className="mx-auto flex max-w-5xl flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-1">
             {tabs.map((t) => (
@@ -109,10 +101,10 @@ export default function CareersRecruitPage() {
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={`rounded px-4 py-2 text-sm font-medium transition ${
+                className={`rounded border px-4 py-2 text-sm font-medium transition ${
                   tab === t
-                    ? "border border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-300"
-                    : "border border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/10"
+                    ? "border-[#7eb89e] bg-[#e8f5ef] text-slate-800 dark:border-emerald-600/70 dark:bg-[#e8f5ef]/40 dark:text-slate-100"
+                    : "border-slate-200 bg-transparent text-slate-600 hover:border-[#a8d5c4]/60 hover:text-slate-900 dark:border-white/20 dark:text-slate-400 dark:hover:border-[#a8d5c4]/50 dark:hover:text-slate-100"
                 }`}
               >
                 {t}
@@ -132,23 +124,24 @@ export default function CareersRecruitPage() {
         </div>
       </div>
 
-      {/* 공고 개수 + 목록 */}
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <p className="mb-6 text-sm text-slate-600 dark:text-slate-400">
-          총 <span className="font-semibold text-emerald-600 dark:text-emerald-400">{filtered.length}</span>건의 채용공고가 있습니다.
-        </p>
+      {/* 공고 개수 + 목록 — 탭 바와 이어지는 흰색 영역 */}
+      <div className="bg-white dark:bg-[#171717]">
+        <div className="mx-auto max-w-5xl px-6 py-8">
+          <p className="mb-6 text-sm text-slate-600 dark:text-slate-400">
+            총 <span className="font-semibold text-foreground">{filtered.length}</span>건의 채용공고가 있습니다.
+          </p>
 
-        {filtered.length === 0 ? (
-          <p className="py-12 text-center text-slate-500 dark:text-slate-400">조건에 맞는 공고가 없습니다.</p>
-        ) : (
-          <ul className="space-y-4">
-            {filtered.map((job) => (
-              <li
-                key={job.id}
-                className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#171717] sm:flex-row sm:items-center sm:justify-between"
-              >
+          {filtered.length === 0 ? (
+            <p className="py-12 text-center text-slate-500 dark:text-slate-400">조건에 맞는 공고가 없습니다.</p>
+          ) : (
+            <ul className="space-y-4">
+              {filtered.map((job) => (
+                <li
+                  key={job.id}
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-[#e8f5ef]/50 p-5 shadow-sm dark:border-white/10 dark:bg-[#1a1a1a] sm:flex-row sm:items-center sm:justify-between"
+                >
                 <div className="min-w-0 flex-1">
-                  <span className="inline-block rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                  <span className="inline-block rounded border border-slate-200 bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                     D-{job.daysLeft}
                   </span>
                   <h2 className="mt-2 font-semibold text-slate-900 dark:text-slate-100">
@@ -161,16 +154,24 @@ export default function CareersRecruitPage() {
                 <div className="shrink-0">
                   <Link
                     href="/apply"
-                    className="inline-flex rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                    className="recruit-apply-btn inline-flex rounded-lg border-2 border-[#5a9b76] bg-[#b8dfce] px-5 py-2.5 text-sm font-semibold text-slate-800 transition-colors dark:border-emerald-600 dark:bg-[#2d5a45]/30 dark:text-slate-100"
                   >
                     지원하기
                   </Link>
                 </div>
               </li>
-            ))}
-          </ul>
-        )}
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
+
+      {/* 푸터 — 연두 톤만 하단에 적용 */}
+      <footer className="mt-auto border-t border-slate-200 bg-gradient-to-b from-[#e8f5ef] to-[#f0f5f0] py-6 dark:border-white/10 dark:from-[#1a2e24] dark:to-[#0f1f18]">
+        <div className="mx-auto max-w-5xl px-6 text-center text-sm text-slate-600 dark:text-slate-400">
+          © 2026 HRInsight. 차세대 인적자본 관리 시스템
+        </div>
+      </footer>
     </div>
   );
 }

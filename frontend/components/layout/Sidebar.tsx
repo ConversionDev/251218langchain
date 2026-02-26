@@ -48,15 +48,15 @@ export function Sidebar() {
   const isDemoAdmin = hydrated && demoRole === "admin";
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-56 border-r border-slate-200/30 bg-white/80 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-[#0f0f0f]/95">
-      <div className="flex h-16 flex-col justify-center gap-0.5 border-b border-slate-200/40 px-4 dark:border-white/10">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-56 border-r border-[#a8d5c4]/50 bg-white/90 shadow-sm backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/95">
+      <div className="flex h-16 flex-col justify-center gap-0.5 border-b border-[#a8d5c4]/40 px-4 dark:border-primary/20">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#e8f5ef] text-muted-foreground dark:bg-primary/20">
             <LayoutDashboard className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <span className="block font-semibold text-slate-800 dark:text-slate-100">Success DNA</span>
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            <span className="block font-semibold text-slate-800 dark:text-foreground">Success DNA</span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               {isDemoAdmin ? "데모 · 관리자" : "관리자"}
             </span>
           </div>
@@ -76,8 +76,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-emerald-500 text-white dark:bg-white/10 dark:text-emerald-400 dark:border-l-2 dark:border-emerald-500 dark:border-y-0 dark:border-r-0"
-                  : "text-slate-600 hover:bg-emerald-50/90 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-100"
+                  ? "bg-[#e8f5ef] text-slate-900 dark:bg-primary/20 dark:text-foreground dark:border-l-2 dark:border-primary dark:border-y-0 dark:border-r-0"
+                  : "text-slate-600 hover:bg-[#e8f5ef]/70 hover:text-slate-900 dark:text-muted-foreground dark:hover:bg-primary/10 dark:hover:text-foreground"
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />

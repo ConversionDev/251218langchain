@@ -1,92 +1,169 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Search, BarChart3, Database } from "lucide-react";
 
 const FEATURES_ID = "features";
 
+/** 메인 히어로 슬로건 (옵션 A: 결과 중심적) — 슬라이드 전환과 관계없이 동일 문구 고정 */
+const HERO_SLOGAN = {
+  main: "인사(HR)의 직관을 데이터의 확신으로 바꾸다",
+  sub: "리더십부터 적응력까지, AI가 분석한 5대 핵심 역량 지표를 통해 오차 없는 인재 배치와 성과 예측을 경험하세요.",
+} as const;
+
+/** 배경 캐러셀용 플레이스홀더 이미지 (추후 기업 신뢰 이미지로 교체) */
+const HERO_BG_IMAGES = [
+  "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1920&q=80",
+  "https://images.unsplash.com/photo-1552664730-d307ca884978?w=1920&q=80",
+  "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1920&q=80",
+] as const;
+
+const SLIDE_COUNT = HERO_BG_IMAGES.length;
+
 export default function LandingPage() {
+  const [heroSlide, setHeroSlide] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setHeroSlide((s) => (s + 1) % SLIDE_COUNT);
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#f5f5f5]">
-      {/* GNB: 라이트 배경 — 메인, AI POWERED HR INTELLIGENCE HRInsight, 데모·로그인 */}
-      <header className="relative z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
-        <div className="flex items-center gap-3 md:gap-4">
-          <Link href="/" className="text-sm font-medium text-slate-800 hover:text-slate-900 transition-colors">
-            메인
-          </Link>
-          <span className="text-slate-300 hidden sm:inline">|</span>
-          <span className="text-sm tracking-tight text-slate-600">
-            AI POWERED HR INTELLIGENCE <span className="font-bold text-emerald-600">HRInsight</span>
-          </span>
-        </div>
+    <div className="font-sans relative min-h-screen overflow-hidden bg-[#f5f5f5]">
+      {/* 히어로 블록: 헤더가 위에 겹쳐져 하나의 영역으로 보이게 */}
+      <section className="relative min-h-screen w-full overflow-hidden flex flex-col">
+        {/* 헤더: 살짝 축소 — 영역·글자 크기 약간 줄임 */}
+        <header className="absolute top-0 left-0 right-0 z-20 flex min-h-[4.5rem] items-center justify-between items-center justify-between border-b border-white/30 bg-white/75 px-6 py-3 backdrop-blur-md md:px-8 md:py-4">
+          <div className="flex flex-1 items-center gap-8 md:gap-10">
+            <Link href="/" className="flex flex-col leading-tight shrink-0">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                AI Powered HR Intelligence
+              </span>
+              <span className="mt-0.5 flex items-baseline gap-1">
+                <span className="text-lg font-bold tracking-tight text-[#14532d] md:text-xl">HR</span>
+                <span
+                  className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-lg font-bold tracking-tight text-transparent md:text-xl"
+                  style={{ WebkitBackgroundClip: "text" }}
+                >
+                  Insight
+                </span>
+              </span>
+            </Link>
 
-        <nav aria-label="메인 메뉴" className="flex items-center gap-6 md:gap-8">
-          <a href={`#${FEATURES_ID}`} className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
-            기능
-          </a>
-          <Link href="/careers" className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
-            채용 지원
-          </Link>
-          <Link href="/workspace" className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
-            직원 서비스
-          </Link>
-          <Link href="/dashboard" className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
-            관리자
-          </Link>
-        </nav>
+            <nav aria-label="메인 메뉴" className="flex items-center gap-6 md:gap-8">
+              <a href={`#${FEATURES_ID}`} className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+                기능
+              </a>
+              <Link href="/careers" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+                채용 지원
+              </Link>
+              <Link href="/workspace" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+                직원 서비스
+              </Link>
+              <Link href="/dashboard" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+                관리자
+              </Link>
+            </nav>
+          </div>
 
-        <div className="flex items-center gap-3">
-          <Link
-            href="/demo"
-            className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors px-3 py-2"
-          >
-            데모
-          </Link>
-          <Link
-            href="/login"
-            className="rounded-md bg-slate-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
-          >
-            로그인
-          </Link>
-        </div>
-      </header>
+          <div className="flex shrink-0 items-center gap-3">
+            <Link
+              href="/demo"
+              className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 md:text-base"
+            >
+              데모
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-md bg-slate-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 md:text-base"
+            >
+              로그인
+            </Link>
+          </div>
+        </header>
 
-      <section className="min-h-[85vh] bg-gradient-to-br from-white from-0% via-[#f0f9f4] via-40% to-[#e0f2eb] to-100% text-gray-900 flex items-center">
-        <div className="mx-auto w-full max-w-6xl px-6 py-12 md:px-12 md:py-16 lg:px-16">
-          <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-14">
-            {/* Left: 텍스트 블록 — 이미지와 동일 */}
-            <div className="flex flex-col max-w-xl lg:max-w-[480px]">
-              <h1 className="text-4xl font-bold leading-[1.2] tracking-tight mb-5 md:text-5xl md:leading-tight">
-                <span className="whitespace-nowrap">지능형 인적자본 솔루션,</span>
-                <br />
-                <span className="text-emerald-600">HRInsight</span>과 함께
-              </h1>
-              <p className="text-base text-gray-700 leading-relaxed mb-3 md:text-lg">
-                AI가 분석한 이력서와 공시 지표로 인재를 찾고,
-              </p>
-              <p className="text-base text-gray-700 leading-relaxed mb-6 md:text-lg">
-                RAG-LLM-Success DNA 역량 분석과 ISO 30414-IFRS S2 대응까지 한 곳에서 관리합니다.
-              </p>
-              <p className="text-sm text-gray-600">
-                이용하실 메뉴는 상단 기능 채용지원 직원 서비스 관리자에서 선택해 주세요.
-              </p>
+        {/* 1) 배경: 빨간 대각선 패턴 — 선명한 이미지를 위해 얇게만 겹침 */}
+        <div
+          className="absolute inset-0 z-0 opacity-50"
+          style={{
+            backgroundImage: `repeating-linear-gradient(
+              -45deg,
+              transparent,
+              transparent 12px,
+              rgba(220, 38, 38, 0.07) 12px,
+              rgba(220, 38, 38, 0.07) 14px
+            ), repeating-linear-gradient(
+              45deg,
+              transparent,
+              transparent 12px,
+              rgba(220, 38, 38, 0.05) 12px,
+              rgba(220, 38, 38, 0.05) 14px
+            )`,
+            backgroundColor: "transparent",
+          }}
+        />
+
+        {/* 2) 배경 캐러셀(슬라이더) — 선명한 색감, 슬로건 쪽만 그라데이션으로 가독성 확보 */}
+        <div className="absolute inset-0 z-[1]">
+          {HERO_BG_IMAGES.map((src, i) => (
+            <div
+              key={i}
+              className="absolute inset-0 transition-opacity duration-500 ease-out"
+              style={{
+                opacity: i === heroSlide ? 1 : 0,
+                pointerEvents: i === heroSlide ? "auto" : "none",
+              }}
+            >
+              <Image
+                src={src}
+                alt=""
+                fill
+                className="object-cover"
+                priority={i === 0}
+                sizes="100vw"
+              />
+              {/* 슬로건 영역(오른쪽)만 밝게 — 이미지는 선명하게 유지 */}
+              <div
+                className="absolute inset-0 bg-gradient-to-l from-white/85 via-white/30 to-transparent"
+                aria-hidden
+              />
             </div>
+          ))}
+        </div>
 
-            {/* Right: 협업 이미지 — 항상 영역 확보, 데스크톱에서 오른쪽 정렬 */}
-            <div className="flex min-w-0 flex-1 basis-[min(100%,420px)] justify-center lg:basis-[min(480px,45%)] lg:justify-end">
-              <div className="relative w-full min-w-[280px] max-w-md aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-black/5 md:rounded-3xl">
-                <Image
-                  src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80"
-                  alt="두 사람이 협업하는 회사 사진"
-                  fill
-                  className="object-cover"
-                  priority
-                  sizes="(max-width: 1024px) 100vw, min(500px, 45vw)"
-                />
-              </div>
+        {/* 3) 글자: 슬로건 (배경 캐러셀 앞에 표시, 헤더 높이만큼 위 여백) */}
+        <div className="relative z-10 flex flex-1 items-center justify-end px-6 pt-24 pb-16 md:px-12 md:pt-28 lg:px-16">
+          <div className="mx-auto w-full max-w-6xl flex justify-end">
+            <div className="max-w-xl text-right">
+              <h2 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 md:text-4xl">
+                {HERO_SLOGAN.main}
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-slate-700 md:text-lg">
+                {HERO_SLOGAN.sub}
+              </p>
             </div>
           </div>
+        </div>
+
+        {/* 4) 슬라이더 인디케이터 — 바디 하단 그라데이션(#e8f5ef → #f0f5f0) 톤에 맞춤 */}
+        <div className="relative z-10 flex justify-center gap-3 pb-10" aria-label="슬라이드 선택">
+          {HERO_BG_IMAGES.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setHeroSlide(i)}
+              className="h-3 w-3 rounded-full border-2 border-[#a8d5c4] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a8d5c4] focus-visible:ring-offset-2"
+              style={{
+                backgroundColor: i === heroSlide ? "#e8f5ef" : "transparent",
+              }}
+              aria-label={`${i + 1}번째 슬라이드`}
+              aria-current={i === heroSlide ? "true" : undefined}
+            />
+          ))}
         </div>
       </section>
 

@@ -320,7 +320,7 @@ export default function ApplyPage() {
           </p>
           <Link
             href="/"
-            className="mt-8 inline-flex items-center gap-2 rounded-xl border-2 border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-white/20 dark:bg-[#171717] dark:text-slate-200 dark:hover:border-emerald-500/80 dark:hover:bg-white/10"
+            className="hero-gradient-hover mt-8 inline-flex items-center gap-2 rounded-xl border-2 border-[#a8d5c4] bg-gradient-to-b from-[#e8f5ef] to-[#f0f5f0] px-5 py-2.5 text-sm font-semibold text-slate-800 shadow transition-colors dark:border-emerald-800/50 dark:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
             {APPLY_MESSAGES.page.backToMain}
@@ -331,21 +331,29 @@ export default function ApplyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-200/60 via-teal-100/80 to-emerald-200/60 dark:from-[#0a0a0a] dark:via-[#0f0f0f] dark:to-[#0a0a0a]">
-      <div className="sticky top-0 z-10 border-b border-slate-200/20 bg-white/60 backdrop-blur-md dark:border-white/10 dark:bg-[#0f0f0f]/90">
-        <div className="mx-auto flex h-12 max-w-3xl items-center justify-between px-4 sm:px-6">
-          <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" aria-hidden>
-            채용·지원
+    <div className="min-h-screen bg-gradient-to-b from-[#e8f5ef] to-[#f0f5f0] dark:bg-background">
+      {/* 헤더: 로고(왼쪽) + 채용 공고(가운데), 메인 링크 없음 — 로고 클릭 시 메인 이동 */}
+      <header className="sticky top-0 z-10 flex min-h-[4.5rem] items-center justify-between border-b border-white/30 bg-white/75 px-6 py-3 backdrop-blur-md dark:border-white/10 dark:bg-background/75 md:px-8 md:py-4">
+        <Link href="/" className="flex items-baseline gap-1.5 shrink-0">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            AI Powered HR Intelligence
           </span>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+          <span className="text-base font-bold tracking-tight text-[#14532d] dark:text-emerald-800 md:text-lg">HR</span>
+          <span
+            className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-base font-bold tracking-tight text-transparent dark:from-teal-400 dark:to-emerald-400 md:text-lg"
+            style={{ WebkitBackgroundClip: "text" }}
           >
-            <ArrowLeft className="h-4 w-4" />
-            {APPLY_MESSAGES.page.toMain}
-          </Link>
-        </div>
-      </div>
+            Insight
+          </span>
+        </Link>
+        <Link
+          href="/careers/recruit"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base"
+        >
+          채용 공고
+        </Link>
+        <div className="w-[1px] shrink-0 md:min-w-[120px]" aria-hidden />
+      </header>
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-lg dark:border-white/10 dark:bg-[#171717] sm:p-8">
@@ -402,8 +410,8 @@ export default function ApplyPage() {
               onDragOver={(e) => e.preventDefault()}
               className={`mt-3 flex min-h-[120px] flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
                 uploadLoading
-                  ? "cursor-wait border-sky-300 bg-sky-50/80 dark:border-sky-600/50 dark:bg-sky-950/30"
-                  : "border-slate-200 bg-slate-50/60 hover:border-sky-400 hover:bg-sky-50/50 dark:border-white/15 dark:bg-white/5 dark:hover:border-sky-500/60 dark:hover:bg-sky-950/20"
+                  ? "cursor-wait border-[#a8d5c4] bg-[#e8f5ef]/80 dark:border-emerald-700/50 dark:bg-emerald-950/30"
+                  : "border-slate-200 bg-slate-50/60 hover:border-[#a8d5c4] hover:bg-[#e8f5ef]/50 dark:border-white/15 dark:bg-white/5 dark:hover:border-emerald-700/50 dark:hover:bg-emerald-950/20"
               } ${attachedFileName ? "min-h-[80px] p-4" : ""}`}
             >
               <input
@@ -685,7 +693,7 @@ export default function ApplyPage() {
                   {APPLY_MESSAGES.duplicateBlockNotice}
                 </p>
               )}
-              <Button type="submit" disabled={submitting || isDuplicateResume} className="gap-2">
+              <Button type="submit" disabled={submitting || isDuplicateResume} className="hero-gradient-hover gap-2 bg-emerald-600 hover:bg-emerald-600">
                 {submitting
                   ? APPLY_MESSAGES.submitButton.submitting
                   : isDuplicateResume
@@ -693,8 +701,8 @@ export default function ApplyPage() {
                     : APPLY_MESSAGES.submitButton.submit}
                 <Send className="h-4 w-4" />
               </Button>
-              <Link href="/">
-                <Button type="button" variant="outline">
+              <Link href="/careers/recruit">
+                <Button type="button" variant="outline" className="border-[#a8d5c4] text-slate-700 hover:bg-[#e8f5ef]/80 hover:border-[#a8d5c4] dark:border-white/20 dark:hover:bg-white/10">
                   {APPLY_MESSAGES.common.cancel}
                 </Button>
               </Link>

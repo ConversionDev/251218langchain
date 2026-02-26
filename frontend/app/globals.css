@@ -45,6 +45,38 @@
   }
 }
 
+/* 공통: 초록 CTA 호버만 적용 — 기본은 컴포넌트에서 중립 스타일, hover 지원 환경에서만 그라데이션 */
+@media (hover: hover) {
+  .hero-gradient-hover:hover,
+  .careers-resumes-btn:hover,
+  .workspace-hero-btn:hover {
+    background: linear-gradient(to bottom, #e8f5ef, #f0f5f0);
+    color: #1e293b;
+    border-color: #a8d5c4;
+  }
+  .dark .hero-gradient-hover:hover,
+  .dark .careers-resumes-btn:hover,
+  .dark .workspace-hero-btn:hover {
+    background: linear-gradient(to bottom, hsl(160 84% 39% / 0.2), hsl(160 84% 39% / 0.08));
+    color: hsl(var(--foreground));
+    border-color: hsl(160 84% 39% / 0.5);
+  }
+}
+
+/* 채용 공고: 지원하기 버튼 호버 시 흰색 배경 */
+@media (hover: hover) {
+  .recruit-apply-btn:hover {
+    background: #fff !important;
+    color: #1e293b !important;
+    border-color: #a8d5c4 !important;
+  }
+  .dark .recruit-apply-btn:hover {
+    background: hsl(0 0% 98%) !important;
+    color: hsl(var(--foreground)) !important;
+    border-color: hsl(160 84% 39% / 0.5) !important;
+  }
+}
+
 /* 다크모드: 막대 채도 완화 */
 .dark .recharts-bar-rectangle {
   opacity: 0.92;

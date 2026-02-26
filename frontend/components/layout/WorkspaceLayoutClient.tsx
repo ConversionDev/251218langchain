@@ -22,8 +22,8 @@ export function WorkspaceLayoutClient({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-100/80 dark:bg-[#0b0b0c]">
-      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200/70 bg-white px-4 py-2.5 md:px-6 dark:border-white/10 dark:bg-[#111214]">
+    <div className="flex min-h-screen flex-col bg-[#f0f5f0] dark:bg-[#0b0b0c]">
+      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-[#a8d5c4]/50 bg-white/90 px-4 py-2.5 md:px-6 dark:border-primary/20 dark:bg-[#111214]">
         <div className="flex items-center gap-3">
           <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
             {isDemoEmployee ? "데모 · 직원 포털" : "직원 포털"}
@@ -40,7 +40,7 @@ export function WorkspaceLayoutClient({
         </div>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-slate-500 transition-colors hover:bg-[#e8f5ef]/80 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-primary/10 dark:hover:text-slate-200"
         >
           <ExternalLink className="h-4 w-4" />
           메인으로

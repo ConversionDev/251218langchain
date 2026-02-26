@@ -147,8 +147,9 @@ export default function DashboardPage() {
       description: "ISO 30414 준수 현황",
       icon: Users,
       href: "/core",
-      color: "text-indigo-400",
-      bg: "bg-indigo-500/10",
+      bg: "bg-[#e8f5ef]/80",
+      color: "text-muted-foreground",
+      hoverColor: "group-hover:text-primary group-hover:bg-[#e8f5ef]",
       values: [
         { label: "총 직원 (신입+일반)", value: totalEmployeesValue },
         { label: "공시 완성도", value: disclosureCompletenessValue },
@@ -160,8 +161,9 @@ export default function DashboardPage() {
       description: "IFRS S2 전환 준비도",
       icon: Brain,
       href: "/intelligence",
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
+      bg: "bg-[#e8f5ef]/80",
+      color: "text-muted-foreground",
+      hoverColor: "group-hover:text-primary group-hover:bg-[#e8f5ef]",
       values: [
         { label: "전환 준비도 평균", value: transitionScoreValue },
         { label: "Green/AI 역량", value: "분석 가능" },
@@ -172,8 +174,9 @@ export default function DashboardPage() {
       description: "인적 자본 가치",
       icon: TrendingUp,
       href: "/performance",
-      color: "text-amber-400",
-      bg: "bg-amber-500/10",
+      bg: "bg-[#e8f5ef]/80",
+      color: "text-muted-foreground",
+      hoverColor: "group-hover:text-primary group-hover:bg-[#e8f5ef]",
       values: [
         { label: "인적자본 투자수익률", value: hcrValue },
         { label: "지속가능 기여도", value: sustainabilityValue },
@@ -185,8 +188,9 @@ export default function DashboardPage() {
       description: "블록체인 무결성",
       icon: ShieldCheck,
       href: "/credential",
-      color: "text-slate-300",
-      bg: "bg-slate-500/10",
+      bg: "bg-[#e8f5ef]/80",
+      color: "text-muted-foreground",
+      hoverColor: "group-hover:text-primary group-hover:bg-[#e8f5ef]",
       values: [
         { label: "검증 완료/전체", value: verifiedTotalValue },
         { label: "검증 완료율", value: verificationRateValue },
@@ -216,11 +220,11 @@ export default function DashboardPage() {
           const Icon = w.icon;
           return (
             <motion.div key={w.title} variants={item}>
-              <Link href={w.href}>
-                <Card className="h-full border-border bg-card transition-colors hover:bg-muted/30">
+              <Link href={w.href} className="group">
+                <Card className="h-full border border-[#a8d5c4]/50 bg-card transition-colors hover:bg-[#e8f5ef]/40 dark:border-primary/20 dark:hover:bg-primary/10">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span className="text-sm font-medium text-muted-foreground">{w.title}</span>
-                    <span className={`rounded-lg p-2 ${w.bg} ${w.color}`}>
+                    <span className={`rounded-lg p-2 transition-colors ${w.bg} ${w.color} ${w.hoverColor}`}>
                       <Icon className="h-5 w-5" />
                     </span>
                   </CardHeader>
@@ -234,7 +238,7 @@ export default function DashboardPage() {
                         </li>
                       ))}
                     </ul>
-                    <p className="mt-3 inline-flex items-center gap-1 text-xs text-primary">
+                    <p className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors group-hover:text-primary">
                       자세히 보기
                       <ArrowRight className="h-3.5 w-3.5" />
                     </p>

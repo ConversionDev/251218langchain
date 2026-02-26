@@ -19,13 +19,13 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="system">시스템 설정</TabsTrigger>
-          <TabsTrigger value="env">환경설정</TabsTrigger>
+        <TabsList className="grid w-full max-w-md grid-cols-2 border border-[#a8d5c4]/50 bg-[#e8f5ef]/30 dark:border-primary/20 dark:bg-primary/5">
+          <TabsTrigger value="system" className="data-[state=active]:bg-[#e8f5ef] data-[state=active]:text-slate-900 dark:data-[state=active]:bg-primary/20 dark:data-[state=active]:text-foreground">시스템 설정</TabsTrigger>
+          <TabsTrigger value="env" className="data-[state=active]:bg-[#e8f5ef] data-[state=active]:text-slate-900 dark:data-[state=active]:bg-primary/20 dark:data-[state=active]:text-foreground">환경설정</TabsTrigger>
         </TabsList>
 
         <TabsContent value="system" className="mt-6">
-          <Card>
+          <Card className="border-[#a8d5c4]/60 dark:border-primary/20">
             <CardHeader>
               <h2 className="text-lg font-semibold leading-none tracking-tight">시스템 설정</h2>
               <p className="text-sm text-muted-foreground">
@@ -34,40 +34,40 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="api-base">API 기본 URL</Label>
+                <Label htmlFor="api-base" className="text-slate-700 dark:text-muted-foreground">API 기본 URL</Label>
                 <Input
                   id="api-base"
                   placeholder="https://api.example.com"
-                  className="max-w-md"
+                  className="max-w-md border-[#a8d5c4]/60 dark:border-primary/30"
                 />
                 <p className="text-xs text-muted-foreground">
                   백엔드 API 서버 주소 (환경 변수로 override 가능)
                 </p>
               </div>
-              <div className="flex items-center justify-between rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between rounded-lg border border-[#a8d5c4]/50 p-4 dark:border-primary/20">
                 <div>
                   <Label htmlFor="rag-default">RAG 검색 기본 사용</Label>
                   <p className="text-xs text-muted-foreground">
                     AI 질의 시 RAG 검색을 기본으로 사용합니다
                   </p>
                 </div>
-                <input type="checkbox" id="rag-default" defaultChecked className="h-4 w-4 rounded border-input" />
+                <input type="checkbox" id="rag-default" defaultChecked className="h-4 w-4 rounded border-[#a8d5c4] text-primary dark:border-primary/50" />
               </div>
-              <div className="flex items-center justify-between rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between rounded-lg border border-[#a8d5c4]/50 p-4 dark:border-primary/20">
                 <div>
                   <Label htmlFor="stream-default">스트리밍 응답</Label>
                   <p className="text-xs text-muted-foreground">
                     AI 응답을 스트리밍으로 표시합니다
                   </p>
                 </div>
-                <input type="checkbox" id="stream-default" defaultChecked className="h-4 w-4 rounded border-input" />
+                <input type="checkbox" id="stream-default" defaultChecked className="h-4 w-4 rounded border-[#a8d5c4] text-primary dark:border-primary/50" />
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="env" className="mt-6">
-          <Card>
+          <Card className="border-[#a8d5c4]/60 dark:border-primary/20">
             <CardHeader>
               <h2 className="text-lg font-semibold leading-none tracking-tight">환경설정</h2>
               <p className="text-sm text-muted-foreground">
@@ -76,27 +76,27 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>테마</Label>
+                <Label className="text-slate-700 dark:text-muted-foreground">테마</Label>
                 <p className="text-xs text-muted-foreground">
                   상단 헤더의 다크 모드 토글로 전환할 수 있습니다.
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date-format">날짜 표시 형식</Label>
+                <Label htmlFor="date-format" className="text-slate-700 dark:text-muted-foreground">날짜 표시 형식</Label>
                 <Input
                   id="date-format"
                   placeholder="YYYY-MM-DD"
-                  className="max-w-xs"
+                  className="max-w-xs border-[#a8d5c4]/60 dark:border-primary/30"
                 />
               </div>
-              <div className="flex items-center justify-between rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between rounded-lg border border-[#a8d5c4]/50 p-4 dark:border-primary/20">
                 <div>
                   <Label htmlFor="compact-view">간편 보기</Label>
                   <p className="text-xs text-muted-foreground">
                     목록·테이블을 더 조밀하게 표시합니다
                   </p>
                 </div>
-                <input type="checkbox" id="compact-view" className="h-4 w-4 rounded border-input" />
+                <input type="checkbox" id="compact-view" className="h-4 w-4 rounded border-[#a8d5c4] text-primary dark:border-primary/50" />
               </div>
             </CardContent>
           </Card>

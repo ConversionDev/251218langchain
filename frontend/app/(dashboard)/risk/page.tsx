@@ -72,7 +72,7 @@ export default function RiskPage() {
         </p>
       </div>
 
-      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <section className="rounded-xl border border-[#a8d5c4]/50 bg-card p-4 shadow-sm dark:border-primary/20">
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <label className="text-xs text-muted-foreground">액션</label>
@@ -97,7 +97,7 @@ export default function RiskPage() {
           </Button>
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-lg border border-border">
+        <div className="mt-4 overflow-hidden rounded-lg border border-[#a8d5c4]/50 dark:border-primary/20">
           <Table>
             <TableHeader>
               <TableRow>

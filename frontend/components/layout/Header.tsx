@@ -129,7 +129,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/20 bg-white/60 px-8 backdrop-blur-md dark:border-white/10 dark:bg-[#0f0f0f]/90">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#a8d5c4]/40 bg-white/70 px-8 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90">
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-semibold text-foreground">Success DNA</h1>
         {hydrated && selectedEmployee !== null && (
@@ -159,7 +159,7 @@ export function Header() {
               onClick={handleBackfillProfiles}
               disabled={backfillLoading}
               title="기존 직원 결측 프로필 자동 보정"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#a8d5c4]/80 bg-[#e8f5ef]/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#e8f5ef] disabled:opacity-50 dark:border-primary/30 dark:bg-primary/10 dark:text-foreground dark:hover:bg-primary/20"
             >
               {backfillLoading ? CORE_EMPLOYEES_MESSAGES.buttons.backfilling : CORE_EMPLOYEES_MESSAGES.buttons.backfill}
             </button>
@@ -169,14 +169,14 @@ export function Header() {
             onClick={handleRefreshEmbeddings}
             disabled={embeddingLoading}
             title="직원·성과 RAG 임베딩 일괄 갱신"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-lg border border-[#a8d5c4]/80 bg-[#e8f5ef]/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#e8f5ef] disabled:opacity-50 dark:border-primary/30 dark:bg-primary/10 dark:text-foreground dark:hover:bg-primary/20"
           >
             <Sparkles className="h-4 w-4" />
             {embeddingLoading ? "갱신 중…" : "임베딩 갱신"}
           </button>
           <Link
             href="/workspace"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-lg border border-[#a8d5c4]/80 bg-[#e8f5ef]/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#e8f5ef] dark:border-primary/30 dark:bg-primary/10 dark:text-foreground dark:hover:bg-primary/20"
             title="직원 업무 서비스로 이동"
           >
             <BriefcaseBusiness className="h-4 w-4" />

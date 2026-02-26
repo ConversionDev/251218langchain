@@ -46,7 +46,7 @@ export default function DataMapPage() {
         </div>
       </div>
       <div className="relative min-h-0 flex-1 px-4 pb-4">
-        <div className="absolute inset-0 rounded-lg border border-border bg-card" />
+        <div className="absolute inset-0 rounded-lg border border-[#a8d5c4]/50 bg-card dark:border-primary/20" />
         <iframe
           src={mapUrl}
           title="역량 군집화 지도"
