@@ -247,10 +247,10 @@ def main():
     parser.add_argument("--no-adaptive", action="store_true")
     args = parser.parse_args()
 
-    data_dir = get_data_dir() / "email" / "sft" / "processed"
+    data_dir = get_data_dir() / "spam" / "sft" / "processed"
     train_path = args.train_path or str(data_dir / "train.jsonl")
     val_path = args.val_path or str(data_dir / "val.jsonl")
-    output_dir = args.output_dir or str(get_data_dir() / "email" / "sft" / "filtered")
+    output_dir = args.output_dir or str(get_data_dir() / "spam" / "sft" / "filtered")
 
     print("[INFO] LLaMA 분류기 로딩 중...")
     classifier = LLaMAGate()

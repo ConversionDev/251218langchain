@@ -1,15 +1,25 @@
 # 문서 목차
 
-`docs/` 에 모아 둔 프로젝트 문서입니다.
+`docs/` 에 있는 프로젝트 문서입니다. **과거 문제·해결**은 [issues-and-resolutions.md](issues-and-resolutions.md)에서 통합 관리합니다.
+
+---
+
+## 문서 구성 (8개)
 
 | 문서 | 설명 |
 |------|------|
-| [project-context.md](project-context.md) | **프로젝트 맥락** — 기능 구현 현황·구현 예정·ATS/HCM 목표 요약 |
-| [vision-and-goals.md](vision-and-goals.md) | 프로젝트 비전·방향성·목표·도메인별 방향·Success DNA 정의 |
-| [technologies.md](technologies.md) | 사용 기술 설명 (pgvector, HNSW, B-tree, BGE-m3 등) |
-| [rag-and-vector.md](rag-and-vector.md) | RAG·벡터 저장 구조, disclosure 적재·검색 흐름, HNSW 인덱스 요약 |
-| [db-and-migrations.md](db-and-migrations.md) | Alembic 통합 스쿼시 사용법, disclosures 테이블 재생성 절차 |
-| [extraction-and-data.md](extraction-and-data.md) | PDF/엑셀 추출 전략(전략 매트릭스·라우팅), competency_anchors 통합 스키마·구현 위치 |
-| [exaone-tool-calling-design.md](exaone-tool-calling-design.md) | EXAONE 도구 바인딩 시 답변 품질 이슈(원인·개선 후보) |
-| [chat-rag-strategy.md](chat-rag-strategy.md) | **채팅 RAG 전략** — 채팅 정상화, 1턴 구조, RAG·도구·GPU 메모리 전략, 공시 카운트, 검증 요약 |
-| [runbook.md](runbook.md) | 프론트엔드 실행·환경 변수, 데이터 폴더 구조·도메인·출력 경로 |
+| [project.md](project.md) | **프로젝트** — 맥락·비전·Success DNA·실행·데이터 폴더(runbook) |
+| [backend.md](backend.md) | **백엔드** — 진입점, API, 도메인, DB, MCP, 설정, DB·마이그레이션, RAG·벡터 |
+| [frontend.md](frontend.md) | **프론트** — 라우트·플로우·API 매핑·현재 상황 |
+| [implementation-status.md](implementation-status.md) | **기능별 구현 상태** — API·도메인별 구현됨/스텁/미구현, 프론트 연동 (AI 인식용) |
+| [issues-and-resolutions.md](issues-and-resolutions.md) | **과거 문제·해결** — 스팸 수신, 데이터 구조, ExaOne/LLaMA 정리 등 |
+| [strategy.md](strategy.md) | **도메인 전략** — 메일(수신·스팸·AI 분석), 채팅 RAG(1턴·도구·GPU), LLaMA 스팸 관리 |
+| [designs.md](designs.md) | **확장·설계안** — 메일–성과 연동, 주소록, 공시 지표, 추출·역량, ExaOne 도구 품질, Apply |
+| (이 파일) | 목차 |
+
+---
+
+## 원칙
+
+- **문제·해결**: [issues-and-resolutions.md](issues-and-resolutions.md)에만 상세 기술. 나머지 문서는 현재 동작만 서술.
+- **참고**: 세부 API 스펙은 FastAPI `/docs`(Swagger)와 코드 참고.

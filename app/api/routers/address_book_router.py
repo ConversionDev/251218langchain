@@ -26,6 +26,7 @@ class CreateAddressBody(BaseModel):
     displayName: str = Field(..., min_length=1)
     email: str = Field(..., min_length=1)
     department: Optional[str] = None
+    ownerEmployeeId: Optional[str] = Field(None, description="대표 소유자(직원 ID), 수신 메일 매핑용")
     metadata: Optional[Dict[str, Any]] = None
     id: Optional[str] = None
 
@@ -35,6 +36,7 @@ class UpdateAddressBody(BaseModel):
     displayName: Optional[str] = Field(None, min_length=1)
     email: Optional[str] = Field(None, min_length=1)
     department: Optional[str] = None
+    ownerEmployeeId: Optional[str] = Field(None, description="대표 소유자(직원 ID)")
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -105,6 +107,7 @@ def create_address(
             display_name=body.displayName,
             email=body.email,
             department=body.department,
+            owner_employee_id=body.ownerEmployeeId,
             metadata_=body.metadata,
             id=body.id,
         )
@@ -125,6 +128,7 @@ def update_address(
         display_name=body.displayName,
         email=body.email,
         department=body.department,
+        owner_employee_id=body.ownerEmployeeId,
         metadata_=body.metadata,
     )
     if result is None:

@@ -1,16 +1,25 @@
 """
-Llama 3.2B 공통 로더 (Hub 싱글톤)
+LLaMA 스팸 분류 공통 로더 (Hub 싱글톤)
 
-스팸 분류가 동일 프로세스에서 같은 베이스 모델을 한 번만 로드하도록 관리합니다.
-- get_base_model() / get_tokenizer(): 스팸 분류(베이스 + 분류 헤드)용
+ExaOne과 동일 전략: config(모델 ID·어댑터 사용 여부) + paths(어댑터 디렉터리).
+- get_base_model() / get_tokenizer(): 스팸 분류(베이스 + 선택적 LoRA + 분류 헤드)용
 """
 
-from pathlib import Path
 from typing import Any, Optional
 
 import threading
 
-_BASE_LLAMA_ID = "unsloth/Llama-3.2-3B-Instruct"
+
+def _get_model_id() -> str:
+    """설정에서 LLaMA 베이스 모델 ID 반환."""
+    from core.config import get_settings  # type: ignore
+    return get_settings().llama_model_id
+
+
+def _get_adapters_dir():
+    """스팸 LoRA 어댑터 경로 (설정 켜져 있을 때만 사용)."""
+    from core.paths import get_llama_adapters_dir  # type: ignore
+    return get_llama_adapters_dir()
 
 
 class LlamaManager:
@@ -29,14 +38,15 @@ class LlamaManager:
         return cls._instance
 
     def get_tokenizer(self):
-        """토크나이저 한 번만 로드 후 반환."""
+        """토크나이저 한 번만 로드 후 반환 (설정의 llama_model_id 사용)."""
         if self._tokenizer is None:
             with self._lock:
                 if self._tokenizer is None:
                     from transformers import AutoTokenizer
 
+                    model_id = _get_model_id()
                     self._tokenizer = AutoTokenizer.from_pretrained(
-                        _BASE_LLAMA_ID, trust_remote_code=True
+                        model_id, trust_remote_code=True
                     )
                     if self._tokenizer.pad_token is None:
                         self._tokenizer.pad_token = self._tokenizer.eos_token
@@ -44,13 +54,14 @@ class LlamaManager:
         return self._tokenizer
 
     def get_base_model(self):
-        """베이스 CausalLM (4-bit). 스팸 분류 등에서 last_hidden_state + 헤드용."""
+        """베이스 CausalLM (4-bit). 설정에 따라 스팸 LoRA 어댑터 로드 (ExaOne competency_adapters와 동일 전략)."""
         if self._base_model is None:
             with self._lock:
                 if self._base_model is None:
                     import torch
                     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
+                    model_id = _get_model_id()
                     device_map = "cuda:0" if torch.cuda.is_available() else "auto"
                     bnb = BitsAndBytesConfig(
                         load_in_4bit=True,
@@ -59,12 +70,32 @@ class LlamaManager:
                         bnb_4bit_use_double_quant=True,
                     )
                     self._base_model = AutoModelForCausalLM.from_pretrained(
-                        _BASE_LLAMA_ID,
+                        model_id,
                         quantization_config=bnb,
                         device_map=device_map,
                         trust_remote_code=True,
                     )
                     self._base_model.eval()
+
+                    # 스팸 LoRA 어댑터 (설정 켜져 있고 경로 존재 시. ExaOne competency_adapters와 동일 전략)
+                    from core.config import get_settings  # type: ignore
+                    settings = get_settings()
+                    if getattr(settings, "llama_use_spam_adapter", True):
+                        adapter_dir = _get_adapters_dir()
+                        adapter_config = adapter_dir / "adapter_config.json"
+                        if not adapter_config.exists() and (adapter_dir / "final_model").is_dir():
+                            adapter_dir = adapter_dir / "final_model"
+                            adapter_config = adapter_dir / "adapter_config.json"
+                        if adapter_dir.is_dir() and adapter_config.exists():
+                            try:
+                                from peft import PeftModel  # type: ignore
+                                self._base_model = PeftModel.from_pretrained(
+                                    self._base_model, str(adapter_dir)
+                                )
+                                self._base_model.eval()
+                                print("[OK] LLaMA 스팸 어댑터 로드 완료 (llama/adapters)")
+                            except Exception as e:
+                                print(f"[WARN] LLaMA 스팸 어댑터 로드 실패, 베이스만 사용: {e}")
         return self._base_model
 
     def reset(self) -> None:

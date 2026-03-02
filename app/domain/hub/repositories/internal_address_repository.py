@@ -18,6 +18,7 @@ def _row_to_dict(row: InternalAddress) -> Dict[str, Any]:
         "displayName": row.display_name,
         "email": row.email,
         "department": row.department,
+        "ownerEmployeeId": getattr(row, "owner_employee_id", None),
         "metadata": row.metadata_ or {},
         "createdAt": row.created_at.isoformat() if row.created_at else None,
     }
@@ -43,6 +44,7 @@ def create(
     display_name: str,
     email: str,
     department: Optional[str] = None,
+    owner_employee_id: Optional[str] = None,
     metadata_: Optional[Dict[str, Any]] = None,
     id: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -56,6 +58,7 @@ def create(
         display_name=display_name.strip(),
         email=email.strip(),
         department=department.strip() if department else None,
+        owner_employee_id=owner_employee_id.strip() if owner_employee_id else None,
         metadata_=metadata_,
     )
     db.add(row)
@@ -70,6 +73,7 @@ def update(
     display_name: Optional[str] = None,
     email: Optional[str] = None,
     department: Optional[str] = None,
+    owner_employee_id: Optional[str] = None,
     metadata_: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """공용·그룹 1건 수정. 없으면 None."""
@@ -82,6 +86,8 @@ def update(
         row.email = email.strip()
     if department is not None:
         row.department = department.strip() or None
+    if owner_employee_id is not None:
+        row.owner_employee_id = owner_employee_id.strip() or None
     if metadata_ is not None:
         row.metadata_ = metadata_
     db.commit()
@@ -107,6 +113,7 @@ def upsert_from_dict(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         "display_name": (data.get("display_name") or data.get("displayName", "")).strip(),
         "email": (data.get("email") or "").strip(),
         "department": (data.get("department") or "").strip() or None,
+        "owner_employee_id": (data.get("owner_employee_id") or data.get("ownerEmployeeId") or "").strip() or None,
         "metadata_": data.get("metadata") or data.get("metadata_") or None,
     }
     if row:
@@ -121,6 +128,7 @@ def upsert_from_dict(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         display_name=payload["display_name"],
         email=payload["email"],
         department=payload["department"],
+        owner_employee_id=payload["owner_employee_id"],
         metadata_=payload["metadata_"],
     )
     db.add(new_row)

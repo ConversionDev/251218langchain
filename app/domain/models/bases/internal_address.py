@@ -20,5 +20,6 @@ class InternalAddress(Base):  # type: ignore[misc]
     display_name = Column(String(256), nullable=False, comment="표시명")
     email = Column(String(512), nullable=False, comment="메일 주소")
     department = Column(String(128), nullable=True, comment="부서/용도")
+    owner_employee_id = Column(String(64), nullable=True, index=True, comment="대표 소유자(직원 ID), 수신 메일 매핑용")
     metadata_ = Column("metadata", JSONB(), nullable=True, comment="멤버 ID 목록 등 (group용)")
     created_at = Column(DateTime(), server_default=text("now()"), nullable=True, comment="생성 시각")

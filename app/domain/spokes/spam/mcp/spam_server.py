@@ -99,7 +99,7 @@ async def classify_spam(email_metadata: dict) -> str:
 
 @mcp_proxy.tool
 async def classify_routing(text: str) -> str:
-    """규칙/정책 라우팅. 기본값 POLICY_BASED 반환 (시멘틱 분류 제거)."""
+    """규칙/정책 라우팅. 텍스트 분류 제거로 기본값만 반환."""
     from fastmcp.client import Client  # type: ignore
     async with Client(get_spam_spoke_mcp_url()) as client:
         result = await client.call_tool("classify_routing", {"text": text})
@@ -123,7 +123,7 @@ def get_spam_spoke_mcp() -> FastMCP:
 
     @mcp_spoke.tool
     def classify_routing(text: str) -> str:
-        """규칙/정책 라우팅. 기본값 반환 (시멘틱 분류 제거)."""
+        """규칙/정책 라우팅. 기본값만 반환."""
         return llama_classify(text)
 
     @mcp_spoke.tool

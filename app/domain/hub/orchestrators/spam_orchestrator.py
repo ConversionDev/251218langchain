@@ -47,6 +47,9 @@ class SpamGatewayService:
         """이메일 메타데이터를 읽고 분류·라우팅 전략 반환."""
         result_dict = self._classify_spam(data)
         routing_strategy = self._decide_routing_strategy(data)
+        # 수신 플로우에서는 LLaMA 결과가 있으면 rule(LLaMA)을 사용해 스팸함 배치가 기대대로 동작하도록 함
+        if isinstance(result_dict, dict) and (result_dict.get("spam_prob") is not None or result_dict.get("label")):
+            routing_strategy = "rule"
         return {
             "email_metadata": data,
             "llama_result": result_dict,

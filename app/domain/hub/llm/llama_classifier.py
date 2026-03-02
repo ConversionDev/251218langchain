@@ -13,7 +13,7 @@ def _get_classifier():
     """LLaMAClassifier 싱글톤 (lazy). LlamaManager 베이스 사용."""
     global _spam_classifier
     if _spam_classifier is None:
-        from domain.spokes.spam.services.semantic_classifier import LLaMAClassifier  # type: ignore
+        from domain.spokes.spam.services.llama_classifier import LLaMAClassifier  # type: ignore
 
         _spam_classifier = LLaMAClassifier()
         _spam_classifier.load_model()

@@ -2,29 +2,21 @@
 Chat MCP Server (역할 통합).
 
 - MCP: Central이 call_tool로 호출. Spoke로 call_tool 위임만 수행.
-- Spoke: Chat MCP가 call_tool로 호출. classify/generate/search_documents 등 실행.
-- Llama·ExaOne은 hub HTTP로 호출.
+- Spoke: Chat MCP가 call_tool로 호출. generate/search_documents 등 실행.
+- 채팅은 ExaOne만 사용. LLaMA는 스팸 도메인에서만 사용.
 """
 
 from datetime import datetime
 
 from fastmcp import FastMCP
 
-from domain.hub.mcp.http_client import (  # type: ignore
-    exaone_generate,
-    llama_classify,
-)
+from domain.hub.mcp.http_client import exaone_generate  # type: ignore
 from domain.hub.mcp.utils import get_chat_spoke_mcp_url, result_to_str  # type: ignore
 
 
 # ---------------------------------------------------------------------------
 # Spoke 구현 (실행)
 # ---------------------------------------------------------------------------
-
-def classify(text: str) -> str:
-    """시멘틱 분류. hub HTTP 호출."""
-    return llama_classify(text)
-
 
 def generate(prompt: str, max_tokens: int = 512) -> str:
     """ExaOne 텍스트 생성. hub HTTP 호출."""
@@ -60,15 +52,6 @@ mcp_proxy = FastMCP("Chat MCP (Routing + Spoke Proxy)")
 
 
 @mcp_proxy.tool
-async def classify_with_llama(text: str) -> str:
-    """Llama 시멘틱 분류. Chat Spoke call_tool."""
-    from fastmcp.client import Client  # type: ignore
-    async with Client(get_chat_spoke_mcp_url()) as client:
-        result = await client.call_tool("classify", {"text": text})
-        return result_to_str(result)
-
-
-@mcp_proxy.tool
 async def generate_with_exaone(prompt: str, max_tokens: int = 512) -> str:
     """ExaOne 텍스트 생성. Chat Spoke call_tool."""
     from fastmcp.client import Client  # type: ignore
@@ -83,21 +66,13 @@ async def classify_then_generate(
     generate_prompt: str,
     max_tokens: int = 512,
 ) -> dict:
-    """Llama 분류 후 ExaOne 생성. Chat Spoke call_tool. {text} 치환 지원."""
+    """ExaOne 생성만 수행. {text} 치환 지원. (채팅은 ExaOne만 사용, LLaMA 분류 제거됨)"""
     from fastmcp.client import Client  # type: ignore
     url = get_chat_spoke_mcp_url()
     async with Client(url) as client:
-        classification_result = await client.call_tool("classify", {"text": text})
-        classification = result_to_str(classification_result)
-        result_dict: dict = {"classification": classification, "generated": None, "skipped": False}
-        if classification == "BLOCK":
-            result_dict["skipped"] = True
-            result_dict["generated"] = "(BLOCK으로 생성 생략)"
-            return result_dict
         full_prompt = generate_prompt.strip().replace("{text}", (text or "").strip())
         gen_result = await client.call_tool("generate", {"prompt": full_prompt, "max_tokens": max_tokens})
-        result_dict["generated"] = result_to_str(gen_result)
-        return result_dict
+        return {"classification": "", "generated": result_to_str(gen_result), "skipped": False}
 
 
 @mcp_proxy.tool
@@ -151,10 +126,6 @@ def get_chat_spoke_mcp() -> FastMCP:
     mcp_spoke = FastMCP("Chat Spoke MCP")
 
     @mcp_spoke.tool
-    def classify(text: str) -> str:
-        return llama_classify(text)
-
-    @mcp_spoke.tool
     def generate(prompt: str, max_tokens: int = 512) -> str:
         return exaone_generate(prompt, max_tokens=max_tokens)
 
@@ -194,8 +165,6 @@ def _invoke_chat_spoke_tool(name: str, args: dict) -> str:
         return _calculate_impl(str(a.get("expression", "")))
     if name == "define":
         return _search_documents_impl(str(a.get("term", "")))
-    if name == "classify":
-        return llama_classify(str(a.get("text", "")))
     if name == "generate":
         return exaone_generate(str(a.get("prompt", "")), max_tokens=int(a.get("max_tokens", 512)))
     return f"알 수 없는 도구: {name}"

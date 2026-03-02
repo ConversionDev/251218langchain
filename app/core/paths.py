@@ -112,6 +112,29 @@ def get_env_mapping_data_dir() -> Path:
     return d
 
 
+def get_spam_data_dir() -> Path:
+    """스팸 SFT 데이터 (ExaOne 합성·실제 레이블). app/data/spam/"""
+    d = get_data_dir() / "spam"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_spam_sft_dir() -> Path:
+    """스팸 SFT JSONL 저장. app/data/spam/sft/"""
+    d = get_spam_data_dir() / "sft"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_llama_adapters_dir() -> Path:
+    """LLaMA 스팸 분류 LoRA 어댑터 저장 경로. ExaOne competency_adapters와 동일 전략.
+
+    Returns:
+        app/artifacts/fine_tuned/llama/adapters/
+    """
+    return get_fine_tuned_dir() / "llama" / "adapters"
+
+
 def get_output_dir() -> Path:
     """출력 디렉토리 경로 반환.
 

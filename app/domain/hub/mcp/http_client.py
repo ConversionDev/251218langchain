@@ -20,17 +20,17 @@ def _get_hub_base_url() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Llama HTTP 클라이언트
+# Llama HTTP 클라이언트 (스팸 분류만 사용. 텍스트 분류는 제거됨)
 # ---------------------------------------------------------------------------
 
 
 def llama_classify(text: str, *, timeout: float = 30.0) -> str:
-    """규칙/정책 라우팅용. 시멘틱 분류 제거로 기본값 POLICY_BASED 반환."""
+    """규칙/정책 라우팅용. 텍스트 분류 제거로 기본값만 반환."""
     return "POLICY_BASED"
 
 
 def llama_classify_spam(email_metadata: Dict[str, Any], *, timeout: float = 60.0) -> Dict[str, Any]:
-    """Llama 스팸 분류. HTTP POST hub/internal/llama/classify_spam."""
+    """LLaMA 스팸 분류. HTTP POST hub/internal/llama/classify_spam. (런타임에서 LLaMA 사용처는 이 함수만.)"""
     base = _get_hub_base_url()
     url = f"{base}/internal/llama/classify_spam"
     payload = {"email_metadata": email_metadata}

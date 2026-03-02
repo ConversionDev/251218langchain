@@ -4,12 +4,12 @@ LoRA Adapter Training with SFTTrainer
 PEFT/LoRA 기반 파인튜닝 학습 실행.
 
 역할: 학습 실행
-1. load_model.py에서 준비된 모델 및 데이터셋 사용
+1. model_loader에서 준비된 모델 및 데이터셋 사용
 2. 하이퍼파라미터 설정 (학습률, 배치 크기, 에포크 등)
 3. SFTTrainer를 사용한 학습 실행
 4. LoRA 어댑터 저장
 
-입력: load_model.py가 준비한 모델 및 데이터셋
+입력: model_loader가 준비한 모델 및 데이터셋
 출력: 학습된 LoRA 어댑터 (체크포인트)
 """
 
@@ -62,7 +62,7 @@ except ImportError:
         except ImportError:
             print("[ERROR] trl이 설치되지 않았습니다. pip install trl을 실행하세요.")
 
-from core.paths import get_data_dir, get_output_dir  # type: ignore
+from core.paths import get_output_dir, get_spam_sft_dir  # type: ignore
 from training.models.exaone.policy_solver.model_loader import TrainingDataLoader  # type: ignore
 
 
@@ -200,23 +200,24 @@ class LoRATrainer:
             학습 준비 완료된 객체들
         """
         if train_path is None or val_path is None:
-            data_dir = get_data_dir() / "email" / "sft" / "processed"
+            from core.paths import get_spam_sft_dir  # type: ignore
+            data_dir = get_spam_sft_dir()
             if train_path is None:
                 train_path = data_dir / "train.jsonl"
             if val_path is None:
                 val_path = data_dir / "val.jsonl"
 
         # 파일 존재 확인
-        if not train_path.exists():
+        if not Path(train_path).exists():
             raise FileNotFoundError(
                 f"Train 파일을 찾을 수 없습니다: {train_path}\n"
-                "먼저 sft_to_train_val_split.py를 실행하여 train.jsonl 파일을 생성하세요."
+                "run_exaone_generate_spam_sft로 exaone_synthetic.jsonl 생성 후 train/val 분할하여 train.jsonl을 두거나, --train_path로 지정하세요."
             )
 
-        if not val_path.exists():
+        if not Path(val_path).exists():
             raise FileNotFoundError(
                 f"Validation 파일을 찾을 수 없습니다: {val_path}\n"
-                "먼저 sft_to_train_val_split.py를 실행하여 val.jsonl 파일을 생성하세요."
+                "train/val 분할 후 val.jsonl을 두거나, --val_path로 지정하세요."
             )
 
         # 학습 준비

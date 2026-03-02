@@ -1,0 +1,2 @@
+{"input": {"subject": "3월 15일 회의 일정 확인 부탁드립니다", "sender": "김동료 <kim@company.com>", "body": "안녕하세요. 다음 주 회의 장소와 안건 공유 부탁드립니다.", "attachments": [], "received_at": ""}, "output": {"action": "ALLOW"}, "category": "work"}
+{"input": {"subject": "당첨 안내! 지금 클릭해 무료 혜택 받으세요", "sender": "noreply@spam.example.com", "body": "축하합니다. 당첨되셨습니다. 링크를 클릭해 비밀번호를 입력해 주세요. 한정 기간 무료.", "attachments": [], "received_at": ""}, "output": {"action": "BLOCK"}, "category": "lottery"}

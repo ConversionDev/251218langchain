@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, FileUp, Mail, Sparkles } from "lucide-react";
+import { ExternalLink, FileUp, Mail, Sparkles, Users } from "lucide-react";
 
 export default function WorkspaceHomePage() {
   return (
@@ -89,6 +89,13 @@ export default function WorkspaceHomePage() {
               >
                 사내 메일
                 <Mail className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/workspace/address-book"
+                className="hero-gradient-hover workspace-hero-btn inline-flex items-center gap-2 rounded-full border-2 border-white/80 bg-white px-6 py-3 text-sm font-semibold text-foreground shadow-sm transition-colors duration-200 dark:border-white/10 dark:bg-white/10"
+              >
+                주소록
+                <Users className="h-4 w-4" />
               </Link>
             </div>
           </section>

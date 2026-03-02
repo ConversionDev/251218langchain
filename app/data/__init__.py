@@ -6,7 +6,7 @@ app/data — 도메인별 데이터 패키지.
 
 서브패키지:
 - disclosure: 공시 문서 (prepared 텍스트 등)
-- email: 이메일 SFT 파이프라인 (raw → sft, sft/processed, sft/filtered)
+- spam: 스팸 SFT (sft/exaone_synthetic.jsonl, train.jsonl, val.jsonl 등)
 - competency_anchors: 역량 앵커
 """
 

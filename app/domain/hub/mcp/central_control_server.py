@@ -16,22 +16,12 @@ from domain.hub.mcp.utils import (  # type: ignore
     result_to_str,
 )
 
-mcp = FastMCP("Central MCP (Llama + ExaOne)")
+mcp = FastMCP("Central MCP (ExaOne + Spam LLaMA)")
 
 
 # ---------------------------------------------------------------------------
-# Chat MCP로 call_tool 위임
+# Chat MCP로 call_tool 위임 (채팅은 ExaOne만 사용, LLaMA 없음)
 # ---------------------------------------------------------------------------
-
-
-@mcp.tool
-async def classify_with_llama(text: str) -> str:
-    """Llama 시멘틱 분류. Chat MCP → Chat Spoke call_tool."""
-    from fastmcp.client import Client  # type: ignore
-    url = get_chat_mcp_url()
-    async with Client(url) as client:
-        result = await client.call_tool("classify_with_llama", {"text": text})
-        return result_to_str(result)
 
 
 @mcp.tool
@@ -53,7 +43,7 @@ async def classify_then_generate(
     generate_prompt: str,
     max_tokens: int = 512,
 ) -> dict:
-    """Llama 분류 후 ExaOne 생성. Chat MCP → Chat Spoke call_tool. {text} 치환 지원."""
+    """ExaOne 생성. Chat MCP → Chat Spoke. {text} 치환 지원. (채팅은 ExaOne만 사용)"""
     from fastmcp.client import Client  # type: ignore
     url = get_chat_mcp_url()
     async with Client(url) as client:
@@ -110,7 +100,7 @@ async def analyze_email(
 
 @mcp.tool
 async def classify_spam(email_metadata: dict) -> str:
-    """Llama 스팸 분류. Spam MCP → Spam Spoke call_tool."""
+    """LLaMA 스팸 분류. Spam MCP → Spam Spoke call_tool. (런타임 LLaMA 유일 사용처.)"""
     from fastmcp.client import Client  # type: ignore
     url = get_spam_mcp_url()
     async with Client(url) as client:
@@ -122,7 +112,7 @@ def get_http_app():
     """Fast MCP ASGI 앱: GET /health + MCP 프로토콜(/server)."""
     from fastapi import FastAPI  # type: ignore
 
-    wrapper = FastAPI(title="MCP (Llama + ExaOne)", tags=["MCP"])
+    wrapper = FastAPI(title="MCP (ExaOne + Spam LLaMA)", tags=["MCP"])
 
     @wrapper.get("/health")
     async def health():

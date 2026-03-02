@@ -155,6 +155,18 @@ class Settings(BaseSettings):
     )
 
     # ===================
+    # LLaMA (스팸 분류)
+    # ===================
+    llama_model_id: str = Field(
+        default="unsloth/Llama-3.2-3B-Instruct",
+        description="LLaMA 스팸 분류 베이스 모델 ID (HF). 학습·추론 공통.",
+    )
+    llama_use_spam_adapter: bool = Field(
+        default=True,
+        description="스팸 LoRA 어댑터 로드 여부. True면 artifacts/fine_tuned/llama/adapters 사용 (ExaOne competency_adapters와 동일 전략).",
+    )
+
+    # ===================
     # API 키
     # ===================
     openai_api_key: Optional[str] = Field(
@@ -168,6 +180,18 @@ class Settings(BaseSettings):
     gemini_model: str = Field(
         default="gemini-2.5-flash",
         description="Gemini 모델 ID (예: gemini-2.5-flash, gemini-2.0-flash). 404 시 공식 문서 모델명 확인.",
+    )
+
+    # ===================
+    # Mailgun (수신 Webhook)
+    # ===================
+    mailgun_webhook_signing_key: Optional[str] = Field(
+        default=None,
+        description="Mailgun Webhook Signing Key (HMAC 검증). 대시보드에서 확인.",
+    )
+    mailgun_skip_verify: bool = Field(
+        default=False,
+        description="True면 Mailgun HMAC 검증 생략 (로컬/개발용).",
     )
 
     # ===================

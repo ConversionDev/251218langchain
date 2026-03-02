@@ -21,7 +21,6 @@ if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 # EXAONE 학습 시 Unsloth SFTTrainer 패치 방지
-# 이 환경 변수는 lora_adapter.py에서도 설정되지만, 여기서 먼저 설정
 os.environ["UNSLOTH_DISABLE_TRAINER_PATCH"] = "1"
 
 from core.llm.providers.llama import LLaMAGate  # type: ignore  # noqa: E402
@@ -70,8 +69,8 @@ class OptimizedTrainingPipeline:
             shutil.rmtree(self.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 필터링된 데이터 저장 경로
-        self.filtered_data_dir = get_data_dir() / "email" / "sft" / "filtered"
+        # 필터링된 데이터 저장 경로 (스팸 SFT 기준)
+        self.filtered_data_dir = get_data_dir() / "spam" / "sft" / "filtered"
 
     def run(self) -> Path:
         """전체 파이프라인 실행.
@@ -84,8 +83,8 @@ class OptimizedTrainingPipeline:
         print("=" * 60)
         print()
 
-        # 경로 자동 탐지
-        data_dir = get_data_dir() / "email" / "sft" / "processed"
+        # 경로 자동 탐지 (스팸 SFT: train/val 분할 파일)
+        data_dir = get_data_dir() / "spam" / "sft"
         train_path = data_dir / "train.jsonl"
         val_path = data_dir / "val.jsonl"
 

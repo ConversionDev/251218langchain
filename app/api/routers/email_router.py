@@ -3,23 +3,32 @@
 메일함(받은/보낸/임시보관/휴지통) CRUD, 전송, 스팸 필터링, 메일 분류(성과/5대 역량) API.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from core.database import get_db  # type: ignore
+from domain.hub.mail import MailgunProvider, NormalizedInboundMail  # type: ignore
 from domain.hub.orchestrators import run_email_classify_and_record, run_spam_detection  # type: ignore
 from domain.hub.repositories.mail_item_repository import (  # type: ignore
+    REJECTED_FOLDER,
+    REJECTED_OWNER_PLACEHOLDER,
     create as mail_item_create,
+    get_by_external_id as mail_item_get_by_external_id,
     get_by_id as mail_item_get,
     list_by_folder as mail_item_list,
     move_to_trash as mail_item_trash,
+    reset_failed_to_pending as mail_item_reset_failed_to_pending,
     update as mail_item_update,
 )
+from domain.hub.shared.mail_owner_resolver import resolve_owner_by_to_email  # type: ignore
 from domain.models import EmailRequest, EmailResponse  # type: ignore
+from domain.models.enums.mail_enums import AiStatus, MailReceiveStatus  # type: ignore
 
 email_router = APIRouter(prefix="/mail", tags=["mail"])
 
@@ -105,10 +114,170 @@ def list_mail(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
-    """폴더별 메일 목록. 받은/보낸/임시보관/휴지통 공통."""
-    if folder not in ("inbox", "sent", "draft", "trash"):
-        raise HTTPException(status_code=400, detail="folder must be inbox, sent, draft, or trash")
+    """폴더별 메일 목록. 받은/보낸/임시보관/휴지통/스팸 공통."""
+    if folder not in ("inbox", "sent", "draft", "trash", "spam"):
+        raise HTTPException(status_code=400, detail="folder must be inbox, sent, draft, trash, or spam")
     return mail_item_list(db, folder=folder, owner_employee_id=ownerEmployeeId, limit=limit, offset=offset)
+
+
+# ---------------------------------------------------------------------------
+# 수신 (Webhook) — Store-then-Process. 스팸 판정/성과 분류는 워커에서.
+# ---------------------------------------------------------------------------
+
+class ReceiveMailBody(BaseModel):
+    """수신 1건 (테스트용 JSON). 멱등: external_id 존재 시 200. Resolver 실패 시 REJECTED 저장 후 200."""
+
+    to_email: str = Field(..., min_length=1, description="수신자 To 주소")
+    from_display: str = Field("", description="발신자 표시명")
+    from_email: Optional[str] = Field(None, description="발신자 이메일")
+    subject: str = Field("", description="제목")
+    body: Optional[str] = Field(None, description="본문")
+    message_id: Optional[str] = Field(None, description="Message-ID (external_id). 중복 시 200 OK 멱등")
+    received_at: Optional[str] = Field(None, description="수신 시각 ISO8601. 없으면 now()")
+
+
+def _save_inbound(
+    db: Session,
+    to_email: str,
+    from_display: str,
+    from_email: Optional[str],
+    subject: str,
+    body: Optional[str],
+    message_id: Optional[str],
+    received_at: datetime,
+) -> tuple[Dict[str, Any], str, int, bool]:
+    """
+    수신 1건 저장 (Store-then-Process). 스팸/성과 분류 없음.
+    Returns: (record_or_existing, folder, status_code, already_stored).
+    """
+    external_id = (message_id or "").strip() or None
+    # 멱등: 이미 있으면 200
+    if external_id:
+        existing = mail_item_get_by_external_id(db, external_id)
+        if existing:
+            return (existing, existing.get("folder") or "inbox", 200, True)
+    owner = resolve_owner_by_to_email(db, to_email.strip())
+    if not owner:
+        record = mail_item_create(
+            db,
+            folder=REJECTED_FOLDER,
+            owner_employee_id=REJECTED_OWNER_PLACEHOLDER,
+            from_display=from_display or "",
+            from_email=from_email,
+            to_email=to_email.strip(),
+            subject=subject or "",
+            body=body,
+            received_at=received_at,
+            external_id=external_id,
+            is_unread=True,
+            status=MailReceiveStatus.REJECTED.value,
+            ai_status=None,
+            spam_score=None,
+        )
+        return (record, REJECTED_FOLDER, 200, False)
+    record = mail_item_create(
+        db,
+        folder="inbox",
+        owner_employee_id=owner,
+        from_display=from_display or "",
+        from_email=from_email,
+        to_email=to_email.strip(),
+        subject=subject or "",
+        body=body,
+        received_at=received_at,
+        external_id=external_id,
+        is_unread=True,
+        status=MailReceiveStatus.RECEIVED.value,
+        ai_status=AiStatus.PENDING.value,
+        spam_score=None,
+    )
+    return (record, "inbox", 201, False)
+
+
+@email_router.post("/receive")
+def receive_mail_api(
+    body: ReceiveMailBody,
+    db: Session = Depends(get_db),
+):
+    """수신 메일 1건 저장 (Store-then-Process). external_id 중복 시 200 OK. Resolver 실패 시 REJECTED 저장 후 200."""
+    received_at = datetime.now(timezone.utc)
+    if body.received_at and body.received_at.strip():
+        try:
+            received_at = datetime.fromisoformat(body.received_at.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    record, folder, status_code, already = _save_inbound(
+        db,
+        to_email=body.to_email.strip(),
+        from_display=body.from_display or "",
+        from_email=body.from_email,
+        subject=body.subject or "",
+        body=body.body,
+        message_id=body.message_id,
+        received_at=received_at,
+    )
+    return JSONResponse(
+        status_code=status_code,
+        content={"status": "received", "mail": record, "folder": folder, "already_stored": already},
+    )
+
+
+@email_router.post("/receive/webhook/mailgun")
+async def receive_mailgun_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Mailgun Webhook. multipart/form-data → parse_and_verify → 저장. 검증 실패 시 401."""
+    form = await request.form()
+    payload = {}
+    for k, v in form.items():
+        if hasattr(v, "read"):
+            continue
+        if isinstance(v, bytes):
+            payload[k] = v.decode("utf-8", errors="replace")
+        else:
+            payload[k] = v
+    try:
+        normalized = MailgunProvider().parse_and_verify(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    received_at = normalized.received_at or datetime.now(timezone.utc)
+    record, folder, status_code, already = _save_inbound(
+        db,
+        to_email=normalized.to_email,
+        from_display=normalized.from_display or "",
+        from_email=normalized.from_email,
+        subject=normalized.subject or "",
+        body=normalized.body,
+        message_id=normalized.message_id,
+        received_at=received_at,
+    )
+    return JSONResponse(
+        status_code=status_code,
+        content={"status": "received", "mail": record, "folder": folder, "already_stored": already},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 메일 단건 조회·수정·재처리 (경로 파라미터 — 구체 경로를 먼저 선언)
+# ---------------------------------------------------------------------------
+
+@email_router.post("/{mail_id}/retry", response_model=Dict[str, Any])
+def retry_mail_processing(
+    mail_id: str,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """FAILED 메일을 PENDING으로 되돌려 워커가 재분류하도록 함. retry_count <= 3 인 경우만."""
+    item = mail_item_get(db, mail_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Mail not found")
+    updated = mail_item_reset_failed_to_pending(db, mail_id, max_retry_count=3)
+    if not updated:
+        raise HTTPException(
+            status_code=400,
+            detail="Mail is not FAILED or retry_count exceeds limit (3). Cannot retry.",
+        )
+    return {"status": "queued_for_retry", "mail": updated}
 
 
 @email_router.get("/{mail_id}", response_model=Dict[str, Any])

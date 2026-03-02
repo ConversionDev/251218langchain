@@ -76,7 +76,7 @@ from unsloth import FastLanguageModel  # noqa: E402
 from typing import Any, Dict, List, Optional
 
 from datasets import Dataset  # noqa: E402
-from core.paths import get_data_dir, get_output_dir  # type: ignore
+from core.paths import get_llama_adapters_dir, get_spam_sft_dir  # type: ignore
 from domain.hub.shared.utils import (  # type: ignore
     extract_email_metadata,
     format_email_text,
@@ -117,9 +117,9 @@ class LLaMATrainer:
 
         self.device = "cuda"
 
-        # 출력 디렉토리 설정 (Exaone과 동일한 구조)
+        # 출력 디렉토리 설정 (ExaOne과 동일 전략: core.paths.get_llama_adapters_dir)
         if output_dir is None:
-            output_dir = get_output_dir() / "llama" / "adapters"
+            output_dir = get_llama_adapters_dir()
         else:
             output_dir = Path(output_dir)
 
@@ -535,10 +535,13 @@ def main():
 
     args = parser.parse_args()
 
-    # 경로 자동 탐지
+    # 경로 자동 탐지 (스팸 SFT만 사용)
     if args.train_path is None:
-        data_dir = get_data_dir() / "email" / "sft" / "processed"
-        args.train_path = str(data_dir / "train.jsonl")
+        spam_sft = get_spam_sft_dir()
+        exaone_synthetic = spam_sft / "exaone_synthetic.jsonl"
+        args.train_path = str(exaone_synthetic)
+        if not exaone_synthetic.exists():
+            print("[INFO] exaone_synthetic.jsonl 없음. 먼저 run_exaone_generate_spam_sft 실행 후 재시도하세요.")
 
     if args.val_path:
         args.val_path = str(Path(args.val_path))

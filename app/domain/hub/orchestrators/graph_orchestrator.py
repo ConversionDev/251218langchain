@@ -893,12 +893,14 @@ def _infer_job_title_part(query: str) -> Optional[str]:
 
 
 def _infer_department_part(query: str) -> Optional[str]:
-    """질의에서 부서 키워드를 추정해 list_for_chat의 department_part로 사용."""
+    """질의에서 부서 키워드를 추정해 list_for_chat의 department_part로 사용. 부서명은 개발·IT로 통일."""
     if not query or not query.strip():
         return None
     q = query.strip().lower()
     q_no_space = q.replace(" ", "")
     if "개발·it" in q or "개발/it" in q or "개발it" in q_no_space:
+        return "개발·IT"
+    if "기술" in q:  # 부서명 통일: 기술/기술팀 등 → 개발·IT
         return "개발·IT"
     for token in ("영업", "마케팅", "인사", "재무", "전략기획", "경영지원", "감사"):
         if token in q_no_space:

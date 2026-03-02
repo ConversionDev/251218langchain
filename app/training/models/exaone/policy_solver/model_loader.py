@@ -10,7 +10,7 @@ ETL Load: Prepare Training Dataset and Model
 4. 데이터셋을 모델 입력 형태로 변환
 5. 학습 준비 완료
 
-입력: sft_to_train_val_split.py가 생성한 train.jsonl, val.jsonl
+입력: run_exaone_generate_spam_sft가 생성한 spam/sft/train.jsonl, val.jsonl
 출력: 학습 준비 완료된 모델 및 데이터셋
 """
 
@@ -460,24 +460,22 @@ class TrainingDataLoader:
 
 def main():
     """메인 실행 함수."""
-    from core.paths import get_data_dir  # type: ignore
-    data_dir = get_data_dir() / "email" / "sft" / "processed"
+    from core.paths import get_spam_sft_dir  # type: ignore
+    data_dir = get_spam_sft_dir()
 
-    # 입력 파일
+    # 입력 파일 (exaone_synthetic.jsonl 생성 후 train/val 분할하여 두거나 --train_path/--val_path 사용)
     train_path = data_dir / "train.jsonl"
     val_path = data_dir / "val.jsonl"
 
     # 파일 존재 확인
     if not train_path.exists():
         print(f"[ERROR] Train 파일을 찾을 수 없습니다: {train_path}")
-        print(
-            "[INFO] 먼저 sft_to_train_val_split.py를 실행하여 train.jsonl 파일을 생성하세요."
-        )
+        print("[INFO] run_exaone_generate_spam_sft 실행 후 train/val 분할하여 train.jsonl을 spam/sft/에 두세요.")
         return
 
     if not val_path.exists():
         print(f"[ERROR] Validation 파일을 찾을 수 없습니다: {val_path}")
-        print("[INFO] 먼저 sft_to_train_val_split.py를 실행하여 val.jsonl 파일을 생성하세요.")
+        print("[INFO] train/val 분할 후 val.jsonl을 spam/sft/에 두세요.")
         return
 
     # TrainingDataLoader 생성
