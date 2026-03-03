@@ -13,15 +13,6 @@ jobs:
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-      MAILGUN_WEBHOOK_SIGNING_KEY: ${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
-      MAILGUN_SKIP_VERIFY: ${{ secrets.MAILGUN_SKIP_VERIFY }}
-      MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-      MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
-      KECI_SERVICE_KEY: ${{ secrets.KECI_SERVICE_KEY }}
       APP_DIR: /home/ubuntu/app
       VENV_DIR: /home/ubuntu/venv
       LOG_FILE: /home/ubuntu/app.log
@@ -79,15 +70,6 @@ jobs:
             LOG_FILE=/home/ubuntu/app.log
             PID_FILE=/home/ubuntu/app.pid
             OPENAI_API_KEY_VALUE="$OPENAI_API_KEY"
-            DATABASE_URL_VALUE="$DATABASE_URL"
-            GEMINI_API_KEY_VALUE="$GEMINI_API_KEY"
-            UPSTASH_REDIS_REST_URL_VALUE="$UPSTASH_REDIS_REST_URL"
-            UPSTASH_REDIS_REST_TOKEN_VALUE="$UPSTASH_REDIS_REST_TOKEN"
-            MAILGUN_WEBHOOK_SIGNING_KEY_VALUE="$MAILGUN_WEBHOOK_SIGNING_KEY"
-            MAILGUN_SKIP_VERIFY_VALUE="$MAILGUN_SKIP_VERIFY"
-            MAILGUN_DOMAIN_VALUE="$MAILGUN_DOMAIN"
-            MAILGUN_API_KEY_VALUE="$MAILGUN_API_KEY"
-            KECI_SERVICE_KEY_VALUE="$KECI_SERVICE_KEY"
 
             cd /home/ubuntu
 
@@ -131,17 +113,8 @@ jobs:
             # Python 경로 설정 (app.model import를 위해)
             export PYTHONPATH="$APP_DIR:\$PYTHONPATH"
 
-            # 환경 변수 설정 (GitHub Secrets → EC2 앱)
+            # 환경 변수 설정 (OPENAI_API_KEY는 Secrets, 나머지는 EC2 ~/.env에서 로드)
             export OPENAI_API_KEY="\$OPENAI_API_KEY_VALUE"
-            export DATABASE_URL="\$DATABASE_URL_VALUE"
-            export GEMINI_API_KEY="\$GEMINI_API_KEY_VALUE"
-            export UPSTASH_REDIS_REST_URL="\$UPSTASH_REDIS_REST_URL_VALUE"
-            export UPSTASH_REDIS_REST_TOKEN="\$UPSTASH_REDIS_REST_TOKEN_VALUE"
-            export MAILGUN_WEBHOOK_SIGNING_KEY="\$MAILGUN_WEBHOOK_SIGNING_KEY_VALUE"
-            export MAILGUN_SKIP_VERIFY="\$MAILGUN_SKIP_VERIFY_VALUE"
-            export MAILGUN_DOMAIN="\$MAILGUN_DOMAIN_VALUE"
-            export MAILGUN_API_KEY="\$MAILGUN_API_KEY_VALUE"
-            export KECI_SERVICE_KEY="\$KECI_SERVICE_KEY_VALUE"
             export HOST=0.0.0.0
             export PORT=8000
             export MODE=api
