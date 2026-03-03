@@ -41,10 +41,19 @@ jobs:
         run: |
           echo "🚀 Creating app directory and transferring files..."
           ssh $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR"
-          rsync -avz --delete \
+          # 메일건 웹훅 테스트용: 수신 API에 불필요한 항목 제외(배포 용량·시간 단축)
+          rsync -avz --delete --info=progress2 \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='.git' \
+            --exclude='artifacts/' \
+            --exclude='data/' \
+            --exclude='training/pipelines/' \
+            --exclude='training/models/' \
+            --exclude='training/data/' \
+            --exclude='scripts/' \
+            --timeout=300 \
+            -e "ssh -o ConnectTimeout=15 -o ServerAliveInterval=30" \
             app/ $EC2_USERNAME@$EC2_HOST:$APP_DIR/
           echo "✅ Files transferred"
 
