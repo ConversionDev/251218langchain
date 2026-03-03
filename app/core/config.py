@@ -61,11 +61,16 @@ class Settings(BaseSettings):
         없으면 POSTGRES_CONNECTION_STRING 또는 기본값을 사용합니다.
         """
         if self.database_url:
-            # DATABASE_URL에 sslmode가 없으면 추가
-            if "sslmode=" not in self.database_url:
-                separator = "&" if "?" in self.database_url else "?"
-                return f"{self.database_url}{separator}sslmode={self.sslmode}"
-            return self.database_url
+            from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+            parsed = urlparse(self.database_url)
+            query = parse_qs(parsed.query)
+            # channel_binding=require 시 EC2(일부 libpq)에서 invalid value 오류 나는 경우 방지
+            query.pop("channel_binding", None)
+            if "sslmode" not in query:
+                query["sslmode"] = [self.sslmode]
+            new_query = urlencode(query, doseq=True)
+            clean = urlunparse(parsed._replace(query=new_query))
+            return clean
 
         # POSTGRES_CONNECTION_STRING이 있으면 사용
         if self.postgres_connection_string:
