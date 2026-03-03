@@ -67,9 +67,20 @@ jobs:
               echo "✅ Virtual environment exists"
             fi
 
+            # 디스크 공간 확보 (small 인스턴스 대응)
+            echo "🧹 Freeing disk space..."
+            source $VENV_DIR/bin/activate
+            pip cache purge 2>/dev/null || true
+            rm -rf ~/.cache/pip 2>/dev/null || true
+            find $VENV_DIR -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+            find $APP_DIR -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+            if [ -f $LOG_FILE ] && [ \$(wc -l < $LOG_FILE) -gt 2000 ]; then
+              tail -1000 $LOG_FILE > $LOG_FILE.tmp && mv $LOG_FILE.tmp $LOG_FILE
+            fi
+            df -h /
+
             # 패키지 설치
             echo "📥 Installing/upgrading packages..."
-            source $VENV_DIR/bin/activate
             pip install --upgrade pip --no-cache-dir
 
             # CPU 전용 torch 먼저 설치 (디스크 공간 절약)
