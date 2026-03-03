@@ -1,138 +1,113 @@
 """
 LLaMA 분류기 (판별기)
 
-역할: 빠른 1차 스팸 분류.
-- 구동 테스트용: 학습 전까지 USE_RULE_FOR_SPAM=True → 키워드 규칙만 사용 (ham → inbox, spam → spam).
-- 학습 후: USE_RULE_FOR_SPAM=False 로 바꾸고, 분류 헤드 체크포인트 로드 시 모델 추론 사용.
-
-분류 헤드 출력은 [spam, ham] 순으로 가정 (인덱스 0 = 스팸 확률).
+역할: 의미 기반 스팸 분류 — 내용(제목·발신자·본문)을 보고 스팸/정상을 구분.
+SFT 모델 generate 후 "스팸 확률: 0.xx" 파싱하여 분류.
 """
 
+import logging
 import re
 from typing import Any, Dict, List, Optional
 
 import torch
 from domain.hub.shared.utils import format_email_text  # type: ignore
-from torch import nn
 
-# True: 학습 전 구동 테스트용 — 규칙 기반만 사용. False로 바꾸고 헤드 로드 추가 시 모델 사용.
-USE_RULE_FOR_SPAM = True
+logger = logging.getLogger(__name__)
 
-# 규칙 기반: 아래 키워드가 제목+본문에 있으면 스팸으로 판단 (구동 테스트용)
-_SPAM_KEYWORDS = re.compile(
-    r"당첨|무료\s*혜택|클릭해|비밀번호\s*입력|한정\s*기간|지금\s*클릭|당첨되셨습니다|광고",
-    re.IGNORECASE,
-)
+# SFT 학습 시 사용한 프롬프트 형식 (finetune.py와 동일)
+_SFT_SYSTEM = "당신은 이메일 스팸 분류 전문가입니다. 이메일을 분석하여 스팸 확률을 0.0~1.0 사이 숫자로 답변하세요."
+_SPAM_PROB_PATTERN = re.compile(r"스팸\s*확률\s*:\s*([0-9.]+)", re.IGNORECASE)
 
 
-def _rule_based_predict(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
-    """학습 전 구동 테스트용. 키워드 규칙으로 spam/ham 판별. ham → inbox, spam → spam."""
-    subject = (email_metadata.get("subject") or "")[:500]
-    body = (email_metadata.get("body") or "")[:2000]
-    text = f"{subject} {body}"
-    matches = _SPAM_KEYWORDS.findall(text)
-    is_spam = len(matches) >= 1
-    spam_prob = 0.85 if is_spam else 0.15
-    label = "spam" if is_spam else "ham"
-    return {
-        "spam_prob": spam_prob,
-        "label": label,
-        "confidence": "high" if is_spam else "medium",
-        "model": "rule",
-    }
+def _build_sft_prompt(email_text: str) -> str:
+    """SFT 학습과 동일한 Llama 3.2 채팅 프롬프트 (generate 입력용)."""
+    return (
+        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+        f"{_SFT_SYSTEM}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n"
+        f"{email_text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+    )
+
+
+def _parse_spam_prob_from_output(text: str) -> float:
+    """생성된 텍스트에서 '스팸 확률: 0.xx' 파싱. 실패 시 0.5."""
+    m = _SPAM_PROB_PATTERN.search(text)
+    if not m:
+        return 0.5
+    try:
+        p = float(m.group(1))
+        return max(0.0, min(1.0, p))
+    except (ValueError, TypeError):
+        return 0.5
 
 
 class LLaMAClassifier:
-    """LLaMA 기반 스팸 분류기. USE_RULE_FOR_SPAM=True면 규칙만 사용(구동 테스트), False면 베이스+헤드 사용."""
+    """LLaMA SFT 모델 기반 스팸 분류기. 내용을 보고 스팸 확률 생성 후 파싱."""
 
     def __init__(self, device: Optional[str] = None):
-        """초기화. USE_RULE_FOR_SPAM=True면 로드는 하지 않음."""
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._model: Any = None
         self._tokenizer: Any = None
-        self._classifier_head: Optional[nn.Module] = None
-        self._use_rule: bool = False
 
     def load_model(self) -> None:
-        """USE_RULE_FOR_SPAM이면 규칙 모드만 설정. 아니면 Hub LlamaManager + 분류 헤드 로드."""
-        if USE_RULE_FOR_SPAM:
-            self._use_rule = True
-            return
+        """LlamaManager(베이스+스팸 LoRA) 로드."""
         if self._model is not None:
             return
         from core.resource_manager.llama_manager import get_llama_manager  # type: ignore
 
         manager = get_llama_manager()
-        base = manager.get_base_model()
-        tokenizer = manager.get_tokenizer()
-        self._model = base
-        self._tokenizer = tokenizer
-        hidden_size = base.config.hidden_size
-        device = next(base.parameters()).device
-        self._classifier_head = nn.Linear(hidden_size, 2).to(device)
+        self._model = manager.get_base_model()
+        self._tokenizer = manager.get_tokenizer()
         self._model.eval()
 
     def predict(
         self, email_metadata: Dict[str, Any], return_confidence: bool = True
     ) -> Dict[str, Any]:
-        """스팸 분류 예측. 규칙 모드면 키워드만 사용, 아니면 LLaMA+헤드."""
-        if getattr(self, "_use_rule", False):
-            out = _rule_based_predict(email_metadata)
-            if not return_confidence:
-                out.pop("confidence", None)
-            return out
-
+        """스팸 분류 예측. SFT 모델이 내용을 보고 generate 후 '스팸 확률' 파싱."""
         if self._model is None or self._tokenizer is None:
             raise ValueError("먼저 load_model()을 호출하세요.")
 
-        text = format_email_text(email_metadata)
-        # max_length: 입력 truncation 전용 (생성 제어는 generate 시 max_new_tokens만 사용)
+        email_text = format_email_text(email_metadata)
+        prompt = _build_sft_prompt(email_text)
         inputs = self._tokenizer(
-            text, return_tensors="pt", truncation=True, max_length=512, padding=True
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512,
+            padding=True,
         )
         device = next(self._model.parameters()).device
         inputs = {k: v.to(device) for k, v in inputs.items()}
 
         with torch.no_grad():
-            outputs = self._model(**inputs)
-            last_hidden = outputs.last_hidden_state
-            cls_embedding = last_hidden[0, 0, :]
-            logits = self._classifier_head(cls_embedding.unsqueeze(0))
+            out = self._model.generate(
+                **inputs,
+                max_new_tokens=24,
+                do_sample=False,
+                pad_token_id=self._tokenizer.eos_token_id,
+            )
+        # 입력 길이만큼 자른 뒤 디코딩
+        gen = out[0][inputs["input_ids"].shape[1] :]
+        decoded = self._tokenizer.decode(gen, skip_special_tokens=False)
+        spam_prob = _parse_spam_prob_from_output(decoded)
+        if spam_prob == 0.5 and not _SPAM_PROB_PATTERN.search(decoded):
+            logger.debug("LLaMA 스팸 파싱 실패(기본 0.5 사용). raw=%r", decoded[:200])
 
-        # 확률 계산 (이진 분류). 헤드 출력 [spam, ham] 순 가정 (인덱스 0 = 스팸).
-        if logits.shape[1] == 2:
-            probs = torch.softmax(logits, dim=-1)
-            spam_prob = probs[0][0].item()  # 스팸 클래스 확률
-        elif logits.shape[1] == 1:
-            spam_prob = torch.sigmoid(logits[0][0]).item()
-        else:
-            print(f"[WARNING] 예상치 못한 logits shape: {logits.shape}")
-            spam_prob = 0.5
-
-        # 라벨 결정: ham → 받은편지함, spam → 스팸함 (워커에서 folder 매핑)
         label = "spam" if spam_prob > 0.5 else "ham"
-
-        # 신뢰도 계산
         confidence = "high"
         if return_confidence:
-            # spam_prob가 0.5에 가까울수록 낮은 신뢰도
             distance_from_center = abs(spam_prob - 0.5)
-            if distance_from_center < 0.15:  # 0.35 ~ 0.65
+            if distance_from_center < 0.15:
                 confidence = "low"
-            elif distance_from_center < 0.3:  # 0.2 ~ 0.35 or 0.65 ~ 0.8
+            elif distance_from_center < 0.3:
                 confidence = "medium"
-            else:  # 0.0 ~ 0.2 or 0.8 ~ 1.0
-                confidence = "high"
 
-        result = {
+        result: Dict[str, Any] = {
             "spam_prob": spam_prob,
             "label": label,
             "model": "llama",
         }
-
         if return_confidence:
             result["confidence"] = confidence
-
         return result
 
     def predict_batch(

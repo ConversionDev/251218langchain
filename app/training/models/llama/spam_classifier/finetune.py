@@ -76,7 +76,11 @@ from unsloth import FastLanguageModel  # noqa: E402
 from typing import Any, Dict, List, Optional
 
 from datasets import Dataset  # noqa: E402
-from core.paths import get_llama_adapters_dir, get_spam_sft_dir  # type: ignore
+from core.paths import (  # type: ignore
+    get_llama_adapters_dir,
+    get_project_root,
+    get_spam_sft_dir,
+)
 from domain.hub.shared.utils import (  # type: ignore
     extract_email_metadata,
     format_email_text,
@@ -93,7 +97,7 @@ class LLaMATrainer:
         self,
         model_id: str = "unsloth/Llama-3.2-3B-Instruct",
         output_dir: Optional[Path] = None,
-        max_seq_length: int = 256,  # 1 에포크 최적화: 512 -> 256 (속도/메모리 개선)
+        max_seq_length: int = 1024,  # 전략 A: 데이터 전부 활용·본문 미절단 (512: 더 빠름, 2048: 더 긴 메일)
         load_in_4bit: bool = True,
     ):
         """초기화.
@@ -200,36 +204,34 @@ class LLaMATrainer:
             traceback.print_exc()
             raise
 
-    def prepare_dataset(self, sft_data: List[Dict[str, Any]]) -> Dataset:
+    def prepare_dataset(
+        self,
+        sft_data: List[Dict[str, Any]],
+        tokenizer: Any = None,
+    ) -> Dataset:
         """SFT 데이터를 프롬프트 형식으로 변환.
 
-        Args:
-            sft_data: SFT 형식 데이터 리스트
-
-        Returns:
-            HuggingFace Dataset
+        app/data/spam 소스 파일은 읽기만 하고 수정하지 않음.
+        본문은 잘리지 않음. tokenizer가 주어지면 max_seq_length 초과 샘플만 학습에서 제외 → Unsloth 길이 오류 방지.
         """
         print("[INFO] 데이터셋 준비 중...")
         texts = []
+        max_tokens = self.max_seq_length
+        n_skipped = 0
 
         for item in sft_data:
-            # 이메일 메타데이터 추출
             email_metadata = extract_email_metadata(item)
             email_text = format_email_text(email_metadata)
 
-            # 라벨 추출 (output.action에서)
             output = item.get("output", {})
             action = output.get("action", "")
-
-            # BLOCK = spam, ALLOW = ham
             if action == "BLOCK":
-                label = "0.95"  # 스팸 확률 높음
+                label = "0.95"
             elif action == "ALLOW":
-                label = "0.05"  # 스팸 확률 낮음
+                label = "0.05"
             else:
                 continue
 
-            # Unsloth 프롬프트 형식
             prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 당신은 이메일 스팸 분류 전문가입니다. 이메일을 분석하여 스팸 확률을 0.0~1.0 사이 숫자로 답변하세요.<|eot_id|><|start_header_id|>user<|end_header_id|>
@@ -238,30 +240,36 @@ class LLaMATrainer:
 
 스팸 확률: {label}<|eot_id|>"""
 
+            # 본문 훼손 없음: 초과 샘플만 제외. Unsloth 길이 오류 방지.
+            if tokenizer is not None:
+                ids = tokenizer.encode(prompt, add_special_tokens=False, truncation=False)
+                if len(ids) > max_tokens:
+                    n_skipped += 1
+                    continue
+
             texts.append(prompt)
 
+        if n_skipped:
+            print(f"[INFO] 본문 미절단 원칙: max_seq_length({max_tokens}) 초과로 {n_skipped}건 제외 (학습에 사용 안 함)")
         print(f"[OK] 데이터 준비 완료: {len(texts)}개")
         print()
 
-        # Dataset 생성
-        dataset = Dataset.from_dict({"text": texts})
-
-        return dataset
+        return Dataset.from_dict({"text": texts})
 
     def train(
         self,
         train_data: List[Dict[str, Any]],
         val_data: Optional[List[Dict[str, Any]]] = None,
-        num_epochs: int = 1,  # 1 에포크 최적화: 3 -> 1
-        per_device_train_batch_size: int = 32,  # 1 에포크 최적화: 16 -> 32 (속도 향상)
-        per_device_eval_batch_size: int = 32,  # 1 에포크 최적화: 16 -> 32
-        learning_rate: float = 3e-4,  # 1 에포크 최적화: 2e-4 -> 3e-4 (빠른 수렴)
-        warmup_steps: int = 10,  # 1 에포크 최적화: 50 -> 10 (짧은 학습)
+        num_epochs: int = 3,  # 3 에포크: 데이터 반영·안정성 (속도와 균형)
+        per_device_train_batch_size: int = 32,
+        per_device_eval_batch_size: int = 32,
+        learning_rate: float = 2e-4,  # 3 에포크용 안정 수렴
+        warmup_steps: int = 50,  # 3 에포크 시 워밍업 여유
         logging_steps: int = 10,
-        save_steps: int = 200,  # 안정성 고려: 500 -> 200 (체크포인트 보장)
-        save_total_limit: int = 2,  # 안정성 고려: 1 -> 2 (초기 + 최신 체크포인트 유지)
-        gradient_accumulation_steps: int = 1,  # 1 에포크 최적화: 2 -> 1 (배치 크기 증가로 조정)
-        eval_strategy: str = "epoch",  # 1 에포크 최적화: 에포크 끝에 평가 (1번만)
+        save_steps: int = 150,  # 에포크당 2회 전후 체크포인트
+        save_total_limit: int = 3,  # 최근 3개 체크포인트 유지
+        gradient_accumulation_steps: int = 1,
+        eval_strategy: str = "epoch",  # 에포크 끝 평가
         eval_steps: Optional[int] = None,
         disable_eval: bool = False,  # 평가 기본 활성화 (모니터링 중요)
     ) -> Path:
@@ -270,16 +278,16 @@ class LLaMATrainer:
         Args:
             train_data: 학습 데이터 (SFT 형식)
             val_data: 검증 데이터 (SFT 형식, None이면 train에서 분할)
-            num_epochs: 학습 에포크 수 (기본값: 1, 1 에포크 최적화)
-            per_device_train_batch_size: 디바이스당 학습 배치 크기 (기본값: 32, 1 에포크 최적화)
+            num_epochs: 학습 에포크 수 (기본값: 3, 데이터·안정성)
+            per_device_train_batch_size: 디바이스당 학습 배치 크기 (기본값: 32)
             per_device_eval_batch_size: 디바이스당 평가 배치 크기 (기본값: 32)
-            learning_rate: 학습률 (기본값: 3e-4, 1 에포크 최적화)
-            warmup_steps: 워밍업 스텝 수 (기본값: 10, 1 에포크 최적화)
+            learning_rate: 학습률 (기본값: 2e-4, 3 에포크 안정 수렴)
+            warmup_steps: 워밍업 스텝 수 (기본값: 50)
             logging_steps: 로깅 스텝 수
-            save_steps: 저장 스텝 수 (기본값: 200, 안정성 고려)
-            save_total_limit: 최대 체크포인트 수 (기본값: 2, 초기 + 최신 유지)
-            gradient_accumulation_steps: 그래디언트 누적 스텝 수 (기본값: 1, 1 에포크 최적화)
-            eval_strategy: 평가 전략 (기본값: "epoch", 1 에포크이므로 1번만 평가)
+            save_steps: 저장 스텝 수 (기본값: 150)
+            save_total_limit: 최대 체크포인트 수 (기본값: 3)
+            gradient_accumulation_steps: 그래디언트 누적 스텝 수 (기본값: 1)
+            eval_strategy: 평가 전략 (기본값: "epoch")
             eval_steps: 평가 빈도 (None이면 eval_strategy에 따라 결정)
             disable_eval: 평가 비활성화 (기본값: False, 평가 유지 권장)
 
@@ -294,8 +302,8 @@ class LLaMATrainer:
         print("=" * 60)
         print()
 
-        # 데이터셋 준비
-        train_dataset = self.prepare_dataset(train_data)
+        # 데이터셋 준비 (토크나이저로 길이 검사 → Unsloth max_seq_length 초과 방지)
+        train_dataset = self.prepare_dataset(train_data, tokenizer=self.tokenizer)
 
         if val_data is None:
             # train에서 10% 분할
@@ -303,19 +311,18 @@ class LLaMATrainer:
             train_dataset = split_dataset["train"]
             val_dataset = split_dataset["test"]
         else:
-            val_dataset = self.prepare_dataset(val_data)
+            val_dataset = self.prepare_dataset(val_data, tokenizer=self.tokenizer)
 
         print(f"[INFO] 학습 데이터: {len(train_dataset)}개")
         print(f"[INFO] 검증 데이터: {len(val_dataset)}개")
         print()
 
-        # 평가 전략 설정 (1 에포크 최적화: 에포크 끝에 평가)
+        # 평가 전략 설정 (에포크 끝 평가)
         if disable_eval:
             final_eval_strategy = "no"
             final_eval_steps = None
         else:
             final_eval_strategy = eval_strategy
-            # 1 에포크이므로 "epoch" 전략이 효율적 (1번만 평가)
             if final_eval_strategy == "epoch":
                 final_eval_steps = None
             else:
@@ -358,7 +365,7 @@ class LLaMATrainer:
             # 체크포인트 복구 설정 (안정성)
             resume_from_checkpoint=False,  # 명시적으로 새 학습 시작
             overwrite_output_dir=True,  # 기존 디렉토리 덮어쓰기
-            load_best_model_at_end=False,  # 1 에포크이므로 최적 모델 선택 불필요
+            load_best_model_at_end=False,
             # 데이터 로더 설정 (Windows 안정성)
             dataloader_num_workers=0,  # Windows 멀티프로세싱 문제 방지
             dataloader_pin_memory=False,  # Windows 안정성
@@ -379,6 +386,22 @@ class LLaMATrainer:
             data_collator=DataCollatorForSeq2Seq(tokenizer=self.tokenizer),
             args=training_args,
         )
+
+        # 예상 총 스텝 수 (학습 전 안내)
+        num_devices = max(1, torch.cuda.device_count())
+        batch_size_effective = (
+            per_device_train_batch_size
+            * gradient_accumulation_steps
+            * num_devices
+        )
+        total_steps = num_epochs * (
+            (len(train_dataset) + batch_size_effective - 1) // batch_size_effective
+        )
+        print("[INFO] 학습 예상:")
+        print(f"  - 예상 총 스텝: {total_steps}")
+        print(f"  - 로깅: 매 {logging_steps}스텝, 체크포인트 저장: 매 {save_steps}스텝")
+        print(f"  - 학습 중 진행률 표시되며, 종료 시 총 소요 시간·초당 샘플 수 출력")
+        print()
 
         # 학습 시작 시 초기 체크포인트 저장 (학습 실패 시 보존)
         # save_total_limit에 포함되지 않으므로 별도로 보존
@@ -506,26 +529,26 @@ def main():
     parser.add_argument(
         "--num_epochs",
         type=int,
-        default=1,
-        help="학습 에포크 수 (기본값: 1, 1 에포크 최적화)",
+        default=3,
+        help="학습 에포크 수 (기본값: 3, 데이터·안정성)",
     )
     parser.add_argument(
         "--batch_size",
         type=int,
         default=32,
-        help="배치 크기 (기본값: 32, 1 에포크 최적화)",
+        help="배치 크기 (기본값: 32)",
     )
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=3e-4,
-        help="학습률 (기본값: 3e-4, 1 에포크 최적화)",
+        default=2e-4,
+        help="학습률 (기본값: 2e-4, 3 에포크 안정 수렴)",
     )
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=256,
-        help="최대 시퀀스 길이 (기본값: 256, 1 에포크 최적화)",
+        default=1024,
+        help="최대 시퀀스 길이 (기본값: 1024, 전략 A. 512=빠름, 2048=긴 메일 전부)",
     )
     parser.add_argument(
         "--disable_eval",
@@ -535,16 +558,24 @@ def main():
 
     args = parser.parse_args()
 
-    # 경로 자동 탐지 (스팸 SFT만 사용)
+    # 경로: 상대 경로는 프로젝트 루트 기준 (os.chdir으로 cwd가 바뀌어도 동작하도록)
+    project_root = get_project_root()
     if args.train_path is None:
         spam_sft = get_spam_sft_dir()
         exaone_synthetic = spam_sft / "exaone_synthetic.jsonl"
         args.train_path = str(exaone_synthetic)
         if not exaone_synthetic.exists():
             print("[INFO] exaone_synthetic.jsonl 없음. 먼저 run_exaone_generate_spam_sft 실행 후 재시도하세요.")
-
+    else:
+        train_path = Path(args.train_path)
+        if not train_path.is_absolute():
+            train_path = project_root / args.train_path
+        args.train_path = str(train_path)
     if args.val_path:
-        args.val_path = str(Path(args.val_path))
+        val_path = Path(args.val_path)
+        if not val_path.is_absolute():
+            val_path = project_root / args.val_path
+        args.val_path = str(val_path)
 
     # 데이터 로드
     print("[INFO] 데이터 로드 중...")

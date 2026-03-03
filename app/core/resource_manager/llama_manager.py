@@ -93,7 +93,7 @@ class LlamaManager:
                                     self._base_model, str(adapter_dir)
                                 )
                                 self._base_model.eval()
-                                print("[OK] LLaMA 스팸 어댑터 로드 완료 (llama/adapters)")
+                                print("[OK] LLaMA 스팸 어댑터 로드 완료 (llama/spam_adapters)")
                             except Exception as e:
                                 print(f"[WARN] LLaMA 스팸 어댑터 로드 실패, 베이스만 사용: {e}")
         return self._base_model

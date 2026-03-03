@@ -75,7 +75,7 @@
 | **sft** | 학습용 SFT, processed/filtered 등 |
 
 **도메인**: disclosure/, spam/sft(exaone_synthetic.jsonl 등). **학습 출력**: `app/artifacts/fine_tuned/` (ExaOne LoRA, LLaMA 어댑터).  
-**ExaOne 학습**: `training.models.exaone.policy_solver.full_pipeline` 만 사용. 역량 SFT: `training.pipelines.sft.run_sft_training`.
+**ExaOne 학습**: 역량 SFT만 사용 — `training.pipelines.sft.run_sft_training` (competency_adapters).
 
 ### 배포
 

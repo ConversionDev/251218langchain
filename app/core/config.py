@@ -163,7 +163,7 @@ class Settings(BaseSettings):
     )
     llama_use_spam_adapter: bool = Field(
         default=True,
-        description="스팸 LoRA 어댑터 로드 여부. True면 artifacts/fine_tuned/llama/adapters 사용 (ExaOne competency_adapters와 동일 전략).",
+        description="스팸 LoRA 어댑터 로드 여부. True면 artifacts/fine_tuned/llama/spam_adapters 사용.",
     )
 
     # ===================
@@ -183,7 +183,7 @@ class Settings(BaseSettings):
     )
 
     # ===================
-    # Mailgun (수신 Webhook)
+    # Mailgun (수신 Webhook + 발송)
     # ===================
     mailgun_webhook_signing_key: Optional[str] = Field(
         default=None,
@@ -192,6 +192,14 @@ class Settings(BaseSettings):
     mailgun_skip_verify: bool = Field(
         default=False,
         description="True면 Mailgun HMAC 검증 생략 (로컬/개발용).",
+    )
+    mailgun_api_key: Optional[str] = Field(
+        default=None,
+        description="Mailgun API Key (발송용). 대시보드 API Keys에서 'Mail' 키.",
+    )
+    mailgun_domain: Optional[str] = Field(
+        default=None,
+        description="발송 도메인 (예: mg.kanggyeonggu.store). 메일건에 등록된 도메인.",
     )
 
     # ===================

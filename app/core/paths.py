@@ -127,12 +127,12 @@ def get_spam_sft_dir() -> Path:
 
 
 def get_llama_adapters_dir() -> Path:
-    """LLaMA 스팸 분류 LoRA 어댑터 저장 경로. ExaOne competency_adapters와 동일 전략.
+    """LLaMA 스팸 분류 LoRA 어댑터 저장 경로. exaone/competency_adapters와 같이 역할별 이름 사용.
 
     Returns:
-        app/artifacts/fine_tuned/llama/adapters/
+        app/artifacts/fine_tuned/llama/spam_adapters/
     """
-    return get_fine_tuned_dir() / "llama" / "adapters"
+    return get_fine_tuned_dir() / "llama" / "spam_adapters"
 
 
 def get_output_dir() -> Path:

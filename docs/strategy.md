@@ -73,7 +73,7 @@ rag_node → model_node(도구 필요 시 forced_tool_calls, 불필요 시 LLM 1
 
 # Part 3. LLaMA 스팸 관리 (한국어 스팸 메일 중심)
 
-- **경로**: `get_llama_adapters_dir()` → `app/artifacts/fine_tuned/llama/adapters/`. 학습·런타임 공통.
+- **경로**: `get_llama_adapters_dir()` → `app/artifacts/fine_tuned/llama/spam_adapters/`. 학습·런타임 공통.
 - **설정**: `llama_model_id`(베이스), `llama_use_spam_adapter`(True 시 어댑터 로드). 환경 변수 LLAMA_MODEL_ID, LLAMA_USE_SPAM_ADAPTER.
 - **로딩**: LlamaManager가 베이스+토크나이저 로드, 어댑터 유효 시 PEFT 부착.
 - **학습**: SFT 데이터 `app/data/spam/sft/`. `python -m training.models.llama.spam_classifier.finetune --train_path <path>`. 출력 미지정 시 get_llama_adapters_dir()에 저장.

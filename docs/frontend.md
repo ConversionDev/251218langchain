@@ -58,4 +58,4 @@
 | 워크스페이스 메일 | UI만(폴더·목록·읽기·쓰기). 전송/수신은 샘플, `/api/mail` 미호출. |
 | 회원가입/로그인 | 폼·유효성만, 실제 인증 API 미연동. |
 
-세부 라우트 트리·플로우는 이전 `frontend-flow-and-status.md`·`frontend-backend-api-mapping.md` 내용을 통합한 것입니다. 코드 상세는 `frontend/` 모듈과 [implementation-status.md](implementation-status.md)를 참고하면 됩니다.
+세부 라우트 트리·플로우는 이 문서에 통합해 두었습니다. 코드 상세는 `frontend/` 모듈과 [implementation-status.md](implementation-status.md)를 참고하면 됩니다.

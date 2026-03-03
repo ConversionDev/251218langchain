@@ -21,7 +21,7 @@
 ### 참고
 
 - 판정 기준: `action`이 **`deliver`** → `folder=inbox`, 그 외 → `folder=spam`.
-- 검증: [mail-strategy.md](mail-strategy.md) §11 스팸 판정 테스트(5단계) curl 예시로 확인.
+- 검증: [strategy.md](strategy.md) Part 1 §11 스팸 판정 테스트(5단계) curl 예시로 확인.
 
 ---
 
@@ -50,10 +50,8 @@
 
 ### 해결 방안
 
-- **단일 진입점**: ExaOne 이메일/정책 LoRA 학습은 **`training.models.exaone.policy_solver.full_pipeline`** 만 사용.
-- **제거된 파일**: `load_model.py`, `lora_adapter.py`, `optimized_training_pipeline.py` 삭제.
-- **역량 SFT**: 별도로 `training.pipelines.sft.run_sft_training` 사용.
-- runbook·README 등 문서에서 "ExaOne 학습은 policy_solver full_pipeline만 사용"으로 통일.
+- **ExaOne 학습**: 런타임에서 사용하는 건 **역량 SFT(competency_adapters)** 만. `training.pipelines.sft.run_sft_training` 사용.
+- **제거됨**: `policy_solver`(2에포크 LoRA, exaone/adapters)는 로드되지 않아 제거. 역량 SFT(4에포크, competency_adapters)만 유지.
 
 ---
 
@@ -170,11 +168,11 @@
 
 ### 해결 방안
 
-- **core.paths**: `get_llama_adapters_dir()` → `artifacts/fine_tuned/llama/adapters`.
+- **core.paths**: `get_llama_adapters_dir()` → `artifacts/fine_tuned/llama/spam_adapters`.
 - **core.config**: `llama_model_id`, `llama_use_spam_adapter` 추가.
 - **LlamaManager**: model_id는 설정에서, 어댑터 경로는 `get_llama_adapters_dir()`(및 final_model fallback) 사용.
 - **파인튜닝 스크립트**: 기본 출력을 `get_llama_adapters_dir()`로, **기본 train 경로는 스팸 SFT 우선**(exaone_synthetic.jsonl → 없으면 email/sft/processed)으로 통일.
-- **문서**: [llama-spam-management.md](llama-spam-management.md) 에 경로·설정·실행 방법 정리.
+- **문서**: [strategy.md](strategy.md) Part 3 에 경로·설정·실행 방법 정리.
 
 ---
 
@@ -189,7 +187,7 @@
 - **receive_mail_api** 에서 저장 후 **folder=inbox** 인 경우에만 **BackgroundTasks** 로 비동기 실행.
 - **`_run_inbox_classify_after_receive(subject, body, owner_employee_id)`**: 전용 DB 세션(SessionLocal)으로 **run_email_classify_and_record** 호출 → 성과로 판단되면 performance_records에 기록, 역량 태깅.
 - 실패 시 **로그만 남기고** 수신 응답은 이미 2xx로 반환된 상태 유지.
-- [mail-strategy.md](mail-strategy.md) §6, §7에 "AI 분석 연결 구현됨(inbox만)" 반영.
+- [strategy.md](strategy.md) Part 1 §6, §7에 "AI 분석 연결 구현됨(inbox만)" 반영.
 
 ---
 
@@ -198,4 +196,4 @@
 - **과거 이슈**: 이 문서(issues-and-resolutions.md)에 문제·해결을 기록하고, 필요 시 "레거시 이슈"로 참조.
 - **현재 문서**: runbook, implementation-status, backend, project-context 등은 **위 해결이 반영된 현재 코드 기준**으로만 서술.  
   "예정", "미구현"은 남기되, "이미 해결된 문제"는 이 문서로만 유지.
-- **통합**: 문서 수를 줄이기 위해 설계·이슈는 이 파일과 상세 설계 문서(mail-strategy, chat-rag-strategy, exaone-tool-calling-design 등)로만 링크하고, 중복 설명은 제거.
+- **통합**: 문서 수를 줄이기 위해 설계·이슈는 이 파일과 상세 문서(strategy, designs, mail 등)로만 링크하고, 중복 설명은 제거.

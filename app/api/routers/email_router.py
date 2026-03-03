@@ -7,13 +7,15 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from core.database import get_db  # type: ignore
+from core.config import get_settings  # type: ignore
+from core.database import SessionLocal, get_db  # type: ignore
 from domain.hub.mail import MailgunProvider, NormalizedInboundMail  # type: ignore
+from domain.hub.mail.send_mailgun import send_email as mailgun_send_email  # type: ignore
 from domain.hub.orchestrators import run_email_classify_and_record, run_spam_detection  # type: ignore
 from domain.hub.repositories.mail_item_repository import (  # type: ignore
     REJECTED_FOLDER,
@@ -26,6 +28,7 @@ from domain.hub.repositories.mail_item_repository import (  # type: ignore
     reset_failed_to_pending as mail_item_reset_failed_to_pending,
     update as mail_item_update,
 )
+from domain.hub.repositories.employee_repository import get_by_id as employee_get_by_id  # type: ignore
 from domain.hub.shared.mail_owner_resolver import resolve_owner_by_to_email  # type: ignore
 from domain.models import EmailRequest, EmailResponse  # type: ignore
 from domain.models.enums.mail_enums import AiStatus, MailReceiveStatus  # type: ignore
@@ -222,12 +225,42 @@ def receive_mail_api(
     )
 
 
+def _save_mailgun_inbound_background(
+    to_email: str,
+    from_display: str,
+    from_email: Optional[str],
+    subject: str,
+    body: Optional[str],
+    message_id: Optional[str],
+    received_at: datetime,
+) -> None:
+    """백그라운드에서 메일건 수신 1건 저장. 전용 세션 사용."""
+    db = SessionLocal()
+    try:
+        _save_inbound(
+            db,
+            to_email=to_email,
+            from_display=from_display,
+            from_email=from_email,
+            subject=subject,
+            body=body,
+            message_id=message_id,
+            received_at=received_at,
+        )
+        db.commit()
+    except Exception as e:
+        logging.getLogger(__name__).exception("Mailgun webhook background save failed: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
+
 @email_router.post("/receive/webhook/mailgun")
 async def receive_mailgun_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks,
 ):
-    """Mailgun Webhook. multipart/form-data → parse_and_verify → 저장. 검증 실패 시 401."""
+    """Mailgun Webhook. 검증 후 즉시 200, 저장은 백그라운드. 메일건 타임아웃 방지."""
     form = await request.form()
     payload = {}
     for k, v in form.items():
@@ -242,8 +275,8 @@ async def receive_mailgun_webhook(
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     received_at = normalized.received_at or datetime.now(timezone.utc)
-    record, folder, status_code, already = _save_inbound(
-        db,
+    background_tasks.add_task(
+        _save_mailgun_inbound_background,
         to_email=normalized.to_email,
         from_display=normalized.from_display or "",
         from_email=normalized.from_email,
@@ -253,8 +286,8 @@ async def receive_mailgun_webhook(
         received_at=received_at,
     )
     return JSONResponse(
-        status_code=status_code,
-        content={"status": "received", "mail": record, "folder": folder, "already_stored": already},
+        status_code=200,
+        content={"status": "accepted", "message": "Webhook received; storage in progress."},
     )
 
 
@@ -297,24 +330,71 @@ def send_mail_api(
     body: SendMailBody,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    """메일 발송 후 mail_items에 저장 (folder=sent)."""
+    """메일 발송: 직원/사내 주소면 DB만(보낸함+받은함), 외부 주소면 메일건 API 발송 후 보낸함 저장."""
     now = datetime.now(timezone.utc)
+    to_email = (body.to.email or "").strip()
+    sender = employee_get_by_id(db, body.senderEmployeeId) if body.senderEmployeeId else None
+    from_display = (sender.get("name") or "me") if sender else "me"
+    from_email = (sender.get("email") or "").strip() if sender else None
+
+    # 수신자가 사내(직원/주소록)인지 확인
+    recipient_owner_id = resolve_owner_by_to_email(db, to_email) if to_email else None
+
+    # 1) 보낸함 저장 (발신자 기준)
     record = mail_item_create(
         db,
         folder="sent",
         owner_employee_id=body.senderEmployeeId,
         from_employee_id=body.senderEmployeeId,
-        from_display="me",
-        from_email=None,
+        from_display=from_display,
+        from_email=from_email,
         to_address_id=body.to.id,
         to_display=body.to.displayName or body.to.id,
-        to_email=body.to.email,
+        to_email=to_email,
         subject=body.subject or "",
         body=body.body,
         sent_at=now,
         is_starred=False,
         is_unread=False,
     )
+
+    # 2) 직원/사내 → 수신자 받은함에 바로 생성 (메일건 미경유)
+    if recipient_owner_id:
+        mail_item_create(
+            db,
+            folder="inbox",
+            owner_employee_id=recipient_owner_id,
+            from_employee_id=body.senderEmployeeId,
+            from_display=from_display,
+            from_email=from_email,
+            to_address_id=body.to.id,
+            to_display=body.to.displayName or body.to.id,
+            to_email=to_email,
+            subject=body.subject or "",
+            body=body.body,
+            received_at=now,
+            is_starred=False,
+            is_unread=True,
+            status=MailReceiveStatus.RECEIVED.value,
+            ai_status=AiStatus.SUCCESS.value,
+            spam_score=0.0,
+        )
+    # 3) 외부 수신자 → 메일건 API로 실제 발송 (설정 있으면)
+    elif to_email:
+        settings = get_settings()
+        api_key = getattr(settings, "mailgun_api_key", None)
+        domain = getattr(settings, "mailgun_domain", None)
+        if api_key and domain:
+            from_addr = from_email or f"noreply@{domain}"
+            mailgun_send_email(
+                api_key=api_key,
+                domain=domain,
+                from_addr=from_addr,
+                to_addr=to_email,
+                subject=body.subject or "",
+                text=body.body or "",
+            )
+
     return {"status": "success", "mail": record}
 
 

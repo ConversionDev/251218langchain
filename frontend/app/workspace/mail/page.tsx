@@ -240,6 +240,10 @@ export default function WorkspaceMailPage() {
   const [toRecipient, setToRecipient] = useState<AddressBookEntry | null>(null);
   const [toSearch, setToSearch] = useState("");
   const [toDropdownOpen, setToDropdownOpen] = useState(false);
+  /** 사내 주소록 vs 외부 이메일 직접 입력 */
+  const [recipientMode, setRecipientMode] = useState<"internal" | "external">("internal");
+  const [toExternalEmail, setToExternalEmail] = useState("");
+  const [toExternalDisplayName, setToExternalDisplayName] = useState("");
   const [mails, setMails] = useState<MailItem[]>([]);
   const [sentMails, setSentMails] = useState<MailItem[]>([]);
   const [draftMails, setDraftMails] = useState<MailItem[]>([]);
@@ -248,8 +252,6 @@ export default function WorkspaceMailPage() {
   const [mailLoading, setMailLoading] = useState(false);
   const [spamTestResult, setSpamTestResult] = useState<{ type: "ham" | "spam" | "rejected"; folder: string; mailId?: string; error?: string } | null>(null);
   const [spamTestLoading, setSpamTestLoading] = useState<"ham" | "spam" | "rejected" | null>(null);
-  const [llamaClassifyResult, setLlamaClassifyResult] = useState<{ spam_prob?: number; label?: string; confidence?: string } | { error: string } | null>(null);
-  const [llamaClassifyLoading, setLlamaClassifyLoading] = useState(false);
   const [classifyLoading, setClassifyLoading] = useState(false);
   const [classifyResult, setClassifyResult] = useState<ClassifyResult>(null);
 
@@ -411,33 +413,41 @@ export default function WorkspaceMailPage() {
   const sendSpamTest = async (type: "ham" | "spam" | "rejected") => {
     setSpamTestResult(null);
     setSpamTestLoading(type);
-    // 고정 message_id로 같은 버튼 재클릭 시 멱등(200, 이미 저장) 동작
+    const ts = new Date().toISOString().slice(0, 19).replace("T", " ");
     const messageId = `${type}-test-sample`;
+    // 마커 없이 내용만으로 분류: 정상 = 업무 문의, 스팸 = 당첨/클릭 유도
     const body =
       type === "ham"
         ? {
-            to_email: "hr@company.com",
+            to_email: "hr@mg.kanggyeonggu.store",
             from_display: "김동료",
             from_email: "kim@company.com",
-            subject: "3월 15일 회의 일정 확인 부탁드립니다",
-            body: "안녕하세요. 다음 주 회의 장소와 안건 공유 부탁드립니다.",
+            subject: `회의 일정 확인 부탁드립니다 (${ts})`,
+            body: `안녕하세요, 인사팀 김동료입니다.
+3월 15일 오후 2시 회의 장소와 안건 공유 부탁드립니다.
+회의실 예약 여부만 회신 주시면 됩니다.
+
+감사합니다.`,
             message_id: messageId,
           }
         : type === "spam"
           ? {
-              to_email: "hr@company.com",
+              to_email: "hr@mg.kanggyeonggu.store",
               from_display: "광고",
-              from_email: "noreply@spam.example.com",
-              subject: "당첨 안내! 지금 클릭해 무료 혜택 받으세요",
-              body: "축하합니다. 당첨되셨습니다. 링크를 클릭해 비밀번호를 입력해 주세요. 한정 기간 무료.",
+              from_email: "noreply@promo.example.com",
+              subject: `당첨 안내! 지금 클릭해 무료 혜택 받으세요 (${ts})`,
+              body: `축하합니다! 당첨되셨습니다!
+지금 바로 링크를 클릭해 비밀번호를 입력해 주세요.
+한정 기간 무료 혜택! 선착 100명!
+http://example.com/claim`,
               message_id: messageId,
             }
           : {
               to_email: "not-in-address-book@example.com",
               from_display: "외부 발신",
               from_email: "external@example.com",
-              subject: "주소록에 없는 수신자 테스트",
-              body: "Resolver 실패 → status=REJECTED, folder=rejected 저장 확인용.",
+              subject: `주소록에 없는 수신자 (${ts})`,
+              body: "수신자(To)가 주소록에 없으면 Resolver 실패 → folder=rejected 로 저장됩니다.",
               message_id: messageId,
             };
     try {
@@ -476,39 +486,6 @@ export default function WorkspaceMailPage() {
     }
   };
 
-  const callLlamaClassifySpam = async () => {
-    setLlamaClassifyResult(null);
-    setLlamaClassifyLoading(true);
-    const email_metadata = {
-      subject: "당첨 안내! 지금 클릭해 무료 혜택 받으세요",
-      sender: "noreply@spam.example.com",
-      body: "축하합니다. 당첨되셨습니다. 링크를 클릭해 비밀번호를 입력해 주세요. 한정 기간 무료.",
-      recipient: "hr@company.com",
-    };
-    try {
-      const res = await fetch(`${API_BASE}/internal/llama/classify_spam`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email_metadata }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setLlamaClassifyResult({ error: typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || res.statusText) });
-        return;
-      }
-      const result = data.result ?? data;
-      setLlamaClassifyResult({
-        spam_prob: result.spam_prob,
-        label: result.label,
-        confidence: result.confidence,
-      });
-    } catch (e) {
-      setLlamaClassifyResult({ error: e instanceof Error ? e.message : "요청 실패" });
-    } finally {
-      setLlamaClassifyLoading(false);
-    }
-  };
-
   const markAsRead = (id: string) => {
     fetch(`${API_BASE}/api/mail/${encodeURIComponent(id)}?isUnread=false`, { method: "PUT" }).catch(() => {});
     setMails((prev) => prev.map((m) => (m.id === id ? { ...m, unread: false } : m)));
@@ -544,6 +521,9 @@ export default function WorkspaceMailPage() {
     setToRecipient(null);
     setToSearch("");
     setToDropdownOpen(false);
+    setRecipientMode("internal");
+    setToExternalEmail("");
+    setToExternalDisplayName("");
     setSubject("");
     setBody("");
   };
@@ -555,8 +535,16 @@ export default function WorkspaceMailPage() {
       setClassifyResult({ classification: { is_performance: false, competency_labels: [] }, performance_record_id: null, raw_response: "메일함 소유자(직원 ID)를 입력하세요." });
       return;
     }
-    if (!toRecipient || !subject.trim()) return;
     const subjectText = subject.trim();
+    if (!subjectText) return;
+    const isInternal = recipientMode === "internal";
+    const toPayload =
+      isInternal && toRecipient
+        ? { id: toRecipient.id, displayName: toRecipient.displayName, email: toRecipient.email || undefined }
+        : recipientMode === "external" && toExternalEmail.trim()
+          ? { id: toExternalEmail.trim(), displayName: (toExternalDisplayName || toExternalEmail).trim(), email: toExternalEmail.trim() }
+          : null;
+    if (!toPayload) return;
     const bodyText = body.trim();
     setClassifyResult(null);
     setClassifyLoading(true);
@@ -566,11 +554,7 @@ export default function WorkspaceMailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           senderEmployeeId: owner,
-          to: {
-            id: toRecipient.id,
-            displayName: toRecipient.displayName,
-            email: toRecipient.email || undefined,
-          },
+          to: toPayload,
           subject: subjectText,
           body: bodyText || undefined,
         }),
@@ -817,56 +801,71 @@ export default function WorkspaceMailPage() {
           </div>
         )}
         {folder === "spam-test" ? (
-          <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-foreground">스팸 판정 테스트 (5단계 검증)</h2>
-            <p className="text-sm text-slate-600 dark:text-muted-foreground">
-              수신 시 스팸 여부에 따라 <strong>folder=inbox</strong> vs <strong>folder=spam</strong>으로 저장됩니다. 전송 후 워커가 분석하므로, 받은편지함/스팸함은 잠시 후 자동 갱신되거나 새로고침으로 확인하세요.
-            </p>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-900/50">
-              <p className="font-medium text-slate-800 dark:text-foreground">판정 기준 (현재)</p>
-              <ul className="mt-1 list-inside list-disc text-slate-600 dark:text-muted-foreground">
-                <li>스팸 감지 결과 <strong>action</strong>이 <strong>deliver</strong>이면 → 받은편지함</li>
-                <li>그 외(reject, quarantine, deliver_with_warning 등) → 스팸함</li>
-              </ul>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-[#a8d5c4]/60 bg-white p-4 shadow-sm dark:border-primary/20 dark:bg-card">
-                <h3 className="font-medium text-slate-900 dark:text-foreground">1) 정상 메일(햄) → 받은편지함 기대</h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">제목: 3월 15일 회의 일정 확인… / 본문: 회의 장소와 안건 공유…</p>
-                <Button
-                  type="button"
-                  className="mt-3 w-full border border-[#a8d5c4] bg-[#e8f5ef] text-slate-800 hover:border-[#a8d5c4] dark:border-primary/40 dark:bg-primary/15 dark:text-foreground"
-                  onClick={() => sendSpamTest("ham")}
-                  disabled={!!spamTestLoading}
-                >
-                  {spamTestLoading === "ham" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "테스트 전송 (햄)"}
-                </Button>
+          <div className="flex flex-1 flex-col gap-6 overflow-auto p-4">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-foreground">메일 테스트</h2>
+
+            {/* 사내용 메일 (직원간 테스트) */}
+            <section className="rounded-xl border-2 border-[#a8d5c4]/70 bg-[#e8f5ef]/30 p-4 dark:border-primary/40 dark:bg-primary/10">
+              <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-foreground">사내용 메일 (직원간 테스트)</h3>
+              <p className="mb-3 text-sm text-slate-600 dark:text-muted-foreground">
+                수신자: 주소록(@mg.kanggyeonggu.store). <strong>마커 없이 내용만으로</strong> LLaMA가 정상/스팸을 구분합니다. 직원간 발송은 메일 쓰기에서 사내용(주소록) 선택 시 DB만 반영됩니다.
+              </p>
+              <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900/30">
+                <p className="font-medium text-slate-800 dark:text-foreground">판정 기준</p>
+                <ul className="mt-1 list-inside list-disc text-slate-600 dark:text-muted-foreground">
+                  <li>내용이 정상(업무 문의 등) → 받은편지함</li>
+                  <li>내용이 스팸성(당첨/클릭 유도 등) → 스팸함</li>
+                </ul>
               </div>
-              <div className="rounded-lg border border-[#a8d5c4]/60 bg-white p-4 shadow-sm dark:border-primary/20 dark:bg-card">
-                <h3 className="font-medium text-slate-900 dark:text-foreground">2) 스팸성 메일 → 스팸함 기대</h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">제목: 당첨 안내! 무료 혜택… / 본문: 클릭해 비밀번호 입력…</p>
-                <Button
-                  type="button"
-                  className="mt-3 w-full border border-[#a8d5c4] bg-[#e8f5ef] text-slate-800 hover:border-[#a8d5c4] dark:border-primary/40 dark:bg-primary/15 dark:text-foreground"
-                  onClick={() => sendSpamTest("spam")}
-                  disabled={!!spamTestLoading}
-                >
-                  {spamTestLoading === "spam" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "테스트 전송 (스팸)"}
-                </Button>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-lg border border-[#a8d5c4]/60 bg-white p-4 shadow-sm dark:border-primary/20 dark:bg-card">
+                  <h4 className="font-medium text-slate-900 dark:text-foreground">1) 정상 메일(햄) → 받은편지함</h4>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">내용: 회의 일정·업무 문의 (정상 메일). 발신: 김동료</p>
+                  <Button
+                    type="button"
+                    className="mt-3 w-full border border-[#a8d5c4] bg-[#e8f5ef] text-slate-800 hover:border-[#a8d5c4] dark:border-primary/40 dark:bg-primary/15 dark:text-foreground"
+                    onClick={() => sendSpamTest("ham")}
+                    disabled={!!spamTestLoading}
+                  >
+                    {spamTestLoading === "ham" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "테스트 전송 (햄)"}
+                  </Button>
+                </div>
+                <div className="rounded-lg border border-[#a8d5c4]/60 bg-white p-4 shadow-sm dark:border-primary/20 dark:bg-card">
+                  <h4 className="font-medium text-slate-900 dark:text-foreground">2) 스팸성 메일 → 스팸함</h4>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">내용: 당첨·클릭 유도 문구 (스팸성). 발신: 광고</p>
+                  <Button
+                    type="button"
+                    className="mt-3 w-full border border-[#a8d5c4] bg-[#e8f5ef] text-slate-800 hover:border-[#a8d5c4] dark:border-primary/40 dark:bg-primary/15 dark:text-foreground"
+                    onClick={() => sendSpamTest("spam")}
+                    disabled={!!spamTestLoading}
+                  >
+                    {spamTestLoading === "spam" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "테스트 전송 (스팸)"}
+                  </Button>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/50 dark:bg-amber-950/20 sm:col-span-2">
+                  <h4 className="font-medium text-slate-900 dark:text-foreground">3) 주소 없음 → REJECTED</h4>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">to=not-in-address-book@example.com → Resolver 실패 → folder=rejected (분류 전에 거부)</p>
+                  <Button
+                    type="button"
+                    className="mt-3 w-full border border-amber-300 bg-amber-100 text-slate-800 hover:border-amber-400 dark:border-amber-700 dark:bg-amber-900/30 dark:text-foreground"
+                    onClick={() => sendSpamTest("rejected")}
+                    disabled={!!spamTestLoading}
+                  >
+                    {spamTestLoading === "rejected" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "테스트 전송 (주소 없음)"}
+                  </Button>
+                </div>
               </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 shadow-sm dark:border-amber-800/50 dark:bg-amber-950/20">
-                <h3 className="font-medium text-slate-900 dark:text-foreground">3) 주소 없음(REJECTED) → rejected 저장 기대</h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">to_email=not-in-address-book@example.com → Resolver 실패 → status=REJECTED, folder=rejected</p>
-                <Button
-                  type="button"
-                  className="mt-3 w-full border border-amber-300 bg-amber-100 text-slate-800 hover:border-amber-400 dark:border-amber-700 dark:bg-amber-900/30 dark:text-foreground"
-                  onClick={() => sendSpamTest("rejected")}
-                  disabled={!!spamTestLoading}
-                >
-                  {spamTestLoading === "rejected" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "테스트 전송 (주소 없음)"}
-                </Button>
-              </div>
-            </div>
+            </section>
+
+            {/* 외부용 메일 테스트 */}
+            <section className="rounded-xl border-2 border-amber-300/80 bg-amber-50/50 p-4 dark:border-amber-700/50 dark:bg-amber-950/20">
+              <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-foreground">외부용 메일 테스트</h3>
+              <p className="mb-3 text-sm text-slate-600 dark:text-muted-foreground">
+                <strong>외부 주소로 발송</strong>하면 Mailgun API로 실제 전송됩니다. 메일 쓰기에서 받는 사람을 <strong>외부용 (이메일 직접 입력)</strong>으로 바꾼 뒤 이메일을 입력해 보내면 됩니다.
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-200">수신 테스트(위 사내용)와 달리, 여기서는 “우리가 외부로 보내는” 발송만 해당합니다.</p>
+            </section>
+
             {spamTestResult && (
               <div className={`rounded-lg border p-4 ${spamTestResult.error ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30" : "border-[#a8d5c4]/60 bg-[#e8f5ef]/50 dark:border-primary/20 dark:bg-primary/10"}`}>
                 <p className="font-medium text-slate-800 dark:text-foreground">
@@ -890,35 +889,10 @@ export default function WorkspaceMailPage() {
                 )}
               </div>
             )}
-            <div className="rounded-lg border border-[#a8d5c4]/60 bg-white p-4 shadow-sm dark:border-primary/20 dark:bg-card">
-              <h3 className="font-medium text-slate-900 dark:text-foreground">4) LLaMA 스팸 분류만 확인 (선택)</h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">
-                POST /internal/llama/classify_spam 호출. spam_prob, label(SPAM/HAM/SUSPICIOUS)로 스팸 판단 여부 확인.
-              </p>
-              <Button
-                type="button"
-                className="mt-3 w-full border border-[#a8d5c4] bg-[#e8f5ef] text-slate-800 hover:border-[#a8d5c4] dark:border-primary/40 dark:bg-primary/15 dark:text-foreground"
-                onClick={callLlamaClassifySpam}
-                disabled={llamaClassifyLoading}
-              >
-                {llamaClassifyLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "분류만 확인 (스팸 예시)"}
-              </Button>
-              {llamaClassifyResult && (
-                <div className={`mt-3 rounded border p-3 text-sm ${"error" in llamaClassifyResult ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30" : "border-[#a8d5c4]/40 bg-[#e8f5ef]/50 dark:border-primary/20 dark:bg-primary/10"}`}>
-                  {"error" in llamaClassifyResult ? (
-                    <p className="text-red-700 dark:text-red-400">{llamaClassifyResult.error}</p>
-                  ) : (
-                    <p className="text-slate-700 dark:text-foreground">
-                      <strong>spam_prob</strong>: {llamaClassifyResult.spam_prob ?? "—"} · <strong>label</strong>: {llamaClassifyResult.label ?? "—"} · <strong>confidence</strong>: {llamaClassifyResult.confidence ?? "—"}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-muted-foreground">
-              <p className="font-medium text-slate-700 dark:text-foreground">목록으로 확인</p>
-              <p className="mt-1">받은편지함 / 스팸함에서 내 메일함(직원 ID)을 hr@company.com 소유자(예: E001)로 설정하면 저장된 메일을 볼 수 있습니다.</p>
-              <p className="mt-2">참고: 스팸 감지 실패 시 수신을 막지 않고 inbox로 저장합니다. 라우팅이 rule이면 LLaMA, policy면 ExaOne 결과로 action이 결정됩니다.</p>
+              <p className="font-medium text-slate-700 dark:text-foreground">스팸 분류는 워커에서만 수행</p>
+              <p className="mt-1">LLaMA 스팸 분류는 <strong>워커(mail_pending)</strong>에서만 실행됩니다. 위 1)·2) 테스트 전송 후 받은편지함/스팸함에서 folder·spam_score를 확인하세요.</p>
+              <p className="mt-2">받은편지함·스팸함에서 내 메일함(직원 ID)을 hr@mg.kanggyeonggu.store 소유자(예: E001)로 설정하면 저장된 메일을 볼 수 있습니다.</p>
             </div>
           </div>
         ) : composing ? (
@@ -931,59 +905,100 @@ export default function WorkspaceMailPage() {
                 </p>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="mail-to" className="text-slate-600 dark:text-muted-foreground">받는 사람 (사내 주소록)</Label>
-                {toRecipient ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-[#a8d5c4]/60 bg-[#e8f5ef]/50 px-3 py-2 dark:border-primary/30 dark:bg-primary/10">
-                    <AddressTypeBadge type={toRecipient.type} />
-                    <span className="flex-1 text-sm font-medium text-slate-800 dark:text-foreground">{formatAddressLabel(toRecipient)}</span>
-                    <Button
+                <div className="flex items-center gap-2">
+                  <Label className="text-slate-600 dark:text-muted-foreground">받는 사람</Label>
+                  <span className="flex gap-1 rounded-lg border border-[#a8d5c4]/60 bg-white p-0.5 dark:border-primary/30 dark:bg-card">
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 shrink-0 p-0 text-slate-500 hover:text-slate-800 dark:hover:text-foreground"
-                      onClick={() => { setToRecipient(null); setToSearch(""); setToDropdownOpen(true); }}
-                      aria-label="받는 사람 변경"
+                      onClick={() => { setRecipientMode("internal"); setToExternalEmail(""); setToExternalDisplayName(""); }}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${recipientMode === "internal" ? "bg-[#e8f5ef] text-slate-800 dark:bg-primary/20 dark:text-foreground" : "text-slate-600 hover:bg-slate-100 dark:text-muted-foreground dark:hover:bg-primary/10"}`}
                     >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <Input
-                      id="mail-to"
-                      value={toSearch}
-                      onChange={(e) => { setToSearch(e.target.value); setToDropdownOpen(true); }}
-                      onFocus={() => setToDropdownOpen(true)}
-                      placeholder={addressBookLoading ? "주소록 불러오는 중…" : "이름·이메일·부서로 검색 (직원+공용+그룹)"}
-                      className="border-[#a8d5c4]/60 bg-white dark:border-primary/30 dark:bg-card"
-                      disabled={addressBookLoading}
-                    />
-                    {toDropdownOpen && (
-                      <>
-                        <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-auto rounded-lg border border-[#a8d5c4]/60 bg-white shadow-lg dark:border-primary/30 dark:bg-card" role="listbox">
-                          {toFilteredEntries.length === 0 ? (
-                            <p className="px-3 py-4 text-center text-sm text-slate-500 dark:text-muted-foreground">
-                              {addressBook.length === 0 ? "주소록이 비어 있습니다." : "검색 결과가 없습니다."}
-                            </p>
-                          ) : (
-                            toFilteredEntries.map((entry) => (
-                              <button
-                                key={`${entry.source}-${entry.id}`}
-                                type="button"
-                                role="option"
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#e8f5ef] dark:hover:bg-primary/15"
-                                onClick={() => { setToRecipient(entry); setToSearch(""); setToDropdownOpen(false); }}
-                              >
-                                <AddressTypeBadge type={entry.type} />
-                                <span className="min-w-0 flex-1 truncate">{formatAddressLabel(entry)}</span>
-                                {entry.department && <span className="shrink-0 text-xs text-slate-500 dark:text-muted-foreground">{entry.department}</span>}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                        <div className="fixed inset-0 z-[9]" aria-hidden onClick={() => setToDropdownOpen(false)} />
-                      </>
+                      사내용 (주소록)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setRecipientMode("external"); setToRecipient(null); setToSearch(""); setToDropdownOpen(false); }}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${recipientMode === "external" ? "bg-[#e8f5ef] text-slate-800 dark:bg-primary/20 dark:text-foreground" : "text-slate-600 hover:bg-slate-100 dark:text-muted-foreground dark:hover:bg-primary/10"}`}
+                    >
+                      외부용 (이메일 직접 입력)
+                    </button>
+                  </span>
+                </div>
+                {recipientMode === "internal" ? (
+                  <>
+                    {toRecipient ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-[#a8d5c4]/60 bg-[#e8f5ef]/50 px-3 py-2 dark:border-primary/30 dark:bg-primary/10">
+                        <AddressTypeBadge type={toRecipient.type} />
+                        <span className="flex-1 text-sm font-medium text-slate-800 dark:text-foreground">{formatAddressLabel(toRecipient)}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 shrink-0 p-0 text-slate-500 hover:text-slate-800 dark:hover:text-foreground"
+                          onClick={() => { setToRecipient(null); setToSearch(""); setToDropdownOpen(true); }}
+                          aria-label="받는 사람 변경"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <Input
+                          id="mail-to"
+                          value={toSearch}
+                          onChange={(e) => { setToSearch(e.target.value); setToDropdownOpen(true); }}
+                          onFocus={() => setToDropdownOpen(true)}
+                          placeholder={addressBookLoading ? "주소록 불러오는 중…" : "이름·이메일·부서로 검색 (직원+공용+그룹)"}
+                          className="border-[#a8d5c4]/60 bg-white dark:border-primary/30 dark:bg-card"
+                          disabled={addressBookLoading}
+                        />
+                        {toDropdownOpen && (
+                          <>
+                            <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-auto rounded-lg border border-[#a8d5c4]/60 bg-white shadow-lg dark:border-primary/30 dark:bg-card" role="listbox">
+                              {toFilteredEntries.length === 0 ? (
+                                <p className="px-3 py-4 text-center text-sm text-slate-500 dark:text-muted-foreground">
+                                  {addressBook.length === 0 ? "주소록이 비어 있습니다." : "검색 결과가 없습니다."}
+                                </p>
+                              ) : (
+                                toFilteredEntries.map((entry) => (
+                                  <button
+                                    key={`${entry.source}-${entry.id}`}
+                                    type="button"
+                                    role="option"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#e8f5ef] dark:hover:bg-primary/15"
+                                    onClick={() => { setToRecipient(entry); setToSearch(""); setToDropdownOpen(false); }}
+                                  >
+                                    <AddressTypeBadge type={entry.type} />
+                                    <span className="min-w-0 flex-1 truncate">{formatAddressLabel(entry)}</span>
+                                    {entry.department && <span className="shrink-0 text-xs text-slate-500 dark:text-muted-foreground">{entry.department}</span>}
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                            <div className="fixed inset-0 z-[9]" aria-hidden onClick={() => setToDropdownOpen(false)} />
+                          </>
+                        )}
+                      </div>
                     )}
+                  </>
+                ) : (
+                  <div className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-800/50 dark:bg-amber-950/20">
+                    <Input
+                      id="mail-to-external-email"
+                      type="email"
+                      value={toExternalEmail}
+                      onChange={(e) => setToExternalEmail(e.target.value)}
+                      placeholder="외부 수신자 이메일 (예: partner@gmail.com)"
+                      className="border-amber-300 bg-white dark:border-amber-700 dark:bg-card"
+                    />
+                    <Input
+                      id="mail-to-external-name"
+                      value={toExternalDisplayName}
+                      onChange={(e) => setToExternalDisplayName(e.target.value)}
+                      placeholder="표시명 (선택)"
+                      className="border-amber-300 bg-white dark:border-amber-700 dark:bg-card"
+                    />
+                    <p className="text-xs text-amber-800 dark:text-amber-200">Mailgun으로 실제 발송됩니다. 주소록에 없는 주소로만 보내세요.</p>
                   </div>
                 )}
               </div>
@@ -1012,7 +1027,11 @@ export default function WorkspaceMailPage() {
               <div className="flex gap-2">
                 <Button
                   type="submit"
-                  disabled={!employeeId.trim() || !toRecipient || !subject.trim()}
+                  disabled={
+                    !employeeId.trim() ||
+                    !subject.trim() ||
+                    (recipientMode === "internal" ? !toRecipient : !toExternalEmail.trim())
+                  }
                   className="workspace-hero-btn border border-[#a8d5c4] bg-[#e8f5ef] text-slate-800 hover:border-[#a8d5c4] dark:border-primary/40 dark:bg-primary/15 dark:text-foreground"
                 >
                   <Send className="mr-2 h-4 w-4" />
