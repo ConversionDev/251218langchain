@@ -13,6 +13,15 @@ jobs:
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+      MAILGUN_WEBHOOK_SIGNING_KEY: ${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
+      MAILGUN_SKIP_VERIFY: ${{ secrets.MAILGUN_SKIP_VERIFY }}
+      MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+      MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+      KECI_SERVICE_KEY: ${{ secrets.KECI_SERVICE_KEY }}
       APP_DIR: /home/ubuntu/app
       VENV_DIR: /home/ubuntu/venv
       LOG_FILE: /home/ubuntu/app.log
@@ -72,6 +81,15 @@ jobs:
             LOG_FILE=/home/ubuntu/app.log
             PID_FILE=/home/ubuntu/app.pid
             OPENAI_API_KEY_VALUE="$OPENAI_API_KEY"
+            DATABASE_URL_VALUE="$DATABASE_URL"
+            GEMINI_API_KEY_VALUE="$GEMINI_API_KEY"
+            UPSTASH_REDIS_REST_URL_VALUE="$UPSTASH_REDIS_REST_URL"
+            UPSTASH_REDIS_REST_TOKEN_VALUE="$UPSTASH_REDIS_REST_TOKEN"
+            MAILGUN_WEBHOOK_SIGNING_KEY_VALUE="$MAILGUN_WEBHOOK_SIGNING_KEY"
+            MAILGUN_SKIP_VERIFY_VALUE="$MAILGUN_SKIP_VERIFY"
+            MAILGUN_DOMAIN_VALUE="$MAILGUN_DOMAIN"
+            MAILGUN_API_KEY_VALUE="$MAILGUN_API_KEY"
+            KECI_SERVICE_KEY_VALUE="$KECI_SERVICE_KEY"
 
             cd /home/ubuntu
 
@@ -83,16 +101,19 @@ jobs:
               echo "✅ Virtual environment exists"
             fi
 
-            # 디스크 공간 확보 (small 인스턴스 대응)
-            echo "🧹 Freeing disk space..."
+            # 디스크 공간 확보 (small 인스턴스 97% 사용 시 대응)
+            echo "Freeing disk space..."
             source $VENV_DIR/bin/activate
             pip cache purge 2>/dev/null || true
-            rm -rf ~/.cache/pip 2>/dev/null || true
+            rm -rf ~/.cache/pip ~/.cache/pip-tools 2>/dev/null || true
             find $VENV_DIR -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
             find $APP_DIR -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-            if [ -f $LOG_FILE ] && [ \$(wc -l < $LOG_FILE) -gt 2000 ]; then
-              tail -1000 $LOG_FILE > $LOG_FILE.tmp && mv $LOG_FILE.tmp $LOG_FILE
+            if [ -f $LOG_FILE ] && [ \$(wc -l < $LOG_FILE) -gt 500 ]; then
+              tail -500 $LOG_FILE > $LOG_FILE.tmp && mv $LOG_FILE.tmp $LOG_FILE
             fi
+            rm -rf ~/.cache/huggingface/hub/*.incomplete 2>/dev/null || true
+            sudo apt-get clean 2>/dev/null || true
+            sudo journalctl --vacuum-size=30M 2>/dev/null || true
             df -h /
 
             # 패키지 설치 (이미 있으면 유지, 없을 때만 설치 → 디스크/시간 절약)
@@ -115,8 +136,17 @@ jobs:
             # Python 경로 설정 (app.model import를 위해)
             export PYTHONPATH="$APP_DIR:\$PYTHONPATH"
 
-            # 환경 변수 설정 (OPENAI_API_KEY는 Secrets, 나머지는 EC2 ~/.env에서 로드)
+            # 환경 변수 설정 (GitHub Secrets → EC2 앱, EC2 ~/.env 수동 불필요)
             export OPENAI_API_KEY="\$OPENAI_API_KEY_VALUE"
+            export DATABASE_URL="\$DATABASE_URL_VALUE"
+            export GEMINI_API_KEY="\$GEMINI_API_KEY_VALUE"
+            export UPSTASH_REDIS_REST_URL="\$UPSTASH_REDIS_REST_URL_VALUE"
+            export UPSTASH_REDIS_REST_TOKEN="\$UPSTASH_REDIS_REST_TOKEN_VALUE"
+            export MAILGUN_WEBHOOK_SIGNING_KEY="\$MAILGUN_WEBHOOK_SIGNING_KEY_VALUE"
+            export MAILGUN_SKIP_VERIFY="\$MAILGUN_SKIP_VERIFY_VALUE"
+            export MAILGUN_DOMAIN="\$MAILGUN_DOMAIN_VALUE"
+            export MAILGUN_API_KEY="\$MAILGUN_API_KEY_VALUE"
+            export KECI_SERVICE_KEY="\$KECI_SERVICE_KEY_VALUE"
             export HOST=0.0.0.0
             export PORT=8000
             export MODE=api
@@ -130,13 +160,13 @@ jobs:
             echo \$APP_PID > $PID_FILE
             echo "✅ Application started (PID: \$APP_PID)"
 
-            # 프로세스 시작 확인
-            sleep 3
+            # 프로세스 시작 확인 (FastAPI 바인딩 대기)
+            sleep 6
             if ps -p \$APP_PID > /dev/null 2>&1; then
-              echo "✅ Process is running"
+              echo "Process is running"
 
               # 포트 체크
-              sleep 2
+              sleep 3
               if ss -tlnp 2>/dev/null | grep :8000 || netstat -tlnp 2>/dev/null | grep :8000; then
                 echo "✅ Port 8000 is listening"
               else
