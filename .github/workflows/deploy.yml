@@ -34,16 +34,18 @@ jobs:
           if [ -z "$EC2_HOST" ]; then echo "::error::EC2_HOST secret is not set"; exit 1; fi
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "Known hosts entries for $EC2_HOST: $(grep -c . ~/.ssh/known_hosts || echo 0)"
 
       - name: Deploy application files
         run: |
-          echo "🚀 Creating app directory and transferring files..."
-          ssh $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR"
-          echo "📤 Excluded: artifacts/, data/, training/pipelines|models|data, scripts. ETA 1~2 min..."
-          # 메일건 웹훅 테스트용: 수신 API에 불필요한 항목 제외(배포 용량·시간 단축)
-          rsync -avz --delete --info=progress2 \
+          echo "Creating app dir and transferring files (max 90s)..."
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR"
+          timeout 90 rsync -avz --delete --info=progress2 \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='.git' \
@@ -53,15 +55,15 @@ jobs:
             --exclude='training/models/' \
             --exclude='training/data/' \
             --exclude='scripts/' \
-            --timeout=300 \
-            -e "ssh -o ConnectTimeout=15 -o ServerAliveInterval=30" \
-            app/ $EC2_USERNAME@$EC2_HOST:$APP_DIR/
-          echo "✅ Files transferred"
+            --timeout=60 \
+            -e "ssh $SSH_OPTS" \
+            app/ $EC2_USERNAME@$EC2_HOST:$APP_DIR/ || { echo "::error::rsync timed out or failed"; exit 1; }
+          echo "Files transferred OK"
 
       - name: Setup virtual environment & start app
         run: |
-          echo "🔧 Setting up virtual environment and starting application..."
-          ssh $EC2_USERNAME@$EC2_HOST bash << ENDSSH
+          echo "Setting up virtual environment and starting application..."
+          ssh -o StrictHostKeyChecking=accept-new $EC2_USERNAME@$EC2_HOST bash << ENDSSH
             set -e
 
             # 변수 설정
