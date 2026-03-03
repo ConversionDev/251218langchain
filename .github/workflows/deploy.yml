@@ -41,6 +41,7 @@ jobs:
         run: |
           echo "🚀 Creating app directory and transferring files..."
           ssh $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR"
+          echo "📤 Excluded: artifacts/, data/, training/pipelines|models|data, scripts. ETA 1~2 min..."
           # 메일건 웹훅 테스트용: 수신 API에 불필요한 항목 제외(배포 용량·시간 단축)
           rsync -avz --delete --info=progress2 \
             --exclude='__pycache__' \
