@@ -75,6 +75,13 @@ app/data/competency_anchors/prepared/
 app/data/competency_anchors/sft/
 app/data/sft_dataset/
 
+# env_mapping: 대용량·외부 데이터·생성물 (푸시 제외)
+app/data/env_mapping/electricity_hourly_dataset.tsf
+app/data/env_mapping/zvg-cas-list-d.xlsx
+app/data/env_mapping/*.pdf
+app/data/env_mapping/check_battery_final_result.txt
+app/data/env_mapping/한국전력거래소_시간별*.csv
+
 # Python 가상환경·캐시
 .venv/
 venv/
