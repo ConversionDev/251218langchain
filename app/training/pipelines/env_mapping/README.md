@@ -60,6 +60,16 @@ python -m training.pipelines.env_mapping.vocabulary_builder --original "data/env
 python -m training.pipelines.env_mapping.merge_with_original --original "..." --mapping "..." --output "..."
 ```
 
+### 4) 배터리만 정리 (EC = 공급망 + zvg xlsx, 다국어 = mapping 활용)
+```bash
+# app 또는 프로젝트 루트에서. EC는 API 없이 data/env_mapping 내 두 xlsx만 사용
+python -m training.pipelines.env_mapping.build_battery_only
+```
+- **EC 번호**: `배터리 산업 공급망 리스트 보강.xlsx`(1차) + `zvg-cas-list-d.xlsx`(GESTIS, 2차). PubChem/ECHA API 미사용.
+- **다국어**: `--mapping` 지정 시 해당 Excel에서 배터리 CAS만 필터해 12개 언어 행 확장. 미지정 시 data/env_mapping 내 최신 `mapping_full_*.xlsx` 자동 사용.
+- **출력**: 환경 데이터 매핑 테이블과 동일 11열, 배터리 물질만. 기본 경로: `data/env_mapping/환경데이터_매핑_보강_배터리.xlsx`
+- 옵션: `--data-dir`, `--mapping`, `--output`, `--battery-csv`
+
 ## 언어 단계
 | stage | 언어 |
 |-------|------|

@@ -81,9 +81,15 @@ def get_synonyms_for_cas_via_cid(cas: str, delay_seconds: float = DEFAULT_DELAY)
 
 def get_ec_number_for_cas(cas: str, delay_seconds: float = DEFAULT_DELAY) -> str:
     """CAS로 PubChem 조회 후 EC 번호(유럽 공동체 번호) 반환. 없으면 빈 문자열."""
+    ec, _ = get_ec_and_cid_for_cas(cas, delay_seconds=delay_seconds)
+    return ec
+
+
+def get_ec_and_cid_for_cas(cas: str, delay_seconds: float = DEFAULT_DELAY) -> tuple[str, str]:
+    """CAS로 PubChem 조회 후 (EC 번호, CID) 반환. 없으면 ('', '')."""
     cas = _normalize_cas(cas)
     if not cas:
-        return ""
+        return ("", "")
     try:
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{cas}/cids/JSON"
         req = Request(url, headers={"Accept": "application/json"})
@@ -92,8 +98,9 @@ def get_ec_number_for_cas(cas: str, delay_seconds: float = DEFAULT_DELAY) -> str
         cids = data.get("IdentifierList", {}).get("CID", [])
         if not cids:
             time.sleep(delay_seconds)
-            return ""
+            return ("", "")
         cid = cids[0]
+        cid_str = str(cid).strip() if cid is not None else ""
         time.sleep(delay_seconds)
         url2 = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/ECNumber/JSON"
         req2 = Request(url2, headers={"Accept": "application/json"})
@@ -102,17 +109,17 @@ def get_ec_number_for_cas(cas: str, delay_seconds: float = DEFAULT_DELAY) -> str
         props = data2.get("PropertyTable", {}).get("Properties", [])
         if not props:
             time.sleep(delay_seconds)
-            return ""
+            return ("", cid_str)
         ec = props[0].get("ECNumber")
         if ec is None:
             time.sleep(delay_seconds)
-            return ""
+            return ("", cid_str)
         if isinstance(ec, list):
             ec = next((x for x in ec if x and str(x).strip()), None) or ""
         s = str(ec).strip()
         time.sleep(delay_seconds)
-        return s
+        return (s, cid_str)
     except Exception as e:
-        logger.debug("PubChem ECNumber cas=%s: %s", cas, e)
+        logger.debug("PubChem EC/CID cas=%s: %s", cas, e)
     time.sleep(delay_seconds)
-    return ""
+    return ("", "")
