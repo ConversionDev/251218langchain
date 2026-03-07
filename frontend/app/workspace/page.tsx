@@ -46,7 +46,7 @@ export default function WorkspaceHomePage() {
       </header>
 
       <main className="relative z-10 mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-5xl flex-col items-center justify-center px-4 py-10 animate-fadeIn">
-        <div className="grid w-full gap-6 rounded-3xl border border-border bg-card/95 p-6 shadow-xl backdrop-blur-md md:grid-cols-[1.05fr,0.95fr] md:p-8">
+        <div className="w-full max-w-2xl rounded-3xl border border-border bg-card/95 p-6 shadow-xl backdrop-blur-md md:p-8">
           <section className="flex flex-col justify-center">
             <p className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
               <Sparkles className="h-3.5 w-3.5" />
@@ -98,17 +98,6 @@ export default function WorkspaceHomePage() {
                 <Users className="h-4 w-4" />
               </Link>
             </div>
-          </section>
-
-          <section className="relative flex items-center justify-center rounded-2xl border border-border bg-white/60 p-4 backdrop-blur-sm dark:bg-white/10">
-            <Image
-              src="/images/workspace-holo-character.png"
-              alt="홀로그램 AI 캐릭터"
-              width={540}
-              height={540}
-              className="relative w-full max-w-[360px] rounded-2xl object-contain"
-              priority
-            />
           </section>
         </div>
       </main>

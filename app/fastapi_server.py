@@ -154,31 +154,25 @@ def init_db() -> None:
 
 
 def init_v1() -> None:
-    """에이전트·RAG 초기화: LangGraph, ExaOne, Embedding(disclosures·competency 검색용)."""
+    """에이전트·RAG 초기화. t3.small 등 메모리 절약을 위해 스타트업에서는 DB만 확인하고, 모델·인덱스는 Lazy."""
     global local_embeddings, local_llm
 
     print("=" * 50)
-    print("에이전트·RAG 초기화 (LangGraph, ExaOne, Embedding)...")
+    print("에이전트·RAG 초기화 (Lazy: Embedding·FAISS 스킵)...")
     print("=" * 50)
 
     llm_provider = settings.llm_provider
     print(f"\n[INFO] LLM_PROVIDER: {llm_provider}")
-    print("[INFO] EXAONE: HuggingFace 캐시에서 로드 (EXAONE_MODEL_DIR 미사용)")
 
     print("\n1. Neon PostgreSQL 연결 확인 중...")
     wait_for_postgres()
 
-    if llm_provider == "exaone":
-        print("\n2. EXAONE: Lazy Loading (첫 채팅 요청 시 로드)")
-
-    print("\n3. Embedding 서버 기동 시 초기화 중... (RAG: disclosures·competency 테이블 검색용)")
-    ensure_rag_initialized()
-    print("[OK] Embedding·RAG 초기화 완료!")
-    print("\n4. 스팸 감지 모델: Lazy Loading (첫 요청 시 LLaMA 로드)")
-    print("[INFO] VRAM 절약을 위해 스팸 테스트 요청 시 LLaMA 모델이 로드됩니다.")
+    print("\n2. EXAONE: Lazy Loading (첫 채팅 요청 시 adapter 로드)")
+    print("\n3. Embedding·RAG: Lazy (첫 RAG 요청 시 Embedding만 로드, FAISS 인덱스는 미로드 → pgvector 사용)")
+    print("\n4. 스팸 LLaMA: Lazy Loading (첫 스팸 요청 시 adapter 로드)")
 
     print("\n" + "=" * 50)
-    print("[OK] 에이전트·RAG 초기화 완료!")
+    print("[OK] 에이전트·RAG 초기화 완료 (주소록/메일 즉시 사용, 채팅·RAG·스팸은 첫 요청 시 로드)")
     print("=" * 50)
 
 
@@ -221,19 +215,12 @@ def ensure_rag_initialized() -> None:
         try:
             from domain.shared.embedding import preload_disclosure_embedding_model  # type: ignore
             if preload_disclosure_embedding_model():
-                print("[OK] RAG 임베딩 준비 완료 (FlagEmbedding BGE-m3, disclosures·competency)")
+                print("[OK] RAG 임베딩 준비 완료 (FlagEmbedding BGE-m3, pgvector 사용)")
             else:
                 print("[WARNING] RAG 임베딩 준비 실패")
         except Exception as e:
             print(f"[WARNING] RAG 임베딩 준비 예외: {e}")
-        try:
-            from core.faiss_store import load_faiss_indices  # type: ignore
-            if load_faiss_indices():
-                print("[OK] FAISS 인덱스 로드 완료 (disclosures·competency_anchors)")
-            else:
-                print("[INFO] FAISS 인덱스 없음 또는 로드 스킵 (pgvector fallback)")
-        except Exception as e:
-            print(f"[WARNING] FAISS 로드 예외: {e}")
+        # FAISS 인덱스는 스타트업에서 로드하지 않음 (메모리 절약). RAG는 pgvector fallback으로 동작.
         _rag_initialized = True
 
 
