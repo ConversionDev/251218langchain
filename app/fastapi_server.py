@@ -211,9 +211,11 @@ def ensure_rag_initialized() -> None:
         if _rag_initialized:
             return
         if local_embeddings is None:
+            logging.info("[RAG] 초기화 시작 — Embedding(BGE-m3) 로드 중 (메모리 사용량 증가, OOM 시 프로세스 종료 가능)")
             initialize_embeddings()
         try:
             from domain.shared.embedding import preload_disclosure_embedding_model  # type: ignore
+            logging.info("[RAG] disclosure 임베딩 모델 preload 시작")
             if preload_disclosure_embedding_model():
                 print("[OK] RAG 임베딩 준비 완료 (FlagEmbedding BGE-m3, pgvector 사용)")
             else:
