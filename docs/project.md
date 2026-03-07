@@ -83,6 +83,27 @@
 - **백엔드**: `CORS_ORIGINS`(쉼표 구분). 비우면 `*`. www에서 API 호출 시 프론트 도메인을 넣어야 CORS 오류가 나지 않음.
 - **DB**: `DATABASE_URL` 또는 `POSTGRES_CONNECTION_STRING`. `AUTO_MIGRATE=true`면 기동 시 `alembic upgrade head`.
 - **스타트업**: DB 연결만 확인. Embedding·FAISS·Adapter는 첫 요청 시 lazy 로드(t3.small 등 소형 인스턴스 안정화). RAG는 pgvector만 사용(FAISS 미로드).
+- **배포 후 API 타임아웃(net::ERR_TIMED_OUT)**: 브라우저에서 `https://api.kanggyeonggu.store/health` 확인. 502/타임아웃이면 EC2 앱이 꺼졌거나 응답 지연. SSH로 `tail /home/ubuntu/app.log`, `ss -tlnp | grep 8000` 점검 후 필요 시 CI/CD 재실행 또는 앱 재시작.
+
+### 배포·비용 전략 (AWS 크레딧 기준)
+
+크레딧 **$113.71**, **104일** 남은 상황에서 금액에 맞는 선택지 요약. (Linux 온디맨드 기준, 지역·요금 변동 있음.)
+
+| 전략 | 인스턴스 | 월 비용(대략) | 크레딧 소진 | 기능·비고 |
+|------|----------|----------------|-------------|------------|
+| **A. 풀 기능 24/7** | t3.medium (4GB) | ~\$37 | 약 3개월 | RAG+ExaOne+어댑터 동일, OOM 위험 낮음. 104일이면 마지막 2주는 부족할 수 있음 → 비용 알람 권장. |
+| **B. 풀 기능 파트타임** | t3.medium, 필요할 때만 가동 | 월 ~\$12–18 (예: 주 5일 8시간) | 6개월 이상 | 데모/개발 시만 켜고 끄기. 동일 스택, 24/7 아님. |
+| **C. 최소 비용 24/7** | t3.small + RAG 비활성화 | ~\$19 | 약 5–6개월 | 도구 기반 답변만, RAG/임베딩 미로드. [backend.md](backend.md) §4.5 전략 A. |
+| **D. t3.small + 임베딩 API** | t3.small 24/7 + OpenAI/Cohere 등 | ~\$19 + API 호출비 | API 사용량에 따라 | RAG 유지, 임베딩만 외부 API. [backend.md](backend.md) §4.5 전략 B. |
+
+**추천**: 크레딧을 104일까지 쓰면서 **풀 기능**을 보여주려면 **B(파트타임 t3.medium)**. 항상 켜두고 싶으면 **A**로 가되, 예상 소진일 전에 **C**로 다운그레이드하거나 사용 시간을 줄여 크레딧을 연장.
+
+### 테스트 시 인스턴스 전략 (m7i-flex.large 등 8GB)
+
+- **RAG + Embedding + Chat + Spam** 구성이면 t3.small(2GB)는 한계. AI 서비스 최소 권장 **4GB**, 안정적 **8GB**.
+- **비용**: m7i-flex.large 기준 시간당 약 $0.12, 1~5시간 테스트는 소액. 24/7 가동 시 월 약 $85 수준.
+- **권장 흐름**: 인스턴스를 **m7i-flex.large(8GB)** 등으로 올린 뒤 → RAG/검색/채팅/스팸 테스트 → `htop` / `free -h`·`dmesg | grep -i oom` 으로 메모리·OOM 확인 → 검증 후 **인스턴스 STOP**. STOP 상태면 컴퓨트 비용 0, EBS·Elastic IP만 소액(월 1천 원 이하 수준) 발생.
+- **OOM 해결 여부**: 테스트 후 `dmesg | grep -i oom` 에 아무것도 안 나오면 OOM 이슈 해결된 것으로 봐도 됨.
 
 ---
 

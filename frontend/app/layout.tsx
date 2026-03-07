@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
 import { RegisterSw } from "@/components/RegisterSw";
-import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
@@ -32,7 +31,6 @@ export default function RootLayout({
         {children}
         <Toaster richColors position="top-right" closeButton duration={1500} />
         <RegisterSw />
-        <RoleSwitcher />
       </body>
     </html>
   );

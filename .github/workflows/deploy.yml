@@ -69,6 +69,22 @@ jobs:
             app/ $EC2_USERNAME@$EC2_HOST:$APP_DIR/ || { echo "::error::rsync timed out or failed"; exit 1; }
           echo "Files transferred OK"
 
+      - name: Deploy fine-tuned adapters only
+        run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          APP_DIR=/home/ubuntu/app
+          # ExaOne 역량 어댑터, LLaMA 스팸 어댑터만 EC2로 전송 (경로 있을 때만)
+          for rel in "artifacts/fine_tuned/exaone/competency_adapters" "artifacts/fine_tuned/llama/spam_adapters"; do
+            if [ -d "app/$rel" ]; then
+              echo "Syncing $rel..."
+              ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR/$rel"
+              rsync -avz --timeout=60 -e "ssh $SSH_OPTS" "app/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ || true
+            else
+              echo "Skip $rel (not found)"
+            fi
+          done
+          echo "Adapters sync done"
+
       - name: Setup virtual environment & start app
         run: |
           echo "Setting up virtual environment and starting application..."
@@ -150,6 +166,8 @@ jobs:
             export HOST=0.0.0.0
             export PORT=8000
             export MODE=api
+            # 배포 환경: Unsloth/LLaMA 캐시를 /tmp로 두어 앱 디스크 부족 방지
+            export UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 
             # 로그 파일 미리 생성
             touch $LOG_FILE

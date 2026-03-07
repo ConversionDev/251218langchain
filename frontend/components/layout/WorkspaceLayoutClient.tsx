@@ -33,13 +33,21 @@ export function WorkspaceLayoutClient({
             </span>
           </Link>
         </div>
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base shrink-0 dark:text-slate-300 dark:hover:text-slate-100"
-        >
-          <ExternalLink className="h-4 w-4" />
-          메인으로
-        </Link>
+        <div className="flex items-center gap-3 shrink-0">
+          <Link
+            href="/demo"
+            className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+          >
+            시연 역할
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base dark:text-slate-300 dark:hover:text-slate-100"
+          >
+            <ExternalLink className="h-4 w-4" />
+            메인으로
+          </Link>
+        </div>
       </header>
       <main className="min-h-0 flex-1 p-4 md:p-5">
         {children}

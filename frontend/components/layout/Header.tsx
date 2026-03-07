@@ -175,6 +175,13 @@ export function Header() {
             {embeddingLoading ? "갱신 중…" : "임베딩 갱신"}
           </button>
           <Link
+            href="/demo"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
+            title="시연용 역할 전환(관리자/직원/지원자)"
+          >
+            시연 역할
+          </Link>
+          <Link
             href="/workspace"
             className="inline-flex items-center gap-2 rounded-lg border border-[#a8d5c4]/80 bg-[#e8f5ef]/80 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#e8f5ef] dark:border-primary/30 dark:bg-primary/10 dark:text-foreground dark:hover:bg-primary/20"
             title="직원 업무 서비스로 이동"

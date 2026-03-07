@@ -40,6 +40,16 @@ from transformers import (
     TextIteratorStreamer,
 )
 
+
+def _get_model_device(model: Any) -> torch.device:
+    """모델이 올라간 디바이스 반환 (device_map='auto'일 때도 첫 파라미터 기준). CPU 폴백."""
+    try:
+        p = next(model.parameters(), None)
+        return p.device if p is not None else torch.device("cpu")
+    except Exception:
+        return torch.device("cpu")
+
+
 # Tool Calling을 위한 시스템 프롬프트 템플릿
 # (직접 답변 우선, 필요할 때만 도구 사용하도록 설계)
 TOOL_CALLING_SYSTEM_PROMPT = """[도구 사용 원칙]
@@ -190,7 +200,7 @@ class ExaoneLLM(BaseLLM):
         try:
             print(f"[INFO] EXAONE 모델 로딩 중: {self._load_path}")
 
-            # CUDA 사용 가능 여부 확인
+            # CUDA 사용 가능 여부 확인 (로컬=GPU 유지, 배포=GPU 없으면 CPU 폴백)
             cuda_available = torch.cuda.is_available()
             print(f"[INFO] CUDA 사용 가능: {cuda_available}")
             if cuda_available:
@@ -198,18 +208,15 @@ class ExaoneLLM(BaseLLM):
                 print(
                     f"[INFO] CUDA 메모리: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f}GB"
                 )
-
-            # CUDA 필수 확인 (GPU 강제 사용)
-            if not cuda_available:
-                raise RuntimeError(
-                    "CUDA가 사용 불가능합니다. GPU가 필요합니다.\n"
-                    "torch.cuda.is_available()이 False입니다."
-                )
+            else:
+                print("[INFO] GPU 없음 → CPU로 로드 (배포 환경. 추론이 느릴 수 있음)")
 
             dtype = torch.float16
+            quantization_config = None
+            quantization_info = "없음 (FP16)"
 
-            if self.use_4bit:
-                print("[INFO] bitsandbytes 4-bit 양자화 적용 (GPU 전용)")
+            if cuda_available and self.use_4bit:
+                print("[INFO] bitsandbytes 4-bit 양자화 적용 (GPU)")
                 quantization_config = BitsAndBytesConfig(
                     load_in_4bit=True,
                     bnb_4bit_quant_type="nf4",
@@ -217,23 +224,22 @@ class ExaoneLLM(BaseLLM):
                     bnb_4bit_use_double_quant=True,
                 )
                 quantization_info = "4-bit (NF4, bitsandbytes)"
-            else:
+            elif cuda_available:
                 print("[INFO] GPU FP16 모드로 로딩")
-                quantization_config = None
-                quantization_info = "없음 (FP16)"
+            # CPU일 때는 양자화 없이 FP16, device_map auto
 
+            device_map: Any = "cuda:0" if cuda_available else "auto"
             # dtype 명시 시 fp32 로드 후 캐스팅 방지. (torch_dtype deprecated → dtype 사용)
-            load_kwargs: Dict[str, Any] = {
+            load_kwargs = {
                 "revision": EXAONE_MODEL_REVISION,
-                "dtype": dtype,
-                "device_map": {"": "cuda:0"},
+                "torch_dtype": dtype,
+                "device_map": device_map,
                 "trust_remote_code": self.trust_remote_code,
                 "low_cpu_mem_usage": True,
                 "attn_implementation": "sdpa",
                 "use_safetensors": True,
                 "local_files_only": True,
             }
-
             if quantization_config is not None:
                 load_kwargs["quantization_config"] = quantization_config
 
@@ -277,7 +283,7 @@ class ExaoneLLM(BaseLLM):
                     except Exception as e:
                         print(f"[WARN] 역량 어댑터 로드 실패, 베이스만 사용: {e}")
 
-            if settings.exaone_use_compile and hasattr(torch, "compile"):
+            if cuda_available and settings.exaone_use_compile and hasattr(torch, "compile"):
                 print("[INFO] torch.compile() 최적화 적용 중...")
                 self.model = torch.compile(self.model, mode="reduce-overhead")
                 print("[OK] torch.compile() 적용 완료")
@@ -321,6 +327,7 @@ class ExaoneLLM(BaseLLM):
             raise RuntimeError("모델이 로드되지 않았습니다.")
 
         try:
+            device = _get_model_device(self.model)
             # EXAONE 채팅 템플릿 사용
             messages = [{"role": "user", "content": prompt}]
             input_ids = self.tokenizer.apply_chat_template(
@@ -328,7 +335,7 @@ class ExaoneLLM(BaseLLM):
                 tokenize=True,
                 add_generation_prompt=True,
                 return_tensors="pt",
-            ).to(self.model.device)
+            ).to(device)
 
             # 생성 파라미터 (권장: max_new_tokens만 사용. max_length 동시 전달 시 HF 경고 발생)
             max_new_tokens = kwargs.get("max_new_tokens", 2048)
@@ -352,18 +359,22 @@ class ExaoneLLM(BaseLLM):
                 gen_kw["temperature"] = temperature
                 gen_kw["top_p"] = top_p
 
-            # 생성 (메모리 효율적인 옵션 적용)
-            with torch.no_grad(), torch.amp.autocast("cuda"):
-                outputs = self.model.generate(input_ids, **gen_kw)
+            # 생성 (GPU일 때만 autocast, CPU는 no_grad만)
+            if device.type == "cuda":
+                with torch.no_grad(), torch.amp.autocast("cuda"):
+                    outputs = self.model.generate(input_ids, **gen_kw)
+            else:
+                with torch.no_grad():
+                    outputs = self.model.generate(input_ids, **gen_kw)
 
             # 디코딩 (입력 부분 제외)
             generated_text = self.tokenizer.decode(
                 outputs[0][input_length:], skip_special_tokens=True
             )
 
-            # GPU 메모리 즉시 해제
             del input_ids, outputs
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
             return generated_text.strip()
         except Exception as e:
@@ -378,12 +389,14 @@ class ExaoneLLM(BaseLLM):
 
     def get_model_info(self) -> Dict[str, Any]:
         """모델 정보 반환."""
+        device_str = str(_get_model_device(self.model)) if self.model else None
+        dtype_str = str(self.model.dtype) if self.model else None
         return {
             "model_type": "exaone",
             "model_path": self._load_path,
             "model_id": self.model_id,
-            "device": str(self.model.device) if self.model else None,
-            "dtype": str(self.model.dtype) if self.model else None,
+            "device": device_str,
+            "dtype": dtype_str,
         }
 
 
@@ -474,13 +487,14 @@ class ExaoneLangChainWrapper(BaseChatModel):
         # 메시지를 EXAONE 채팅 형식으로 변환
         chat_messages = self._convert_messages(messages)
 
+        device = _get_model_device(self._model)
         # 채팅 템플릿 적용
         input_ids = self._tokenizer.apply_chat_template(
             chat_messages,
             tokenize=True,
             add_generation_prompt=True,
             return_tensors="pt",
-        ).to(self._model.device)
+        ).to(device)
 
         # 생성 파라미터 (invoke 시 전달된 kwargs가 LangChain 체인으로 전달됨)
         # max_tokens는 max_new_tokens와 동일 의미로 호출부에서 넘어올 수 있음
@@ -506,9 +520,13 @@ class ExaoneLangChainWrapper(BaseChatModel):
             gen_kw["temperature"] = temperature
             gen_kw["top_p"] = top_p
 
-        # 생성 (메모리 효율적인 옵션 적용)
-        with torch.no_grad(), torch.amp.autocast("cuda"):
-            outputs = self._model.generate(**gen_kw)
+        # 생성 (GPU일 때만 autocast)
+        if device.type == "cuda":
+            with torch.no_grad(), torch.amp.autocast("cuda"):
+                outputs = self._model.generate(**gen_kw)
+        else:
+            with torch.no_grad():
+                outputs = self._model.generate(**gen_kw)
 
         # 디코딩 (입력 부분 제외)
         generated_text = self._tokenizer.decode(
@@ -516,9 +534,9 @@ class ExaoneLangChainWrapper(BaseChatModel):
         )
         generated_text = generated_text.strip()
 
-        # GPU 메모리 즉시 해제
         del input_ids, outputs
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # 도구가 바인딩되어 있으면 JSON 파싱 시도
         tool_calls = []
@@ -603,13 +621,14 @@ class ExaoneLangChainWrapper(BaseChatModel):
         # 메시지를 EXAONE 채팅 형식으로 변환
         chat_messages = self._convert_messages(messages)
 
+        device = _get_model_device(self._model)
         # 채팅 템플릿 적용
         input_ids = self._tokenizer.apply_chat_template(
             chat_messages,
             tokenize=True,
             add_generation_prompt=True,
             return_tensors="pt",
-        ).to(self._model.device)
+        ).to(device)
 
         # 생성 파라미터 (invoke kwargs 전달; max_tokens는 max_new_tokens 대체 가능)
         max_new_tokens = kwargs.get("max_new_tokens") or kwargs.get("max_tokens") or 2048
@@ -643,10 +662,16 @@ class ExaoneLangChainWrapper(BaseChatModel):
             generation_kwargs["temperature"] = temperature
             generation_kwargs["top_p"] = top_p
 
+        use_cuda = device.type == "cuda"
+
         # 별도 스레드에서 생성 실행
         def generate_in_thread():
-            with torch.no_grad(), torch.amp.autocast("cuda"):
-                self._model.generate(**generation_kwargs)
+            if use_cuda:
+                with torch.no_grad(), torch.amp.autocast("cuda"):
+                    self._model.generate(**generation_kwargs)
+            else:
+                with torch.no_grad():
+                    self._model.generate(**generation_kwargs)
 
         thread = threading.Thread(target=generate_in_thread)
         thread.start()
@@ -663,9 +688,9 @@ class ExaoneLangChainWrapper(BaseChatModel):
 
         thread.join()
 
-        # GPU 메모리 즉시 해제
         del input_ids
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # 도구 호출 파싱 (스트리밍 완료 후)
         if self._tools and generated_text:

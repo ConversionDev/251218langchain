@@ -137,6 +137,51 @@ app/
 - `CORS_ORIGINS`가 있으면 해당 오리진만 허용, 없으면 `*` (전체 허용).
 - **배포 시**: Vercel(www)에서 API(api 도메인)를 호출하려면 EC2 앱에 `CORS_ORIGINS=https://www.kanggyeonggu.store,https://kanggyeonggu.store` 처럼 프론트 오리진을 넣어야 한다. (CI/CD deploy.yml에서 주입)
 
+### 4.4 앱이 죽는 원인(첫 요청 시 모델 로드·OOM)
+
+스타트업 직후가 아니라 **어느 시점에** 앱이 죽는다면, **첫 번째로 RAG/채팅/스팸을 쓰는 요청**에서 모델이 lazy 로드되며 메모리가 급증해 **OOM(Out of Memory)** 으로 프로세스가 kill되는 경우가 많다.
+
+- **재현 예**: 채팅에서 **「신입 지원자 목록 알려줘」** 등 제안 질문을 누르면 직원 RAG 경로가 실행되며 `ensure_rag_initialized()` → BGE-m3 로드가 발생하고, 이 순간 t3.small에서 죽을 수 있다.
+- **트리거**
+  - **AI 질의(채팅·검색)**: `graph_orchestrator` → `ensure_rag_initialized()` → **FlagEmbedding BGE-m3** 로드 (torch + 모델 수백 MB~1GB급). 이때 t3.small(2GB)에서는 Python/FastAPI/DB 사용량에 더해 메모리 부족으로 OOM 가능성이 큼.
+  - **직원 임베딩 갱신**: `POST /api/employees/embedding` → `get_disclosure_embedding_model()` 또는 `ensure_rag_initialized()` → 동일하게 BGE-m3 로드.
+  - **ExaOne**: 첫 채팅 시 로드. **LLaMA**: 첫 스팸 분류 시 로드. 각각 추가 메모리 사용.
+- **확인 방법**
+  - EC2 SSH 후: `dmesg | grep -i "out of memory\|oom\|killed process"` → OOM killer 로그 확인.
+  - `tail -150 /home/ubuntu/app.log` → 죽기 직전 Traceback·예외 메시지 확인.
+- **대응**
+  - **인스턴스 메모리 증설**: t3.small(2GB) → t3.medium(4GB) 등으로 변경 시 RAG+ExaOne 동시 로드 여유 생김.
+  - **로그 강화**: `ensure_rag_initialized()` / ExaOne·LLaMA 로드 직전·직후에 로그를 남겨, 죽는 직전에 어떤 모델 로드가 시작됐는지 파악.
+  - **(선택)** RAG/임베딩 비활성화 옵션을 두고, 소형 인스턴스에서는 BGE 로드를 건너뛰고 RAG 없이 동작하게 할 수 있음.
+  - **ExaOne CPU 폴백**: GPU 없을 때(배포 환경) ExaOne은 CPU로 로드·추론하도록 되어 있음. 로컬(GPU 있음)은 기존처럼 GPU 사용. 추론은 CPU에서 느리지만 동작함. (`domain.models.bases.exaone_model`)
+
+### 4.5 t3.small 유지 + 비용 최소화 전략
+
+#### S3에 모델 넣으면 괜찮아지나?
+
+**아니요. 메모리 부하는 그대로입니다.**
+
+- 모델 파일을 S3에 두고, 첫 요청 시 EC2로 다운로드 후 로드하는 방식은 **디스크 사용량·배포 속도**에는 도움이 되지만, **실제 추론 시에는 모델을 반드시 인스턴스 RAM에 올립니다.**  
+  → S3는 “저장소”일 뿐이고, 실행 중 메모리 사용량을 줄이지 못합니다.  
+  따라서 **OOM을 피하려면 “로드하지 않기” 또는 “다른 서비스에 맡기기”**가 필요합니다.
+
+#### t3.small 유지하면서 서비스 정상 동작시키는 전략 (가벼움·저비용 우선)
+
+| 전략 | 내용 | 메모리 | 비용 | 품질/기능 |
+|------|------|--------|------|-----------|
+| **A. RAG 임베딩 비활성화** | 환경 변수(예: `DISABLE_RAG_EMBEDDING=true`)로 BGE-m3 로드를 아예 하지 않음. 채팅 시 RAG 벡터 검색은 스킵하고, **도구만** 사용(get_hr_summary, list_employees, get_employee_info 등). 「신입 지원자 목록 알려줘」는 DB 기반 list_employees로만 답변. | t3.small 가능 | EC2 비용만 (기존 유지) | RAG 검색 없음, 도구 기반 답변만 |
+| **B. 임베딩만 외부 API** | BGE 대신 **OpenAI Embeddings / Cohere 등 API**로 쿼리·문서 임베딩. EC2에는 모델 미로드 → 메모리 거의 증가 없음. RAG(공시·직원·역량)는 그대로 동작. | t3.small 가능 | EC2 + API 호출당 소액 | RAG 유지, 품질 유사 |
+| **C. ExaOne/LLaMA도 외부 또는 별도** | 채팅·스팸을 EC2에서 로컬 모델로 돌리지 않고, **호스팅 API** 또는 **별도 소형 인스턴스 1대**에서만 추론. t3.small은 API 서버·라우팅·DB·도구만 담당. | t3.small 가능 | EC2 + (API 또는 inference 전용 인스턴스) | 기능 유지, 구성만 분리 |
+| **D. 인스턴스만 증설** | t3.small → t3.medium(4GB). 로직 변경 없이 RAG+ExaOne 동시 로드 가능. | 4GB | EC2 비용만 소폭 증가 | 현재와 동일 |
+
+**추천 조합 (최대한 가볍고 비용 적게):**
+
+- **지금 당장:** **A (RAG 임베딩 비활성화)**  
+  - t3.small에서 `DISABLE_RAG_EMBEDDING=true`로 배포하면, 채팅은 **도구 기반 답변만** 되고 BGE를 로드하지 않아 OOM 없이 동작.  
+  - 직원/신입/고성과 목록·요약은 이미 `list_employees`, `get_hr_summary` 등으로 가능하므로, “목록 알려줘” 계열은 서비스 유지 가능.
+- **RAG 품질이 필요해지면:** **B (임베딩만 외부 API)**  
+  - EC2 메모리는 그대로 두고, 임베딩만 API로 전환하면 RAG를 다시 켜도 t3.small 유지 가능. (API 키·호출 비용만 추가.)
+
 ---
 
 ## 5. API 라우터 상세
