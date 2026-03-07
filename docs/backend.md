@@ -120,21 +120,22 @@ app/
 
 1. **yield 전**: 서버를 먼저 띄우기 위해 `yield`를 즉시 수행하고, **백그라운드 태스크**에서 아래를 순서대로 실행한다.
 2. **init_v1()**:  
-   - PostgreSQL 연결 대기  
-   - LLM 프로바이더 설정 (ExaOne lazy load)  
-   - **ensure_rag_initialized()**: Embedding(BGE-m3) 초기화, RAG 임베딩 준비, FAISS 인덱스 로드(선택)
+   - PostgreSQL 연결 대기만 수행. **Embedding·FAISS·ExaOne·LLaMA는 스타트업에서 로드하지 않음** (배포 정상화·t3.small 메모리 절약).  
+   - ExaOne / LLaMA adapter: 첫 채팅·스팸 요청 시 lazy 로드.  
+   - Embedding·RAG: 첫 RAG 요청 시 `ensure_rag_initialized()`에서 Embedding만 로드. **FAISS 인덱스는 로드하지 않고 pgvector fallback**만 사용.
 3. **init_db()**:  
    - PostgreSQL 대기  
    - `AUTO_MIGRATE=true`이면 `alembic upgrade` 실행 (`migration_revision`, 기본 `head`)  
    - 실패 시 로그 후 예외 재발생
 4. **yield 후 (종료 시)**: 초기화 태스크 취소 대기, Gemini 클라이언트 정리
 
-이렇게 하면 Windows/uvicorn에서 lifespan에서 초기화를 기다릴 때 서버가 바로 꺼지는 현상을 피할 수 있다.
+이렇게 하면 Windows/uvicorn에서 lifespan에서 초기화를 기다릴 때 서버가 바로 꺼지는 현상을 피할 수 있고, EC2 t3.small 등 소형 인스턴스에서도 스타트업 시 OOM 없이 기동된다.
 
 ### 4.3 CORS
 
 - `gateway.add_cors_middleware(app)`로 전역 CORS 적용.
 - `CORS_ORIGINS`가 있으면 해당 오리진만 허용, 없으면 `*` (전체 허용).
+- **배포 시**: Vercel(www)에서 API(api 도메인)를 호출하려면 EC2 앱에 `CORS_ORIGINS=https://www.kanggyeonggu.store,https://kanggyeonggu.store` 처럼 프론트 오리진을 넣어야 한다. (CI/CD deploy.yml에서 주입)
 
 ---
 

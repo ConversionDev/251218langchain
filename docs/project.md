@@ -79,9 +79,10 @@
 
 ### 배포
 
-- **프론트**: `NEXT_PUBLIC_API_URL` 설정 후 빌드.
-- **백엔드**: `CORS_ORIGINS`(쉼표 구분). 비우면 `*`.
+- **프론트**: `NEXT_PUBLIC_API_URL` 설정 후 빌드 (예: `https://api.kanggyeonggu.store`, 포트 없음).
+- **백엔드**: `CORS_ORIGINS`(쉼표 구분). 비우면 `*`. www에서 API 호출 시 프론트 도메인을 넣어야 CORS 오류가 나지 않음.
 - **DB**: `DATABASE_URL` 또는 `POSTGRES_CONNECTION_STRING`. `AUTO_MIGRATE=true`면 기동 시 `alembic upgrade head`.
+- **스타트업**: DB 연결만 확인. Embedding·FAISS·Adapter는 첫 요청 시 lazy 로드(t3.small 등 소형 인스턴스 안정화). RAG는 pgvector만 사용(FAISS 미로드).
 
 ---
 

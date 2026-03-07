@@ -19,10 +19,8 @@ const nextConfig = {
     ],
     turbopackFileSystemCacheForDev: true,
   },
-  // Turbopack 루트를 명시해 경로 해석 오류 방지 (Windows)
-  turbopack: {
-    root: path.resolve(__dirname),
-  },
+  // 로컬에서만 Turbopack 루트 설정 (Windows 경로 해석 방지). Vercel 빌드에서는 미설정으로 경고 제거.
+  ...(process.env.VERCEL ? {} : { turbopack: { root: path.resolve(__dirname) } }),
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
