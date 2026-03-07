@@ -21,7 +21,7 @@ jobs:
       MAILGUN_SKIP_VERIFY: ${{ secrets.MAILGUN_SKIP_VERIFY }}
       MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
       MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
-      KECI_SERVICE_KEY: ${{ secrets.KECI_SERVICE_KEY }}
+      CORS_ORIGINS: "https://www.kanggyeonggu.store,https://kanggyeonggu.store"
       APP_DIR: /home/ubuntu/app
       VENV_DIR: /home/ubuntu/venv
       LOG_FILE: /home/ubuntu/app.log
@@ -89,7 +89,7 @@ jobs:
             MAILGUN_SKIP_VERIFY_VALUE="$MAILGUN_SKIP_VERIFY"
             MAILGUN_DOMAIN_VALUE="$MAILGUN_DOMAIN"
             MAILGUN_API_KEY_VALUE="$MAILGUN_API_KEY"
-            KECI_SERVICE_KEY_VALUE="$KECI_SERVICE_KEY"
+            CORS_ORIGINS_VALUE="$CORS_ORIGINS"
 
             cd /home/ubuntu
 
@@ -146,7 +146,7 @@ jobs:
             export MAILGUN_SKIP_VERIFY="\$MAILGUN_SKIP_VERIFY_VALUE"
             export MAILGUN_DOMAIN="\$MAILGUN_DOMAIN_VALUE"
             export MAILGUN_API_KEY="\$MAILGUN_API_KEY_VALUE"
-            export KECI_SERVICE_KEY="\$KECI_SERVICE_KEY_VALUE"
+            export CORS_ORIGINS="\$CORS_ORIGINS_VALUE"
             export HOST=0.0.0.0
             export PORT=8000
             export MODE=api
