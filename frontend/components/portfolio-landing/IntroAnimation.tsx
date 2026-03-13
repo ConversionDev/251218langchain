@@ -22,7 +22,7 @@ const TAGLINE = "한 줄의 코드가 세상을 바꾼다";
 const PENCIL_W = 200;
 
 /** 글씨가 쓰여지는 걸 눈으로 따라갈 수 있도록 충분한 시간 — 한 획 한 획 정성스럽게 */
-const WRITE_DURATION = 10;
+const WRITE_DURATION = 8;
 
 type PathData = {
   pathD: string;
@@ -43,14 +43,19 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
   const textRef = useRef<HTMLParagraphElement>(null);
   const pathRef = useRef<SVGPathElement | null>(null);
   const penRef = useRef<HTMLDivElement | null>(null);
+  /** 깃털 표시 위치 — 목표를 부드럽게 따라가서 여유 있게 보이도록 */
+  const penPosRef = useRef({ left: 0, top: 0 });
 
   const usePathMode = pathData !== null && pathLength !== null;
+
+  /** 밑줄·reveal은 progress에 맞춰 일정하게, 깃털만 부드럽게 지연 */
+  const PEN_SMOOTH = 0.14;
 
   useEffect(() => {
     opentype.load("/fonts/NanumBrushScript-Regular.ttf", (err, font) => {
       if (err || !font) return;
       try {
-        const path = font.getPath(TAGLINE, 0, 0, 72);
+        const path = font.getPath(`"${TAGLINE}"`, 0, 0, 72);
         const bbox = path.getBoundingBox();
         setPathData({
           pathD: path.toPathData(2),
@@ -111,10 +116,18 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
       const length = pathLength;
       const bbox = pathData.bbox;
 
+      const pt0 = pathEl.getPointAtLength(0);
+      const containerW0 = textRef.current?.offsetWidth ?? textWidth;
+      const containerH0 = textRef.current?.offsetHeight ?? 120;
+      const w0 = bbox.x2 - bbox.x1;
+      const h0 = bbox.y2 - bbox.y1;
+      penPosRef.current.left = (w0 > 0 ? ((pt0.x - bbox.x1) / w0) * containerW0 : 0) - PENCIL_W * Math.cos(angleRad);
+      penPosRef.current.top = h0 > 0 ? ((pt0.y - bbox.y1) / h0) * containerH0 : 0;
+
       const tween = gsap.to(progressRef.current, {
         p: 1,
         duration: WRITE_DURATION,
-        ease: "power2.inOut",
+        ease: "none",
         onUpdate: () => {
           const p = progressRef.current.p;
           setProgress(p);
@@ -124,13 +137,14 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           const containerH = textRef.current?.offsetHeight ?? 120;
           const w = bbox.x2 - bbox.x1;
           const h = bbox.y2 - bbox.y1;
-          const nibX_px =
-            w > 0 ? ((pt.x - bbox.x1) / w) * containerW : 0;
-          const nibY_px =
-            h > 0 ? ((pt.y - bbox.y1) / h) * containerH : 0;
+          const targetLeft = (w > 0 ? ((pt.x - bbox.x1) / w) * containerW : 0) - PENCIL_W * Math.cos(angleRad);
+          const targetTop = h > 0 ? ((pt.y - bbox.y1) / h) * containerH : 0;
 
-          penEl.style.left = `${nibX_px - PENCIL_W * Math.cos(angleRad)}px`;
-          penEl.style.top = `${nibY_px}px`;
+          penPosRef.current.left += (targetLeft - penPosRef.current.left) * PEN_SMOOTH;
+          penPosRef.current.top += (targetTop - penPosRef.current.top) * PEN_SMOOTH;
+
+          penEl.style.left = `${penPosRef.current.left}px`;
+          penEl.style.top = `${penPosRef.current.top}px`;
         },
         onComplete: finish,
       });
@@ -146,7 +160,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
     const tween = gsap.to(progressRef.current, {
       p: 1,
       duration: WRITE_DURATION,
-      ease: "power2.inOut",
+      ease: "none",
       onUpdate: () => setProgress(progressRef.current.p),
       onComplete: finish,
     });
@@ -177,11 +191,9 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
   }
 
   const penLeft = nibX - PENCIL_W * Math.cos(angleRad);
-  const streakWidth = Math.min(textWidth, Math.max(0, nibX));
-  const clipRight = Math.max(
-    0,
-    Math.min(100, (1 - nibX / textWidth) * 100)
-  );
+  /** 밑줄은 progress에 맞춰 일정하게 진행 (깃털 위치와 분리) */
+  const streakWidth = Math.min(textWidth, Math.max(0, progress * textWidth));
+  const clipRight = Math.max(0, Math.min(100, (1 - progress) * 100));
   const pencilVisible = progress > 0.01 && progress < 0.99;
 
   const taglinePathSvg =
@@ -293,7 +305,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
             }}
             aria-hidden
           >
-            {TAGLINE}
+            "{TAGLINE}"
           </p>
 
           {taglinePathSvg}
@@ -310,7 +322,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
                 clipPath: `inset(-80px ${clipRight.toFixed(2)}% -80px 0)`,
               }}
             >
-              {TAGLINE}
+              "{TAGLINE}"
             </p>
           )}
 
