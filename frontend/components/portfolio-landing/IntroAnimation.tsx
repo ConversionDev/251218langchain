@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { animate, cubicBezier } from "animejs";
+import gsap from "gsap";
 import opentype from "opentype.js";
 import { Nanum_Brush_Script, Noto_Serif_KR } from "next/font/google";
 import { FeatherPenSVG, PENCIL_WRITE_ANGLE_DEG } from "./FeatherPenSVG";
@@ -21,11 +21,8 @@ const notoSerifKR = Noto_Serif_KR({
 const TAGLINE = "한 줄의 코드가 세상을 바꾼다";
 const PENCIL_W = 200;
 
-/** 글씨가 쓰여지는 걸 눈으로 따라갈 수 있도록 충분한 시간 */
-const WRITE_DURATION = 5.2;
-
-/** 손으로 쓰는 듯한 리듬: 처음·끝 살짝 느리고 중간이 조금 빠름 */
-const WRITE_EASE = [0.22, 0.12, 0.3, 1] as const;
+/** 글씨가 쓰여지는 걸 눈으로 따라갈 수 있도록 충분한 시간 — 한 획 한 획 정성스럽게 */
+const WRITE_DURATION = 10;
 
 type PathData = {
   pathD: string;
@@ -38,16 +35,14 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
   const [writingStarted, setWritingStarted] = useState(false);
   const [isOut, setIsOut] = useState(false);
   const [progress, setProgress] = useState(0);
-
-  const progressRef = useRef({ p: 0 });
-  const lastLogStepRef = useRef(-1);
-  const textRef = useRef<HTMLParagraphElement>(null);
-  const pathRef = useRef<SVGPathElement | null>(null);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-
   const [textWidth, setTextWidth] = useState(500);
   const [pathData, setPathData] = useState<PathData | null>(null);
   const [pathLength, setPathLength] = useState<number | null>(null);
+
+  const progressRef = useRef({ p: 0 });
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const pathRef = useRef<SVGPathElement | null>(null);
+  const penRef = useRef<HTMLDivElement | null>(null);
 
   const usePathMode = pathData !== null && pathLength !== null;
 
@@ -55,7 +50,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
     opentype.load("/fonts/NanumBrushScript-Regular.ttf", (err, font) => {
       if (err || !font) return;
       try {
-        const path = font.getPath(`"${TAGLINE}"`, 0, 0, 72);
+        const path = font.getPath(TAGLINE, 0, 0, 72);
         const bbox = path.getBoundingBox();
         setPathData({
           pathD: path.toPathData(2),
@@ -67,10 +62,15 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           },
         });
       } catch {
-        // path 생성 실패 시 기존 clipPath 방식 사용
+        // path 생성 실패 시 fallback(clipPath 텍스트) 사용
       }
     });
   }, []);
+
+  useLayoutEffect(() => {
+    if (!pathData || !pathRef.current) return;
+    setPathLength(pathRef.current.getTotalLength());
+  }, [pathData]);
 
   useEffect(() => {
     const t1 = setTimeout(() => setShowName(true), 300);
@@ -87,66 +87,89 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
     };
   }, []);
 
-  useLayoutEffect(() => {
-    if (!pathData || !pathRef.current) return;
-    setPathLength(pathRef.current.getTotalLength());
-  }, [pathData]);
-
   useEffect(() => {
     if (!writingStarted) return;
-    let cancelled = false;
+
+    const angleRad = (PENCIL_WRITE_ANGLE_DEG * Math.PI) / 180;
+    const finish = () => {
+      setIsOut(true);
+      setTimeout(onComplete, 700);
+    };
+
+    if (
+      usePathMode &&
+      pathRef.current &&
+      penRef.current &&
+      pathData &&
+      pathLength !== null
+    ) {
+      progressRef.current.p = 0;
+      setProgress(0);
+
+      const pathEl = pathRef.current;
+      const penEl = penRef.current;
+      const length = pathLength;
+      const bbox = pathData.bbox;
+
+      const tween = gsap.to(progressRef.current, {
+        p: 1,
+        duration: WRITE_DURATION,
+        ease: "power2.inOut",
+        onUpdate: () => {
+          const p = progressRef.current.p;
+          setProgress(p);
+          const pt = pathEl.getPointAtLength(p * length);
+
+          const containerW = textRef.current?.offsetWidth ?? textWidth;
+          const containerH = textRef.current?.offsetHeight ?? 120;
+          const w = bbox.x2 - bbox.x1;
+          const h = bbox.y2 - bbox.y1;
+          const nibX_px =
+            w > 0 ? ((pt.x - bbox.x1) / w) * containerW : 0;
+          const nibY_px =
+            h > 0 ? ((pt.y - bbox.y1) / h) * containerH : 0;
+
+          penEl.style.left = `${nibX_px - PENCIL_W * Math.cos(angleRad)}px`;
+          penEl.style.top = `${nibY_px}px`;
+        },
+        onComplete: finish,
+      });
+
+      return () => {
+        tween.kill();
+      };
+    }
 
     progressRef.current.p = 0;
     setProgress(0);
 
-    const anim = animate(progressRef.current, {
+    const tween = gsap.to(progressRef.current, {
       p: 1,
-      duration: WRITE_DURATION * 1000,
-      ease: cubicBezier(
-        WRITE_EASE[0],
-        WRITE_EASE[1],
-        WRITE_EASE[2],
-        WRITE_EASE[3]
-      ),
-      onUpdate: () => {
-        if (!cancelled) {
-          const p = progressRef.current.p;
-          setProgress(p);
-
-          if (process.env.NODE_ENV === "development") {
-            const step = Math.floor(p * 5);
-            if (step !== lastLogStepRef.current) {
-              lastLogStepRef.current = step;
-              console.log("[anime.js] write progress", step * 20 + "%");
-            }
-          }
-        }
-      },
+      duration: WRITE_DURATION,
+      ease: "power2.inOut",
+      onUpdate: () => setProgress(progressRef.current.p),
+      onComplete: finish,
     });
 
-    const t1 = setTimeout(() => {
-      if (!cancelled) setIsOut(true);
-    }, (WRITE_DURATION + 1.6) * 1000);
-
-    const t2 = setTimeout(() => {
-      if (!cancelled) onComplete();
-    }, (WRITE_DURATION + 2.3) * 1000);
-
     return () => {
-      cancelled = true;
-      anim.cancel();
-      clearTimeout(t1);
-      clearTimeout(t2);
+      tween.kill();
     };
-  }, [writingStarted, onComplete]);
+  }, [
+    writingStarted,
+    onComplete,
+    usePathMode,
+    pathData,
+    pathLength,
+    textWidth,
+  ]);
 
   const angleRad = (PENCIL_WRITE_ANGLE_DEG * Math.PI) / 180;
   let nibX: number;
 
-  if (usePathMode && pathRef.current && pathLength !== null) {
+  if (usePathMode && pathRef.current && pathLength !== null && pathData) {
     const len = progress * pathLength;
     const pt = pathRef.current.getPointAtLength(len);
-    const bbox = pathData!.bbox;
+    const bbox = pathData.bbox;
     const w = bbox.x2 - bbox.x1;
     nibX = w > 0 ? ((pt.x - bbox.x1) / w) * textWidth : 0;
   } else {
@@ -182,14 +205,12 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           </clipPath>
         </defs>
         <g clipPath="url(#introPathReveal)">
-          <g>
-            <path
-              ref={pathRef}
-              d={pathData.pathD}
-              fill="#ffffff"
-              style={{ transition: "none", opacity: pathLength !== null ? 1 : 0 }}
-            />
-          </g>
+          <path
+            ref={pathRef}
+            d={pathData.pathD}
+            fill="#ffffff"
+            style={{ transition: "none", opacity: pathLength !== null ? 1 : 0 }}
+          />
         </g>
       </svg>
     ) : null;
@@ -246,7 +267,8 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           style={{
             height: 1,
             width: "clamp(140px, 26vw, 260px)",
-            background: "linear-gradient(90deg, transparent, #4fc3f7, transparent)",
+            background:
+              "linear-gradient(90deg, transparent, #4fc3f7, transparent)",
             boxShadow: "0 0 10px rgba(79,195,247,0.5)",
             originX: 0.5,
             marginBottom: "2.2rem",
@@ -254,7 +276,6 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
         />
 
         <div
-          ref={wrapperRef}
           className="relative inline-block"
           style={{ overflow: "hidden" }}
         >
@@ -272,7 +293,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
             }}
             aria-hidden
           >
-            "{TAGLINE}"
+            {TAGLINE}
           </p>
 
           {taglinePathSvg}
@@ -289,7 +310,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
                 clipPath: `inset(-80px ${clipRight.toFixed(2)}% -80px 0)`,
               }}
             >
-              "{TAGLINE}"
+              {TAGLINE}
             </p>
           )}
 
@@ -310,11 +331,21 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
                   transition: "none",
                 }}
               />
-              <FeatherPenSVG
-                width={PENCIL_W}
-                left={penLeft}
-                visible={pencilVisible}
-              />
+              <div
+                ref={penRef}
+                style={{
+                  position: "absolute",
+                  top: usePathMode ? 0 : "50%",
+                  left: usePathMode ? 0 : penLeft,
+                  transform: usePathMode ? undefined : "translateY(-50%)",
+                }}
+              >
+                <FeatherPenSVG
+                  width={PENCIL_W}
+                  left={0}
+                  visible={usePathMode ? true : pencilVisible}
+                />
+              </div>
             </div>
           )}
         </div>

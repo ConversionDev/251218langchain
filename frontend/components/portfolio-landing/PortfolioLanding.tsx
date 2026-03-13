@@ -39,11 +39,14 @@ export function PortfolioLanding() {
     setTimeout(() => setIntroComplete(true), 400);
   };
 
+  const introBackground =
+    "radial-gradient(ellipse 120% 100% at 50% 50%, #0d1c42 0%, #060c28 55%, #010511 100%)";
+
   return (
     <div
       className="min-h-screen [overflow-x:clip]"
       style={{
-        background: "#0f172a",
+        background: introBackground,
         color: "#e8e8f0",
         WebkitFontSmoothing: "antialiased",
       }}
@@ -56,7 +59,7 @@ export function PortfolioLanding() {
           <div
             className="md:hidden fixed top-0 inset-x-0 z-50 flex items-center justify-between px-6 h-14"
             style={{
-              background: "#0f172a",
+              background: "rgba(13, 28, 66, 0.85)",
               backdropFilter: "blur(20px)",
               WebkitBackdropFilter: "blur(20px)",
               borderBottom: "1px solid rgba(168,230,207,0.08)",

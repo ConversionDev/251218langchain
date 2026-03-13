@@ -11,6 +11,7 @@ declare module "opentype.js" {
   }
   export interface Font {
     getPath(text: string, x: number, y: number, fontSize: number): Path;
+    getPaths(text: string, x: number, y: number, fontSize: number): Path[];
   }
   export function load(
     url: string,
