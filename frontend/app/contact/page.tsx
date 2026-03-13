@@ -4,7 +4,6 @@ import Link from "next/link";
 
 const NAV_LINKS = [
   { href: "/", label: "홈" },
-  { href: "/portfolio", label: "프로젝트" },
   { href: "/contact", label: "연락처" },
 ];
 
@@ -77,7 +76,6 @@ export default function ContactPage() {
           <span>© {new Date().getFullYear()} 강경구</span>
           <div className="flex items-center gap-6">
             <Link href="/" className="hover:text-slate-700">홈</Link>
-            <Link href="/portfolio" className="hover:text-slate-700">프로젝트</Link>
           </div>
         </div>
       </footer>

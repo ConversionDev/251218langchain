@@ -1,17 +1,36 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { motion, animate as fmAnimate } from "framer-motion";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
+import { motion } from "framer-motion";
+import { animate, cubicBezier } from "animejs";
+import opentype from "opentype.js";
 import { Nanum_Brush_Script, Noto_Serif_KR } from "next/font/google";
 import { FeatherPenSVG, PENCIL_WRITE_ANGLE_DEG } from "./FeatherPenSVG";
 
-const nanumBrush = Nanum_Brush_Script({ weight: "400", subsets: ["latin"], display: "swap" });
-const notoSerifKR = Noto_Serif_KR({ weight: ["700"], subsets: ["latin"], display: "swap" });
+const nanumBrush = Nanum_Brush_Script({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+const notoSerifKR = Noto_Serif_KR({
+  weight: ["700"],
+  subsets: ["latin"],
+  display: "swap",
+});
 
+const TAGLINE = "한 줄의 코드가 세상을 바꾼다";
 const PENCIL_W = 200;
-const WRITE_DURATION = 3.2;
+
+/** 글씨가 쓰여지는 걸 눈으로 따라갈 수 있도록 충분한 시간 */
+const WRITE_DURATION = 5.2;
+
 /** 손으로 쓰는 듯한 리듬: 처음·끝 살짝 느리고 중간이 조금 빠름 */
 const WRITE_EASE = [0.22, 0.12, 0.3, 1] as const;
+
+type PathData = {
+  pathD: string;
+  bbox: { x1: number; y1: number; x2: number; y2: number };
+};
 
 export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
   const [showName, setShowName] = useState(false);
@@ -19,8 +38,39 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
   const [writingStarted, setWritingStarted] = useState(false);
   const [isOut, setIsOut] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  const progressRef = useRef({ p: 0 });
+  const lastLogStepRef = useRef(-1);
   const textRef = useRef<HTMLParagraphElement>(null);
+  const pathRef = useRef<SVGPathElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
   const [textWidth, setTextWidth] = useState(500);
+  const [pathData, setPathData] = useState<PathData | null>(null);
+  const [pathLength, setPathLength] = useState<number | null>(null);
+
+  const usePathMode = pathData !== null && pathLength !== null;
+
+  useEffect(() => {
+    opentype.load("/fonts/NanumBrushScript-Regular.ttf", (err, font) => {
+      if (err || !font) return;
+      try {
+        const path = font.getPath(`"${TAGLINE}"`, 0, 0, 72);
+        const bbox = path.getBoundingBox();
+        setPathData({
+          pathD: path.toPathData(2),
+          bbox: {
+            x1: bbox.x1,
+            y1: bbox.y1,
+            x2: bbox.x2,
+            y2: bbox.y2,
+          },
+        });
+      } catch {
+        // path 생성 실패 시 기존 clipPath 방식 사용
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const t1 = setTimeout(() => setShowName(true), 300);
@@ -29,47 +79,132 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
       setTextWidth(textRef.current?.offsetWidth ?? 500);
       setWritingStarted(true);
     }, 1450);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, []);
+
+  useLayoutEffect(() => {
+    if (!pathData || !pathRef.current) return;
+    setPathLength(pathRef.current.getTotalLength());
+  }, [pathData]);
 
   useEffect(() => {
     if (!writingStarted) return;
     let cancelled = false;
-    const controls = fmAnimate(0, 1, {
-      duration: WRITE_DURATION,
-      ease: WRITE_EASE,
-      onUpdate: (v) => { if (!cancelled) setProgress(v); },
+
+    progressRef.current.p = 0;
+    setProgress(0);
+
+    const anim = animate(progressRef.current, {
+      p: 1,
+      duration: WRITE_DURATION * 1000,
+      ease: cubicBezier(
+        WRITE_EASE[0],
+        WRITE_EASE[1],
+        WRITE_EASE[2],
+        WRITE_EASE[3]
+      ),
+      onUpdate: () => {
+        if (!cancelled) {
+          const p = progressRef.current.p;
+          setProgress(p);
+
+          if (process.env.NODE_ENV === "development") {
+            const step = Math.floor(p * 5);
+            if (step !== lastLogStepRef.current) {
+              lastLogStepRef.current = step;
+              console.log("[anime.js] write progress", step * 20 + "%");
+            }
+          }
+        }
+      },
     });
-    const t1 = setTimeout(() => { if (!cancelled) setIsOut(true); }, (WRITE_DURATION + 1.6) * 1000);
-    const t2 = setTimeout(() => { if (!cancelled) onComplete(); }, (WRITE_DURATION + 2.3) * 1000);
+
+    const t1 = setTimeout(() => {
+      if (!cancelled) setIsOut(true);
+    }, (WRITE_DURATION + 1.6) * 1000);
+
+    const t2 = setTimeout(() => {
+      if (!cancelled) onComplete();
+    }, (WRITE_DURATION + 2.3) * 1000);
+
     return () => {
       cancelled = true;
-      controls.stop();
+      anim.cancel();
       clearTimeout(t1);
       clearTimeout(t2);
     };
   }, [writingStarted, onComplete]);
 
-  // 연필 촉이 글자 끝을 따라가며, 촉 바로 앞까지 텍스트가 드러남 (글씨 써지는 느낌)
-  const nibX = progress * (textWidth + PENCIL_W * 0.5);
   const angleRad = (PENCIL_WRITE_ANGLE_DEG * Math.PI) / 180;
+  let nibX: number;
+
+  if (usePathMode && pathRef.current && pathLength !== null) {
+    const len = progress * pathLength;
+    const pt = pathRef.current.getPointAtLength(len);
+    const bbox = pathData!.bbox;
+    const w = bbox.x2 - bbox.x1;
+    nibX = w > 0 ? ((pt.x - bbox.x1) / w) * textWidth : 0;
+  } else {
+    nibX = progress * (textWidth + PENCIL_W * 0.5);
+  }
+
   const penLeft = nibX - PENCIL_W * Math.cos(angleRad);
   const streakWidth = Math.min(textWidth, Math.max(0, nibX));
-  const clipRight = Math.max(0, Math.min(100, (1 - nibX / textWidth) * 100));
+  const clipRight = Math.max(
+    0,
+    Math.min(100, (1 - nibX / textWidth) * 100)
+  );
   const pencilVisible = progress > 0.01 && progress < 0.99;
+
+  const taglinePathSvg =
+    pathData !== null ? (
+      <svg
+        className="absolute inset-0 w-full h-full"
+        style={{ overflow: "visible" }}
+        viewBox={`${pathData.bbox.x1} ${pathData.bbox.y1} ${
+          pathData.bbox.x2 - pathData.bbox.x1
+        } ${pathData.bbox.y2 - pathData.bbox.y1}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          <clipPath id="introPathReveal">
+            <rect
+              x={pathData.bbox.x1}
+              y={pathData.bbox.y1}
+              width={(pathData.bbox.x2 - pathData.bbox.x1) * progress}
+              height={pathData.bbox.y2 - pathData.bbox.y1}
+            />
+          </clipPath>
+        </defs>
+        <g clipPath="url(#introPathReveal)">
+          <g>
+            <path
+              ref={pathRef}
+              d={pathData.pathD}
+              fill="#ffffff"
+              style={{ transition: "none", opacity: pathLength !== null ? 1 : 0 }}
+            />
+          </g>
+        </g>
+      </svg>
+    ) : null;
 
   return (
     <motion.div
       className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden"
       style={{
-        background: "radial-gradient(ellipse 120% 100% at 50% 50%, #0d1c42 0%, #060c28 55%, #010511 100%)",
+        background:
+          "radial-gradient(ellipse 120% 100% at 50% 50%, #0d1c42 0%, #060c28 55%, #010511 100%)",
       }}
       animate={{ opacity: isOut ? 0 : 1 }}
       transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
     >
       <div className="relative flex flex-col items-center select-none px-6 w-full max-w-4xl">
-
-        {/* 영어 이름 - 얇은 간격 넓은 대문자 */}
         <motion.p
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: showName ? 0.5 : 0, y: showName ? 0 : -12 }}
@@ -87,7 +222,6 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           Kang Kyung Gu
         </motion.p>
 
-        {/* 한글 이름 - 사이드바와 동일한 Nanum Pen Script */}
         <motion.h1
           initial={{ opacity: 0, y: 28 }}
           animate={{ opacity: showName ? 1 : 0, y: showName ? 0 : 28 }}
@@ -100,13 +234,11 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
             lineHeight: 1.05,
             color: "rgba(180,200,240,0.6)",
             marginBottom: "0.8rem",
-            textShadow: "none",
           }}
         >
           강경구
         </motion.h1>
 
-        {/* 구분선 */}
         <motion.div
           initial={{ scaleX: 0, opacity: 0 }}
           animate={{ scaleX: showLine ? 1 : 0, opacity: showLine ? 1 : 0 }}
@@ -121,10 +253,11 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           }}
         />
 
-        {/* 태그라인 + 깃털 애니메이션 영역 - overflow로 삐져나온 부분 숨김 */}
-        <div className="relative inline-block" style={{ overflow: "hidden" }}>
-
-          {/* 레이아웃 크기용 투명 텍스트 (실제 폭 측정) */}
+        <div
+          ref={wrapperRef}
+          className="relative inline-block"
+          style={{ overflow: "hidden" }}
+        >
           <p
             ref={textRef}
             className={nanumBrush.className}
@@ -139,33 +272,32 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
             }}
             aria-hidden
           >
-            &quot;한 줄의 코드가 세상을 바꾼다&quot;
+            "{TAGLINE}"
           </p>
 
-          {/* 보이는 태그라인 - clip-path로 좌→우 reveal */}
-          <p
-            className={`absolute inset-0 ${nanumBrush.className}`}
-            style={{
-              fontSize: "clamp(3.2rem, 8.5vw, 6rem)",
-              color: "#ffffff",
-              lineHeight: 1.4,
-              whiteSpace: "nowrap",
-              paddingBottom: "0.35em",
-              clipPath: `inset(-80px ${clipRight.toFixed(2)}% -80px 0)`,
-              textShadow: "none",
-              transition: "none",
-            }}
-          >
-            &quot;한 줄의 코드가 세상을 바꾼다&quot;
-          </p>
+          {taglinePathSvg}
 
-          {/* 깃털 + 빛 줄기 오버레이 */}
+          {!pathData && (
+            <p
+              className={`absolute inset-0 ${nanumBrush.className}`}
+              style={{
+                fontSize: "clamp(3.2rem, 8.5vw, 6rem)",
+                color: "#ffffff",
+                lineHeight: 1.4,
+                whiteSpace: "nowrap",
+                paddingBottom: "0.35em",
+                clipPath: `inset(-80px ${clipRight.toFixed(2)}% -80px 0)`,
+              }}
+            >
+              "{TAGLINE}"
+            </p>
+          )}
+
           {writingStarted && (
             <div
               className="absolute pointer-events-none"
               style={{ inset: 0, overflow: "visible" }}
             >
-              {/* 미니멀 밑줄 — 단순한 선만 */}
               <div
                 style={{
                   position: "absolute",
@@ -173,12 +305,11 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
                   left: 0,
                   width: streakWidth,
                   height: 2,
-                  background: "linear-gradient(90deg, transparent 0%, rgba(226,232,244,0.5) 30%, rgba(226,232,244,0.85) 100%)",
+                  background:
+                    "linear-gradient(90deg, transparent 0%, rgba(226,232,244,0.5) 30%, rgba(226,232,244,0.85) 100%)",
                   transition: "none",
                 }}
               />
-
-              {/* 깃털펜: 레퍼런스 PNG처럼 선만 선명하게, 발광 없음 */}
               <FeatherPenSVG
                 width={PENCIL_W}
                 left={penLeft}

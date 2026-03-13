@@ -9,7 +9,6 @@ import { StrengthsTechSection } from "./StrengthsTechSection";
 import { TimelineSection } from "./TimelineSection";
 import { ContactSection } from "./ContactSection";
 import { IntroAnimation } from "./IntroAnimation";
-import { ResumePanel } from "@/components/portfolio/ResumePanel";
 
 const SECTIONS = ["about", "projects", "strengths", "timeline", "contact"] as const;
 
@@ -17,7 +16,6 @@ export function PortfolioLanding() {
   const [showIntro, setShowIntro] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
   const [activeSection, setActiveSection] = useState("about");
-  const [resumeOpen, setResumeOpen] = useState(false);
 
   useEffect(() => {
     if (!introComplete) return;
@@ -87,10 +85,7 @@ export function PortfolioLanding() {
             </span>
           </div>
           <div className="relative z-10 w-full max-w-[1280px] mx-auto px-8 sm:px-12 lg:px-16 xl:px-24 md:flex md:items-start md:gap-16 lg:gap-24 xl:gap-32">
-            <Navigation
-              activeSection={activeSection}
-              onOpenResume={() => setResumeOpen(true)}
-            />
+            <Navigation activeSection={activeSection} />
             <main className="flex-1 min-w-0 max-w-[720px] pt-14 md:pt-0 pb-40">
               <AboutSection />
               <ProjectsSection />
@@ -99,7 +94,6 @@ export function PortfolioLanding() {
               <ContactSection />
             </main>
           </div>
-          <ResumePanel open={resumeOpen} onClose={() => setResumeOpen(false)} />
         </>
       )}
     </div>

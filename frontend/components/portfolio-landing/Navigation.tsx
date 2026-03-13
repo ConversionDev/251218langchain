@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Mail, FileText, PenSquare, User, FolderKanban, Layers, Briefcase } from "lucide-react";
+import { Mail, PenSquare, User, FolderKanban, Layers, Briefcase } from "lucide-react";
 import { Jua, Nanum_Pen_Script, Nanum_Brush_Script } from "next/font/google";
 import Image from "next/image";
 
@@ -10,12 +10,11 @@ const nanumPen = Nanum_Pen_Script({ weight: "400", subsets: ["latin"], display: 
 const nanumBrush = Nanum_Brush_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 
 const NAV = [
-  { id: "about", label: "About", icon: User, isResume: false },
-  { id: "projects", label: "Projects", icon: FolderKanban, isResume: false },
-  { id: "strengths", label: "Tech Stack", icon: Layers, isResume: false },
-  { id: "timeline", label: "Career", icon: Briefcase, isResume: false },
-  { id: "_resume", label: "Resume", icon: FileText, isResume: true },
-  { id: "contact", label: "Contact", icon: Mail, isResume: false },
+  { id: "about", label: "About", icon: User },
+  { id: "projects", label: "Projects", icon: FolderKanban },
+  { id: "strengths", label: "Tech Stack", icon: Layers },
+  { id: "timeline", label: "Career", icon: Briefcase },
+  { id: "contact", label: "Contact", icon: Mail },
 ] as const;
 
 /** 보내주신 사진과 유사: 한쪽 톱니, 한쪽 부드러운 곡선, 중앙 깃대. 반전해 펜끝이 문장(오른쪽) 향함 */
@@ -74,12 +73,11 @@ const SOCIALS = [
 
 type NavigationProps = {
   activeSection: string;
-  onOpenResume?: () => void;
   /** 사이드바 상단 로고/프로필 사진 URL. 있으면 이름 위에 크게 표시 */
   logoImageSrc?: string;
 };
 
-export function Navigation({ activeSection, onOpenResume, logoImageSrc }: NavigationProps) {
+export function Navigation({ activeSection, logoImageSrc }: NavigationProps) {
   const go = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 
@@ -147,16 +145,15 @@ export function Navigation({ activeSection, onOpenResume, logoImageSrc }: Naviga
             className="absolute left-0 top-1 bottom-1 w-px"
             style={{ background: "rgba(142,240,215,0.08)" }}
           />
-          {/* 목차 1: About, Projects, Tech Stack */}
           <div className="pl-5 space-y-1.5">
-            {NAV.filter((item) => !["timeline", "_resume", "contact"].includes(item.id)).map(({ id, label, isResume, icon: Icon }) => (
+            {NAV.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => (isResume && onOpenResume ? onOpenResume() : go(id))}
+                onClick={() => go(id)}
                 className="group relative flex items-center py-3 w-full text-left"
               >
-                {activeSection === id && !isResume && (
+                {activeSection === id && (
                   <motion.span
                     layoutId="navDot"
                     className="absolute -left-[5.5px] w-2.5 h-2.5 rounded-full"
@@ -182,56 +179,6 @@ export function Navigation({ activeSection, onOpenResume, logoImageSrc }: Naviga
                     transition: "color 0.25s",
                   }}
                   className={activeSection !== id ? "group-hover:!text-[rgba(220,228,245,0.9)]" : ""}
-                >
-                  {label}
-                </span>
-              </button>
-            ))}
-          </div>
-          {/* 구분선: Career / Resume / Contact 를 별도 목차로 */}
-          <div
-            className="my-3 mx-0 pl-5"
-            style={{
-              width: "calc(100% - 1.25rem)",
-              height: 1,
-              background: "rgba(142,240,215,0.12)",
-            }}
-          />
-          {/* 목차 2: Career, Resume, Contact */}
-          <div className="pl-5 space-y-1.5">
-            {NAV.filter((item) => ["timeline", "_resume", "contact"].includes(item.id)).map(({ id, label, isResume, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => (isResume && onOpenResume ? onOpenResume() : go(id))}
-                className="group relative flex items-center py-3 w-full text-left"
-              >
-                {activeSection === id && !isResume && (
-                  <motion.span
-                    layoutId="navDot"
-                    className="absolute -left-[5.5px] w-2.5 h-2.5 rounded-full"
-                    style={{
-                      background: "#8ef0d7",
-                      boxShadow: "0 0 10px rgba(142,240,215,0.6)",
-                    }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 380,
-                      damping: 28,
-                    }}
-                  />
-                )}
-                <Icon size={iconSize} className="mr-2 shrink-0 opacity-70" style={{ color: iconColor }} />
-                <span
-                  style={{
-                    fontSize: "1.05rem",
-                    fontWeight: activeSection === id && !isResume ? 600 : 400,
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: activeSection === id && !isResume ? "#8ef0d7" : "rgba(220,228,245,0.65)",
-                    transition: "color 0.25s",
-                  }}
-                  className={activeSection !== id || isResume ? "group-hover:!text-[rgba(220,228,245,0.9)]" : ""}
                 >
                   {label}
                 </span>
