@@ -121,12 +121,10 @@ def get_hr_summary() -> str:
         try:
             employees = repo_list_all(db) or []
             employee_count = len(employees)
-            ats_statuses = {"pending", "screening", "hired", "rejected"}
 
             def _is_new_hire(emp: Dict[str, Any]) -> bool:
-                et0 = str(emp.get("employmentType") or "").strip().lower()
-                st0 = str(emp.get("status") or "").strip().lower()
-                return et0 == "new_hire" or st0 in ats_statuses
+                st = str(emp.get("status") or "").strip().lower()
+                return st in ("pending", "screening", "rejected")  # ATS 단계 = 신입, 빈값/hired = 기존
 
             def _is_high_performer(emp: Dict[str, Any]) -> bool:
                 dna = emp.get("successDna")
@@ -247,7 +245,7 @@ def list_employees(
         return "performance_tier는 all, high 중 하나여야 합니다."
     try:
         from core.database import SessionLocal  # type: ignore
-        from domain.hub.repositories.employee_repository import list_for_chat, count_for_chat, count_all  # type: ignore
+        from domain.hub.repositories.employee_repository import list_for_chat, count_for_chat  # type: ignore
 
         db = SessionLocal()
         try:
@@ -267,7 +265,6 @@ def list_employees(
             )
             if not rows:
                 return "조건에 맞는 직원이 없습니다."
-            total = count_all(db)
             filtered_total = count_for_chat(
                 db,
                 employment_type=emp_type_filter,
@@ -276,12 +273,9 @@ def list_employees(
                 exclude_sample=False,
             )
 
-            ats_statuses = {"pending", "screening", "hired", "rejected"}
-
             def _is_new_hire(emp: Dict[str, Any]) -> bool:
-                et0 = str(emp.get("employmentType") or "").strip().lower()
-                st0 = str(emp.get("status") or "").strip().lower()
-                return et0 == "new_hire" or st0 in ats_statuses
+                st = str(emp.get("status") or "").strip().lower()
+                return st in ("pending", "screening", "rejected")  # ATS 단계 = 신입, 빈값/hired = 기존
 
             def _is_high_performer(emp: Dict[str, Any]) -> bool:
                 dna = emp.get("successDna")
@@ -318,17 +312,15 @@ def list_employees(
                 regular_count = len(rows) - new_hire_count
                 filtered_total = high_count
 
-            # GPU OOM 방지: LLM에 보내는 명단은 최대 30명으로 제한
-            MAX_DISPLAY = 30
+            # 명단은 상위 5명만 나열하고 나머지는 '… 외 N명'. 인원 수는 count 기준(filtered_total)으로 통일
+            MAX_DISPLAY = 5
             displayed = min(len(rows), MAX_DISPLAY)
-            ratio_pct = round((high_count / total) * 100, 1) if total > 0 else 0
+            # 조건 일치 인원은 count_for_chat 결과 사용 (list limit와 무관하게 301 등 정확 반영)
+            remainder = max(0, filtered_total - displayed)
             lines: List[str] = [
-                f"[조회 결과] 전체 {total}명 중 조건 일치 {filtered_total}명 (신입 {new_hire_count} / 일반 {regular_count} / 고성과 {high_count}, 전체 대비 비율 {ratio_pct}%)",
+                f"[조회 결과] 이번 조건에 맞는 인원: {filtered_total}명 (신입 {new_hire_count} / 일반 {regular_count} / 고성과 {high_count})",
+                "※ 답변에는 반드시 아래 [1]~[5] 5줄을 그대로 복사해 넣고, 마지막에 '… 외 N명'만 추가하세요. 인원 수는 위 '이번 조건에 맞는 인원: N명'과 '… 외 K명'만 사용하세요.",
             ]
-            if displayed < len(rows):
-                lines.append(f"▼ 아래는 {filtered_total}명 중 상위 {displayed}명 표시 (이름·부서·직급을 그대로 답변에 나열하세요)")
-            else:
-                lines.append("▼ 직원 명단 (이름·부서·직급을 그대로 답변에 나열하세요)")
             for i, emp in enumerate(rows[:MAX_DISPLAY], 1):
                 cls = "신입" if _is_new_hire(emp) else "일반"
                 hp = ",고성과" if _is_high_performer(emp) else ""
@@ -336,8 +328,8 @@ def list_employees(
                     f"[{i}] 이름: {emp.get('name','')}, 부서: {emp.get('department') or '-'}, "
                     f"직급: {emp.get('jobTitle') or '-'}, 구분: {cls}{hp}"
                 )
-            if displayed < len(rows):
-                lines.append(f"… 외 {len(rows) - displayed}명 더 있음. department/job_title 필터를 사용하면 더 볼 수 있습니다.")
+            if remainder > 0:
+                lines.append(f"… 외 {remainder}명")
             return "\n".join(lines)
         finally:
             db.close()
@@ -508,11 +500,8 @@ def _build_forced_tool_calls(user_query: str) -> List[Dict[str, Any]]:
     if _needs_hr_summary_prefetch(user_query):
         _append_forced("get_hr_summary", {})
 
-    has_explicit_list_intent = any(k in q_raw for k in ("명단", "목록", "누가", "누구", "보여"))
-
-    if _needs_employee_list_prefetch(user_query) and (
-        not _needs_hr_summary_prefetch(user_query) or has_explicit_list_intent
-    ):
+    # 부서+신입/일반+몇명 질의는 hr_summary 여부와 관계없이 list_employees로 정확한 인원 수 제공
+    if _needs_employee_list_prefetch(user_query):
         is_new_hire_query = ("신입" in q or "지원자" in q)
         is_regular_query = ("기존 직원" in q or "일반 직원" in q)
         is_high_query = ("고성과" in q or "high performer" in q or "highperformer" in q)
@@ -921,7 +910,7 @@ def _needs_hr_summary_prefetch(query: str) -> bool:
 
 
 def _needs_employee_list_prefetch(query: str) -> bool:
-    """명단/누구/보여줘/알려줘 계열 질문은 직원 목록을 선제 조회."""
+    """명단/누구/보여줘/알려줘 계열 질문은 직원 목록을 선제 조회. 부서+신입/일반+몇명도 list_employees로."""
     if not query or not query.strip():
         return False
     q = query.strip().lower()
@@ -930,6 +919,10 @@ def _needs_employee_list_prefetch(query: str) -> bool:
         return True
     if ("신입" in q or "지원자" in q) and any(ak in q for ak in ("알려", "조회", "검색", "확인")):
         return True
+    # 부서별 신입/일반 인원 수 → list_employees 호출해 부서 필터 결과 사용 (prefetch 전체 수 301 사용 방지)
+    if any(t in q for t in ("몇명", "몇 명", "인원", "수")) and any(t in q for t in ("신입", "일반", "지원자")):
+        if any(d in q for d in ("부서", "개발", "it", "기술", "영업", "마케팅", "인사", "재무")):
+            return True
     return False
 
 
@@ -940,117 +933,50 @@ def _build_prefetch_context(
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """
     모델이 tool call을 실패해도 답할 수 있도록 DB 기반 운영 컨텍스트를 선제 주입.
-    - 직원 총원/적재상태 질문: HR 요약
-    - 직원 목록/직급 질문: list_for_chat 기반 목록
+    - 직원 총원/적재상태 질문: HR 요약만 prefetch (명단은 list_employees 도구로만 제공)
     """
     parts: List[str] = []
     sources: List[Dict[str, Any]] = []
 
-    if routes.get("employees") and (_needs_hr_summary_prefetch(user_query) or _needs_employee_list_prefetch(user_query)):
+    if routes.get("employees") and _needs_hr_summary_prefetch(user_query):
         try:
             from domain.hub.repositories.employee_repository import (  # type: ignore
                 count_all as repo_count_all,
                 list_all as repo_list_all,
-                list_for_chat,
             )
             from domain.hub.repositories.performance_record_repository import get_performance_record_count  # type: ignore
             from domain.hub.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
             from domain.hub.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
 
-            if _needs_hr_summary_prefetch(user_query):
-                employee_count = repo_count_all(db)
-                # 집계 질문은 전체 모수를 기준으로 계산해야 하므로 제한 없는 목록을 사용.
-                rows_all = repo_list_all(db) or []
-                ats_statuses = {"pending", "screening", "hired", "rejected"}
+            employee_count = repo_count_all(db)
+            rows_all = repo_list_all(db) or []
 
-                def _is_new_hire(emp: Dict[str, Any]) -> bool:
-                    et0 = str(emp.get("employmentType") or "").strip().lower()
-                    st0 = str(emp.get("status") or "").strip().lower()
-                    return et0 == "new_hire" or st0 in ats_statuses
+            def _is_new_hire(emp: Dict[str, Any]) -> bool:
+                st = str(emp.get("status") or "").strip().lower()
+                return st in ("pending", "screening", "rejected")  # ATS 단계 = 신입, 빈값/hired = 기존
 
-                regular_count = sum(1 for e in rows_all if not _is_new_hire(e))
-                new_hire_count = len(rows_all) - regular_count
-                perf_count = get_performance_record_count(db)
-                disclosure_count = get_disclosure_doc_count(db)
-                anchor_count = get_anchor_doc_count(db)
-                parts.append(
-                    "[운영 요약]\n"
-                    f"전체 직원 수(신입 + 일반): {employee_count}명\n"
-                    f"일반 직원 수: {regular_count}명\n"
-                    f"신입사원 수(인턴·사원 포함): {new_hire_count}명\n"
-                    f"성과(performance_records) 기록: {perf_count}건\n"
-                    f"공시(disclosures) 문서 청크: {disclosure_count}건\n"
-                    f"역량(competency_anchors) 문서: {anchor_count}건"
-                )
-                sources.extend(
-                    [
-                        {"table": "employees", "id": "prefetch:hr_summary", "source": "prefetch"},
-                        {"table": "performance_records", "id": "prefetch:hr_summary", "source": "prefetch"},
-                        {"table": "disclosures", "id": "prefetch:hr_summary", "source": "prefetch"},
-                        {"table": "competency_anchors", "id": "prefetch:hr_summary", "source": "prefetch"},
-                    ]
-                )
-
-            q_raw = (user_query or "").strip()
-            has_explicit_list_intent = any(k in q_raw for k in ("명단", "목록", "누가", "누구", "보여"))
-            if _needs_employee_list_prefetch(user_query) and (
-                not _needs_hr_summary_prefetch(user_query) or has_explicit_list_intent
-            ):
-                q = user_query.strip().lower()
-                job_title_part = _infer_job_title_part(user_query)
-                department_part = _infer_department_part(user_query)
-                is_new_hire_query = ("신입" in q or "지원자" in q)
-                is_regular_query = ("기존 직원" in q or "일반 직원" in q)
-                is_high_query = ("고성과" in q or "high performer" in q or "highperformer" in q)
-                if is_new_hire_query:
-                    employment_type = "new_hire"
-                elif is_regular_query or is_high_query:
-                    employment_type = "regular"
-                else:
-                    employment_type = None
-                performance_tier = "high" if ("고성과" in q or "high performer" in q or "highperformer" in q) else "all"
-                is_full_list = any(k in q_raw for k in ("전체 명단", "전체 목록", "전원", "모두 보여", "다 보여", "전부"))
-                prefetch_limit = 500 if (is_full_list or performance_tier == "high") else (200 if (department_part or job_title_part) else 200)
-                rows = list_for_chat(
-                    db,
-                    employment_type=employment_type,
-                    department_part=department_part,
-                    job_title_part=job_title_part,
-                    exclude_sample=False,
-                    limit=prefetch_limit,
-                )
-                if performance_tier == "high":
-                    def _is_high_performer(emp: Dict[str, Any]) -> bool:
-                        dna = emp.get("successDna")
-                        if not isinstance(dna, dict):
-                            return False
-                        keys = ("leadership", "technical", "creativity", "collaboration", "adaptability")
-                        vals: List[float] = []
-                        for k in keys:
-                            v = dna.get(k)
-                            try:
-                                if v is None:
-                                    continue
-                                vals.append(float(v))
-                            except Exception:
-                                continue
-                        if not vals:
-                            return False
-                        return (sum(vals) / len(vals)) >= 80.0
-                    rows = [r for r in rows if _is_high_performer(r)]
-                if rows:
-                    PREFETCH_MAX_DISPLAY = 30
-                    display_limit = min(len(rows), PREFETCH_MAX_DISPLAY)
-                    lines = [f"[직원 목록 프리패치] 조회 {len(rows)}명 (이 이름들을 답변에 그대로 나열하세요)"]
-                    for i, emp in enumerate(rows[:display_limit], 1):
-                        lines.append(
-                            f"[{i}] 이름: {emp.get('name','')}, "
-                            f"부서: {emp.get('department') or '-'}, 직급: {emp.get('jobTitle') or '-'}"
-                        )
-                    if len(rows) > display_limit:
-                        lines.append(f"… 외 {len(rows) - display_limit}명")
-                    parts.append("\n".join(lines))
-                    sources.append({"table": "employees", "id": "prefetch:list_employees", "source": "prefetch"})
+            regular_count = sum(1 for e in rows_all if not _is_new_hire(e))
+            new_hire_count = len(rows_all) - regular_count
+            perf_count = get_performance_record_count(db)
+            disclosure_count = get_disclosure_doc_count(db)
+            anchor_count = get_anchor_doc_count(db)
+            parts.append(
+                "[운영 요약]\n"
+                f"전체 직원 수(신입 + 일반): {employee_count}명\n"
+                f"일반 직원 수: {regular_count}명\n"
+                f"신입사원 수(인턴·사원 포함): {new_hire_count}명\n"
+                f"성과(performance_records) 기록: {perf_count}건\n"
+                f"공시(disclosures) 문서 청크: {disclosure_count}건\n"
+                f"역량(competency_anchors) 문서: {anchor_count}건"
+            )
+            sources.extend(
+                [
+                    {"table": "employees", "id": "prefetch:hr_summary", "source": "prefetch"},
+                    {"table": "performance_records", "id": "prefetch:hr_summary", "source": "prefetch"},
+                    {"table": "disclosures", "id": "prefetch:hr_summary", "source": "prefetch"},
+                    {"table": "competency_anchors", "id": "prefetch:hr_summary", "source": "prefetch"},
+                ]
+            )
         except Exception as e:
             logger.info("[RAG] prefetch 실패(계속 진행): %s", e)
 

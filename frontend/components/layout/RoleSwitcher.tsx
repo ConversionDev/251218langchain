@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Users, UserCog, FileEdit } from "lucide-react";
 import {
   useDemoRoleStore,
@@ -20,10 +20,12 @@ const ROLE_OPTIONS: { role: DemoRole; icon: React.ComponentType<{ className?: st
 export function RoleSwitcher() {
   const hydrated = useHydrated();
   const router = useRouter();
+  const pathname = usePathname();
   const { demoRole, setDemoRole } = useDemoRoleStore();
   const [open, setOpen] = useState(false);
 
   if (!hydrated) return null;
+  if (pathname === "/") return null;
 
   const handleSwitch = (role: DemoRole) => {
     setDemoRole(role);

@@ -279,9 +279,51 @@ Alembic `env.py`에서는 `CompetencyAnchor`, `Disclosure`, `Employee`, `Perform
 
 ---
 
-## 8. MCP (Hub-Spoke)
+## 8. MCP (Hub-Spoke) · 스타 토폴로지
 
-### 8.1 구조
+### 8.1 스타 토폴로지 구조도
+
+중앙 **Hub** 한 개가 모든 MCP 요청의 진입점이 되고, 도메인별 **Spoke(Chat MCP, Spam MCP)** 로만 위임하는 **스타 토폴로지** 구조입니다.
+
+```
+                        [ 클라이언트 ]
+                              │
+                              ▼
+                   [ FastAPI 게이트웨이 ]
+                     /api/*  /mcp  /internal/*
+                              │
+                              ▼
+              ┌────────────────────────────────┐
+              │     Hub (Central Control)       │
+              │   /mcp  FastMCP · call_tool      │
+              │   요청을 Chat/Spam MCP로 위임    │
+              └────────────────────────────────┘
+                        │              │
+              ┌─────────┘              └─────────┐
+              ▼                                   ▼
+     ┌─────────────────┐                 ┌─────────────────┐
+     │   Chat MCP      │                 │   Spam MCP      │
+     │ /internal/mcp/  │                 │ (별도 9021 등)  │
+     │ chat, chat-spoke│                 │ 이메일·스팸 분류 │
+     └────────┬────────┘                 └────────┬────────┘
+              │                                     │
+              ▼                                     ▼
+     ┌─────────────────┐                 ┌─────────────────┐
+     │  Chat Spoke     │                 │  Spam Spoke     │
+     │ ExaOne 채팅 등  │                 │ LLaMA 스팸 분류 │
+     └────────┬────────┘                 └────────┬────────┘
+              │                                     │
+              └──────────────┬──────────────────────┘
+                             ▼
+                   [ Hub 내부 API ]
+                   /internal/llama
+                   /internal/exaone
+                             │
+                             ▼
+                   [ PostgreSQL · pgvector ]
+```
+
+### 8.2 구성요소
 
 - **Hub (Central Control Server)**: `domain.hub.mcp.central_control_server`. FastMCP 앱으로 `/mcp`에 마운트. 요청을 **Chat MCP** / **Spam MCP**로만 위임.
 - **Chat MCP / Chat Spoke**: 동일 프로세스에서 `/internal/mcp/chat`, `/internal/mcp/chat-spoke`로 마운트. 채팅은 ExaOne만 사용(LLaMA 제거).
@@ -289,13 +331,13 @@ Alembic `env.py`에서는 `CompetencyAnchor`, `Disclosure`, `Employee`, `Perform
 
 Hub는 무거운 모델을 직접 부르지 않고, 각 도메인 MCP가 자신의 Spoke URL로 `call_tool`한다.
 
-### 8.2 설정
+### 8.3 설정
 
 - **hub_service_url**: Hub 베이스 URL (기본 `http://127.0.0.1:8000`).
 - **chat_mcp_url**, **chat_spoke_mcp_url**: 기본값은 동일 프로세스(8000)의 `/internal/mcp/chat/server`, `/internal/mcp/chat-spoke/server`.
 - **spam_mcp_url**, **spam_spoke_mcp_url**: 기본 9021/9022 (별도 프로세스 예시).
 
-### 8.3 HTTP 클라이언트
+### 8.4 HTTP 클라이언트
 
 - **domain.hub.mcp.http_client**: Spokes가 Hub를 HTTP로 호출할 때 사용. `llama_classify_spam`, `exaone_generate`, `exaone_analyze_email`, `chat_call`, `spam_call` 등.
 - **domain.hub.mcp.mcp_utils / utils**: `get_chat_mcp_url`, `get_spam_mcp_url`, `get_chat_spoke_mcp_url`, `get_spam_spoke_mcp_url`, `result_to_str`.

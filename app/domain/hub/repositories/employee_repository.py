@@ -198,23 +198,20 @@ def _build_chat_query(
     job_title_part: Optional[str] = None,
     exclude_sample: bool = False,
 ):
-    """list_for_chat / count_for_chat 공용 필터 빌더."""
+    """list_for_chat / count_for_chat 공용 필터 빌더.
+    신입/기존은 status 기준: 신입=ATS 단계(pending/screening/rejected), 기존=빈값·hired(입사 확정 시 기존으로 이관).
+    """
     q = db.query(Employee)
+    # 신입 = ATS 진행 중 (pending/screening/rejected) → 301명
+    # 기존 = status 빈값 또는 hired(입사 확정 후 기존으로 넘어감) → 301명
+    _ats_statuses = ("pending", "screening", "rejected")
     if employment_type == "new_hire":
-        q = q.filter(
-            (Employee.employment_type == "new_hire")
-            | (Employee.status.in_(["pending", "screening", "hired", "rejected"]))
-        )
+        q = q.filter(Employee.status.in_(_ats_statuses))
     elif employment_type == "regular":
-        q = q.filter(
-            (Employee.employment_type.is_(None))
-            | (Employee.employment_type == "")
-            | (Employee.employment_type == "regular")
-        )
         q = q.filter(
             (Employee.status.is_(None))
             | (Employee.status == "")
-            | (~Employee.status.in_(["pending", "screening", "rejected"]))
+            | (Employee.status.ilike("hired"))
         )
     if department_part and department_part.strip():
         pattern = f"%{department_part.strip()}%"
