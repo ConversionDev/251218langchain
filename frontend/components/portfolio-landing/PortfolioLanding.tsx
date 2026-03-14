@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
 import { Navigation } from "./Navigation";
 import { AboutSection } from "./AboutSection";
 import { ProjectsSection } from "./ProjectsSection";
@@ -9,6 +10,7 @@ import { StrengthsTechSection } from "./StrengthsTechSection";
 import { TimelineSection } from "./TimelineSection";
 import { ContactSection } from "./ContactSection";
 import { IntroAnimation } from "./IntroAnimation";
+import { ResumeSampleContent } from "./ResumeSection";
 
 const SECTIONS = ["about", "projects", "strengths", "timeline", "contact"] as const;
 
@@ -16,6 +18,7 @@ export function PortfolioLanding() {
   const [showIntro, setShowIntro] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
   const [activeSection, setActiveSection] = useState("about");
+  const [resumeModalOpen, setResumeModalOpen] = useState(false);
 
   useEffect(() => {
     if (!introComplete) return;
@@ -88,7 +91,10 @@ export function PortfolioLanding() {
             </span>
           </div>
           <div className="relative z-10 w-full max-w-[1280px] mx-auto px-8 sm:px-12 lg:px-16 xl:px-24 md:flex md:items-start md:gap-16 lg:gap-24 xl:gap-32">
-            <Navigation activeSection={activeSection} />
+            <Navigation
+              activeSection={activeSection}
+              onOpenResumeModal={() => setResumeModalOpen(true)}
+            />
             <main className="flex-1 min-w-0 max-w-[720px] pt-14 md:pt-0 pb-40">
               <AboutSection />
               <ProjectsSection />
@@ -97,6 +103,55 @@ export function PortfolioLanding() {
               <ContactSection />
             </main>
           </div>
+
+          {/* 이력서 내부 창(모달): 같은 페이지에 오버레이로 PDF 표시 */}
+          <AnimatePresence>
+            {resumeModalOpen && (
+              <motion.div
+                key="resume-modal"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+                role="dialog"
+                aria-modal="true"
+                aria-label="이력서"
+              >
+                <div
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                  onClick={() => setResumeModalOpen(false)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative w-full max-w-4xl h-[85vh] sm:h-[90vh] flex flex-col rounded-lg overflow-hidden shadow-2xl"
+                  style={{
+                    background: "#fff",
+                    border: "3px solid #1e293b",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between shrink-0 px-4 py-2 border-b border-slate-200 bg-slate-50">
+                    <span className="text-sm font-semibold text-slate-700">이력서 (샘플)</span>
+                    <button
+                      type="button"
+                      onClick={() => setResumeModalOpen(false)}
+                      className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
+                      aria-label="닫기"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0 bg-white">
+                    <ResumeSampleContent variant="modal" />
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
     </div>

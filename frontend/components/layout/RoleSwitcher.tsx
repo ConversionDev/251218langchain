@@ -89,7 +89,7 @@ export function RoleSwitcher() {
                 onClick={() => {
                   setDemoRole(null);
                   setOpen(false);
-                  router.push("/");
+                  router.push("/hr");
                 }}
                 className="mt-2 w-full rounded-lg border border-slate-200 py-1.5 text-xs text-slate-500 hover:bg-slate-50 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
               >

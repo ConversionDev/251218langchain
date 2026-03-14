@@ -45,7 +45,7 @@ export default function CareersFaqPage() {
             <Link href="/resumes" className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
               <FileText className="h-4 w-4" /> 지원내역
             </Link>
-            <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
+            <Link href="/hr" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
               <ExternalLink className="h-4 w-4" />
               메인
             </Link>

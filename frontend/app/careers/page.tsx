@@ -23,7 +23,7 @@ export default function CareersEntryPage() {
       {/* 헤더: 메인과 동일 형식 — 영역·로고 스타일·왼쪽 정렬 */}
       <header className="relative z-10 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
         <div className="flex flex-1 items-center gap-3 md:gap-4">
-          <Link href="/" className="flex items-baseline gap-1.5">
+          <Link href="/hr" className="flex items-baseline gap-1.5">
             <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
               AI Powered HR Intelligence
             </span>
@@ -37,7 +37,7 @@ export default function CareersEntryPage() {
           </Link>
         </div>
         <Link
-          href="/"
+          href="/hr"
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base shrink-0 dark:text-slate-300 dark:hover:text-slate-100"
         >
           <ExternalLink className="h-4 w-4" />

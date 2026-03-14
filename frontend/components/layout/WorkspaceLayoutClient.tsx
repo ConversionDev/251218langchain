@@ -41,7 +41,7 @@ export function WorkspaceLayoutClient({
             시연 역할
           </Link>
           <Link
-            href="/"
+            href="/hr"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base dark:text-slate-300 dark:hover:text-slate-100"
           >
             <ExternalLink className="h-4 w-4" />

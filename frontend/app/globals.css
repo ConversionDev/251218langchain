@@ -230,3 +230,35 @@
   background: rgb(15 23 42 / 0.6);
   box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4), 0 0 24px -4px rgb(16 185 129 / 0.12);
 }
+
+/* 포트폴리오 이력서 섹션: 인쇄 시 이력서 영역만 표시 (PDF 저장용) */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #resume-print-area,
+  #resume-print-area * {
+    visibility: visible;
+  }
+  #resume-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 1.5rem 2rem !important;
+    background: #fff !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  #resume-print-area .resume-content h2,
+  #resume-print-area .resume-content h3,
+  #resume-print-area .resume-content h4 {
+    color: #0f172a !important;
+  }
+  #resume-print-area .resume-content p,
+  #resume-print-area .resume-content span,
+  #resume-print-area .resume-content li {
+    color: #334155 !important;
+  }
+}

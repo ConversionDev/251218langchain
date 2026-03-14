@@ -27,7 +27,7 @@ const navItems: {
   /** true면 하위 경로(/performance/activities 등)에서 이 메뉴는 비활성 */
   exact?: boolean;
 }[] = [
-  { href: "/", label: "메인", icon: Home, exact: true },
+  { href: "/hr", label: "메인", icon: Home, exact: true },
   { href: "/dashboard", label: "전사 현황", icon: LayoutDashboard },
   { href: "/chat", label: "AI 질의", icon: MessageCircle },
   { href: "/data-map", label: "데이터 지도", icon: Map },

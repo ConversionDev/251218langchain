@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Mail, PenSquare, User, FolderKanban, Layers, Briefcase } from "lucide-react";
+import { Mail, PenSquare, User, FolderKanban, Layers, Briefcase, FileText } from "lucide-react";
 import { Jua, Nanum_Pen_Script, Nanum_Brush_Script } from "next/font/google";
 import Image from "next/image";
 
@@ -9,11 +9,15 @@ const jua = Jua({ weight: "400", subsets: ["latin"], display: "swap" });
 const nanumPen = Nanum_Pen_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 const nanumBrush = Nanum_Brush_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 
+/** 이력서 PDF: public/resume/강경구_커스텀이력서.pdf 에 두면 /resume/강경구_커스텀이력서.pdf 로 서빙됨 */
+const RESUME_PDF_URL = "/resume/강경구_커스텀이력서.pdf";
+
 const NAV = [
   { id: "about", label: "About", icon: User },
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "strengths", label: "Tech Stack", icon: Layers },
   { id: "timeline", label: "Career", icon: Briefcase },
+  { id: "resume", label: "Resume", icon: FileText, openPdf: true },
   { id: "contact", label: "Contact", icon: Mail },
 ] as const;
 
@@ -75,9 +79,11 @@ type NavigationProps = {
   activeSection: string;
   /** 사이드바 상단 로고/프로필 사진 URL. 있으면 이름 위에 크게 표시 */
   logoImageSrc?: string;
+  /** Resume 클릭 시 내부 창(모달)으로 이력서 열기 */
+  onOpenResumeModal?: () => void;
 };
 
-export function Navigation({ activeSection, logoImageSrc }: NavigationProps) {
+export function Navigation({ activeSection, logoImageSrc, onOpenResumeModal }: NavigationProps) {
   const go = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 
@@ -146,14 +152,17 @@ export function Navigation({ activeSection, logoImageSrc }: NavigationProps) {
             style={{ background: "rgba(142,240,215,0.08)" }}
           />
           <div className="pl-5 space-y-1.5">
-            {NAV.map(({ id, label, icon: Icon }) => (
+            {NAV.map((item) => {
+              const { id, label, icon: Icon } = item;
+              const openPdf = "openPdf" in item && item.openPdf;
+              return (
               <button
                 key={id}
                 type="button"
-                onClick={() => go(id)}
+                onClick={() => openPdf ? (onOpenResumeModal?.() ?? window.open(RESUME_PDF_URL, "_blank", "noopener,noreferrer")) : go(id)}
                 className="group relative flex items-center py-3 w-full text-left"
               >
-                {activeSection === id && (
+                {activeSection === id && !openPdf && (
                   <motion.span
                     layoutId="navDot"
                     className="absolute -left-[5.5px] w-2.5 h-2.5 rounded-full"
@@ -183,7 +192,8 @@ export function Navigation({ activeSection, logoImageSrc }: NavigationProps) {
                   {label}
                 </span>
               </button>
-            ))}
+            );
+            })}
           </div>
         </nav>
       </motion.div>

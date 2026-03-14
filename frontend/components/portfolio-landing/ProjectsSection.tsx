@@ -34,7 +34,10 @@ interface SubProject {
   techStack?: string[];
 }
 
-const PROJECTS: Project[] = [
+/** 카테고리: Personal / Team(ESG 완성 후 추가) / Other(과거 팀프로젝트) */
+const PROJECT_CATEGORY = { personal: "personal", team: "team", other: "other" } as const;
+
+const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
   {
     id: "hr-agent",
     title: "Intelligent HR Agent",
@@ -44,6 +47,7 @@ const PROJECTS: Project[] = [
     icon: Bot,
     type: "개인 프로젝트",
     year: "2025",
+    category: "personal",
     metrics: [
       { label: "OCR 정확도", value: "95%" },
       { label: "분석 속도 향상", value: "40%↑" },
@@ -60,7 +64,7 @@ const PROJECTS: Project[] = [
       "저품질 스캔 문서 OCR 정확도 → 전처리 파이프라인 + 후보정 로직으로 해결",
       "대용량 문서 메모리 이슈 → 스트리밍 + 배치 처리 아키텍처 도입",
     ],
-    viewUrl: "/landing",
+    viewUrl: "/hr",
     viewLabel: "인사 시스템 보기",
   },
   {
@@ -72,6 +76,7 @@ const PROJECTS: Project[] = [
     icon: Leaf,
     type: "팀 프로젝트",
     year: "2025",
+    category: "team",
     metrics: [
       { label: "리스크 탐지 정확도", value: "92%" },
       { label: "분석 시간 단축", value: "70%↓" },
@@ -90,6 +95,10 @@ const PROJECTS: Project[] = [
     ],
   },
 ];
+
+/** 팀 프로젝트: ESG(AIFIX) — 완성도 올라가면 내용만 보강하면 됨 */
+const PERSONAL_PROJECTS = PROJECTS.filter((p) => p.category === "personal");
+const TEAM_PROJECTS = PROJECTS.filter((p) => p.category === "team");
 
 const SUB_PROJECTS: SubProject[] = [
   {
@@ -305,29 +314,38 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
               </span>
             ))}
           </div>
-          {project.viewUrl && (
-            <div className="pt-4 border-t" style={{ borderColor: "rgba(142,240,215,0.08)" }}>
-              <Link
-                href={project.viewUrl}
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
-                style={{
-                  background: "rgba(142,240,215,0.1)",
-                  color: "#8ef0d7",
-                  border: "1px solid rgba(142,240,215,0.25)",
-                }}
-              >
-                <ExternalLink size={14} />
-                {project.viewLabel ?? "보기"}
-              </Link>
-            </div>
-          )}
         </div>
       </motion.div>
     </motion.div>
   );
 }
 
-/** 메인 프로젝트: 가벼운 행 레이아웃 — 왼쪽 썸네일, 오른쪽 제목+설명+태그 */
+/** 미리보기·카드 공통 크기 (Personal/Team/Other 통일) */
+const PREVIEW_CLASS = "shrink-0 w-[140px] sm:w-[160px] h-[88px] sm:h-[96px] rounded-lg overflow-hidden";
+
+const titleStyle = {
+  fontSize: "0.9375rem",
+  fontWeight: 700 as const,
+  color: "#ccd6f6",
+  lineHeight: 1.3,
+};
+const subtitleStyle = {
+  fontSize: "0.8125rem",
+  color: "rgba(220,228,245,0.88)",
+  lineHeight: 1.55,
+  marginTop: "0.35rem",
+};
+const tagStyle = {
+  fontSize: "0.6875rem",
+  color: "rgba(142,240,215,0.7)",
+  background: "rgba(142,240,215,0.06)",
+  border: "1px solid rgba(142,240,215,0.12)",
+  padding: "2px 8px",
+  borderRadius: 4,
+  fontWeight: 500,
+};
+
+/** 메인 프로젝트: 미리보기 클릭 시 프로젝트로 이동(viewUrl) 또는 모달 */
 function MainProjectRow({
   project,
   index,
@@ -340,26 +358,16 @@ function MainProjectRow({
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
   const hasPreview = project.viewUrl && project.viewUrl.startsWith("/");
+  const hasLink = !!project.viewUrl;
 
-  return (
-    <motion.article
-      ref={ref}
-      initial={{ opacity: 0, y: 12 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.4, delay: index * 0.08 }}
-      className="group flex gap-5 sm:gap-6 items-start rounded-xl py-4 px-1 transition-colors"
-      style={{
-        borderBottom: "1px solid rgba(142,240,215,0.06)",
-      }}
-    >
-      {/* 왼쪽: 작은 미리보기 */}
+  const content = (
+    <>
       <div
-        className="shrink-0 w-[140px] sm:w-[160px] h-[88px] sm:h-[96px] rounded-lg overflow-hidden cursor-pointer"
+        className={`${PREVIEW_CLASS} cursor-pointer`}
         style={{
           border: "1px solid rgba(142,240,215,0.08)",
           background: "rgba(0,0,0,0.25)",
         }}
-        onClick={onOpen}
       >
         {hasPreview ? (
           <iframe
@@ -374,73 +382,55 @@ function MainProjectRow({
           </div>
         )}
       </div>
-      {/* 오른쪽: 제목 + 설명 + 태그 */}
-      <div
-        className="flex-1 min-w-0 cursor-pointer"
-        onClick={onOpen}
-        onKeyDown={(e) => e.key === "Enter" && onOpen()}
-        role="button"
-        tabIndex={0}
-      >
+      <div className="flex-1 min-w-0 cursor-pointer">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3
-            style={{
-              fontSize: "0.9375rem",
-              fontWeight: 700,
-              color: "#ccd6f6",
-              lineHeight: 1.3,
-            }}
-            className="group-hover:!text-[#8ef0d7] transition-colors"
-          >
+          <h3 style={titleStyle} className="group-hover:!text-[#8ef0d7] transition-colors">
             {project.title}
           </h3>
           <ArrowUpRight size={14} style={{ color: "rgba(142,240,215,0.5)" }} className="shrink-0" />
         </div>
-        <p
-          style={{
-            fontSize: "0.8125rem",
-            color: "rgba(220,228,245,0.88)",
-            lineHeight: 1.55,
-            marginTop: "0.35rem",
-          }}
-        >
-          {project.subtitle}
-        </p>
+        <p style={subtitleStyle}>{project.subtitle}</p>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {project.techStack.slice(0, 5).map((tech) => (
-            <span
-              key={tech}
-              style={{
-                fontSize: "0.6875rem",
-                color: "rgba(142,240,215,0.7)",
-                background: "rgba(142,240,215,0.06)",
-                border: "1px solid rgba(142,240,215,0.12)",
-                padding: "2px 8px",
-                borderRadius: 4,
-                fontWeight: 500,
-              }}
-            >
+            <span key={tech} style={tagStyle}>
               {tech}
             </span>
           ))}
         </div>
-        {project.viewUrl && (
-          <Link
-            href={project.viewUrl}
-            className="inline-flex items-center gap-1.5 mt-2 text-[0.75rem] font-medium transition-colors"
-            style={{ color: "rgba(142,240,215,0.85)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ExternalLink size={12} />
-            {project.viewLabel ?? "보기"}
-          </Link>
-        )}
       </div>
+    </>
+  );
+
+  const motionProps = {
+    ref,
+    initial: { opacity: 0, y: 12 },
+    animate: inView ? { opacity: 1, y: 0 } : {},
+    transition: { duration: 0.4, delay: index * 0.08 },
+    className: "group flex gap-5 sm:gap-6 items-start rounded-xl py-4 px-1 transition-colors",
+    style: { borderBottom: "1px solid rgba(142,240,215,0.06)" },
+  };
+
+  if (hasLink) {
+    return (
+      <Link href={project.viewUrl!}>
+        <motion.article {...motionProps}>{content}</motion.article>
+      </Link>
+    );
+  }
+  return (
+    <motion.article
+      {...motionProps}
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+      role="button"
+      tabIndex={0}
+    >
+      {content}
     </motion.article>
   );
 }
 
-/** 서브 프로젝트: 작은 미리보기 + 클릭 시 해당 링크로 이동 */
+/** 서브 프로젝트: 미리보기·글자 크기·태그 스타일 통일, 클릭 시 해당 링크로 이동 */
 function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
   const ref = useRef<HTMLAnchorElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
@@ -454,26 +444,25 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
       initial={{ opacity: 0, y: 12 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.4, delay: index * 0.08 }}
-      className="group flex gap-4 sm:gap-5 items-center rounded-xl py-3 px-1 transition-colors"
+      className="group flex gap-5 sm:gap-6 items-start rounded-xl py-4 px-1 transition-colors"
       style={{
-        borderBottom: "1px solid rgba(142,240,215,0.05)",
+        borderBottom: "1px solid rgba(142,240,215,0.06)",
         textDecoration: "none",
       }}
     >
-      {/* 왼쪽: 일부분만 보이는 작은 미리보기 (디자인처럼) */}
       <div
-        className="shrink-0 w-[100px] sm:w-[120px] h-[64px] sm:h-[72px] rounded-md overflow-hidden"
+        className={PREVIEW_CLASS}
         style={{
-          border: "1px solid rgba(142,240,215,0.1)",
-          background: "rgba(0,0,0,0.3)",
+          border: "1px solid rgba(142,240,215,0.08)",
+          background: "rgba(0,0,0,0.25)",
         }}
       >
         {sub.previewImage ? (
           <Image
             src={sub.previewImage}
             alt=""
-            width={120}
-            height={72}
+            width={160}
+            height={96}
             className="w-full h-full object-cover object-top"
             unoptimized
           />
@@ -482,14 +471,14 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
             className="w-full h-full flex flex-col items-center justify-center p-1"
             style={{ background: "rgba(142,240,215,0.08)" }}
           >
-            <Key size={20} style={{ color: "rgba(142,240,215,0.4)" }} />
+            <Key size={28} style={{ color: "rgba(142,240,215,0.35)" }} />
             <span
               style={{
-                fontSize: "0.6rem",
+                fontSize: "0.6875rem",
                 fontWeight: 700,
                 color: "rgba(220,228,245,0.9)",
                 letterSpacing: "0.02em",
-                marginTop: 2,
+                marginTop: 4,
               }}
             >
               {sub.title}
@@ -497,45 +486,18 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
           </div>
         )}
       </div>
-      {/* 오른쪽: 제목 + 설명 */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span
-            style={{
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              color: "#ccd6f6",
-              lineHeight: 1.3,
-            }}
-            className="group-hover:!text-[#8ef0d7] transition-colors"
-          >
+        <div className="flex items-center gap-2">
+          <h3 style={titleStyle} className="group-hover:!text-[#8ef0d7] transition-colors">
             {sub.title}
-          </span>
-          <ExternalLink size={12} style={{ color: "rgba(142,240,215,0.5)" }} className="shrink-0" />
+          </h3>
+          <ExternalLink size={14} style={{ color: "rgba(142,240,215,0.5)" }} className="shrink-0" />
         </div>
-        <p
-          style={{
-            fontSize: "0.75rem",
-            color: "rgba(220,228,245,0.88)",
-            lineHeight: 1.5,
-            marginTop: "0.25rem",
-          }}
-        >
-          {sub.description}
-        </p>
+        <p style={subtitleStyle}>{sub.description}</p>
         {sub.techStack && sub.techStack.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
+          <div className="flex flex-wrap gap-1.5 mt-2">
             {sub.techStack.map((t) => (
-              <span
-                key={t}
-                style={{
-                  fontSize: "0.625rem",
-                  color: "rgba(220,228,245,0.82)",
-                  padding: "1px 6px",
-                  borderRadius: 4,
-                  background: "rgba(255,255,255,0.04)",
-                }}
-              >
+              <span key={t} style={tagStyle}>
                 {t}
               </span>
             ))}
@@ -546,52 +508,47 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
   );
 }
 
+const blockLabelStyle = {
+  fontSize: "0.6875rem",
+  color: "rgba(220,228,245,0.8)",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase" as const,
+  marginBottom: "1rem",
+};
+
 export function ProjectsSection() {
   const [active, setActive] = useState<Project | null>(null);
 
   return (
     <section id="projects" className="pt-10 pb-28 scroll-mt-14 md:scroll-mt-0">
-      <SectionHeader num="02" label="Projects" />
-      {/* 메인 프로젝트 — 가볍게 행으로 */}
+      <SectionHeader num="02" label="Main Projects" />
+      {/* Personal Project — 인사 */}
       <div className="mb-10">
-        <p
-          style={{
-            fontSize: "0.6875rem",
-            color: "rgba(220,228,245,0.8)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            marginBottom: "1rem",
-          }}
-        >
-          Featured
-        </p>
+        <p style={blockLabelStyle}>Personal Project</p>
         <div className="space-y-0">
-          {PROJECTS.map((p, i) => (
+          {PERSONAL_PROJECTS.map((p, i) => (
             <MainProjectRow key={p.id} project={p} index={i} onOpen={() => setActive(p)} />
           ))}
         </div>
       </div>
-      {/* 서브 프로젝트 — 작은 미리보기 + 클릭 시 링크 이동 */}
-      {SUB_PROJECTS.length > 0 && (
-        <div>
-          <p
-            style={{
-              fontSize: "0.6875rem",
-              color: "rgba(220,228,245,0.8)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              marginBottom: "1rem",
-            }}
-          >
-            Other Projects
-          </p>
-          <div className="space-y-0">
-            {SUB_PROJECTS.map((sub, i) => (
-              <SubProjectRow key={sub.id} sub={sub} index={i} />
-            ))}
-          </div>
+      {/* Team Project — ESG(AIFIX) */}
+      <div className="mb-10">
+        <p style={blockLabelStyle}>Team Project</p>
+        <div className="space-y-0">
+          {TEAM_PROJECTS.map((p, i) => (
+            <MainProjectRow key={p.id} project={p} index={i} onOpen={() => setActive(p)} />
+          ))}
         </div>
-      )}
+      </div>
+      {/* Other Project — 과거 팀프로젝트 (KeyWord 등) */}
+      <div>
+        <p style={blockLabelStyle}>Other Project</p>
+        <div className="space-y-0">
+          {SUB_PROJECTS.map((sub, i) => (
+            <SubProjectRow key={sub.id} sub={sub} index={i} />
+          ))}
+        </div>
+      </div>
       <AnimatePresence>
         {active && <Modal project={active} onClose={() => setActive(null)} />}
       </AnimatePresence>

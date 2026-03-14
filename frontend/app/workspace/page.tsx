@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, FileUp, Mail, Sparkles, Users } from "lucide-react";
+import { ExternalLink, FileUp, FileText, Mail, Sparkles, Users } from "lucide-react";
 
 export default function WorkspaceHomePage() {
   return (
@@ -23,7 +23,7 @@ export default function WorkspaceHomePage() {
       {/* 헤더: 메인과 동일 형식 — 영역·로고 스타일·왼쪽 정렬 */}
       <header className="relative z-10 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
         <div className="flex flex-1 items-center gap-3 md:gap-4">
-          <Link href="/" className="flex items-baseline gap-1.5">
+          <Link href="/hr" className="flex items-baseline gap-1.5">
             <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
               AI Powered HR Intelligence
             </span>
@@ -37,7 +37,7 @@ export default function WorkspaceHomePage() {
           </Link>
         </div>
         <Link
-          href="/"
+          href="/hr"
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base shrink-0 dark:text-slate-300 dark:hover:text-slate-100"
         >
           <ExternalLink className="h-4 w-4" />
@@ -73,6 +73,14 @@ export default function WorkspaceHomePage() {
                   을 눌러주세요.
                 </p>
               </div>
+              <div className="rounded-2xl border border-white/80 bg-white p-4 text-foreground shadow-sm dark:border-white/10 dark:bg-white/10 dark:text-card-foreground">
+                <p className="text-sm font-medium">회의록·보고서를 확인하시겠습니까?</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  제출한 회의록·보고서 목록은{" "}
+                  <span className="font-semibold text-foreground">내 활동</span>
+                  에서 볼 수 있습니다.
+                </p>
+              </div>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -96,6 +104,13 @@ export default function WorkspaceHomePage() {
               >
                 주소록
                 <Users className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/workspace/my-activities"
+                className="hero-gradient-hover workspace-hero-btn inline-flex items-center gap-2 rounded-full border-2 border-white/80 bg-white px-6 py-3 text-sm font-semibold text-foreground shadow-sm transition-colors duration-200 dark:border-white/10 dark:bg-white/10"
+              >
+                내 활동
+                <FileText className="h-4 w-4" />
               </Link>
             </div>
           </section>
