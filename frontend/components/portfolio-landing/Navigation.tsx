@@ -9,15 +9,12 @@ const jua = Jua({ weight: "400", subsets: ["latin"], display: "swap" });
 const nanumPen = Nanum_Pen_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 const nanumBrush = Nanum_Brush_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 
-/** 이력서 PDF: public/resume/강경구_커스텀이력서.pdf 에 두면 /resume/강경구_커스텀이력서.pdf 로 서빙됨 */
-const RESUME_PDF_URL = "/resume/강경구_커스텀이력서.pdf";
-
 const NAV = [
   { id: "about", label: "About", icon: User },
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "strengths", label: "Tech Stack", icon: Layers },
   { id: "timeline", label: "Career", icon: Briefcase },
-  { id: "resume", label: "Resume", icon: FileText, openPdf: true },
+  { id: "resume", label: "Resume", icon: FileText, openModal: true },
   { id: "contact", label: "Contact", icon: Mail },
 ] as const;
 
@@ -154,15 +151,15 @@ export function Navigation({ activeSection, logoImageSrc, onOpenResumeModal }: N
           <div className="pl-5 space-y-1.5">
             {NAV.map((item) => {
               const { id, label, icon: Icon } = item;
-              const openPdf = "openPdf" in item && item.openPdf;
+              const openModal = "openModal" in item && item.openModal;
               return (
               <button
                 key={id}
                 type="button"
-                onClick={() => openPdf ? (onOpenResumeModal?.() ?? window.open(RESUME_PDF_URL, "_blank", "noopener,noreferrer")) : go(id)}
+                onClick={() => (openModal ? onOpenResumeModal?.() : go(id))}
                 className="group relative flex items-center py-3 w-full text-left"
               >
-                {activeSection === id && !openPdf && (
+                {activeSection === id && !openModal && (
                   <motion.span
                     layoutId="navDot"
                     className="absolute -left-[5.5px] w-2.5 h-2.5 rounded-full"

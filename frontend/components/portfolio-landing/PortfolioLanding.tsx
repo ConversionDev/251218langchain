@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Download } from "lucide-react";
 import { Navigation } from "./Navigation";
 import { AboutSection } from "./AboutSection";
 import { ProjectsSection } from "./ProjectsSection";
@@ -10,7 +10,7 @@ import { StrengthsTechSection } from "./StrengthsTechSection";
 import { TimelineSection } from "./TimelineSection";
 import { ContactSection } from "./ContactSection";
 import { IntroAnimation } from "./IntroAnimation";
-import { ResumeSampleContent } from "./ResumeSection";
+import { ResumeModalContent } from "./ResumeSection";
 
 const SECTIONS = ["about", "projects", "strengths", "timeline", "contact"] as const;
 
@@ -41,6 +41,28 @@ export function PortfolioLanding() {
     setShowIntro(false);
     setTimeout(() => setIntroComplete(true), 400);
   };
+
+  const handleResumePdf = useCallback(() => {
+    window.print();
+  }, []);
+
+  useEffect(() => {
+    if (resumeModalOpen) {
+      document.body.classList.add("resume-modal-open");
+    } else {
+      document.body.classList.remove("resume-modal-open");
+    }
+    return () => document.body.classList.remove("resume-modal-open");
+  }, [resumeModalOpen]);
+
+  useEffect(() => {
+    if (!resumeModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setResumeModalOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [resumeModalOpen]);
 
   const introBackground =
     "radial-gradient(ellipse 120% 100% at 50% 50%, #0d1c42 0%, #060c28 55%, #010511 100%)";
@@ -104,7 +126,7 @@ export function PortfolioLanding() {
             </main>
           </div>
 
-          {/* 이력서 내부 창(모달): 같은 페이지에 오버레이로 PDF 표시 */}
+          {/* 이력서 모달: 모노톤 이력서 뷰 + PDF 다운로드(인쇄) */}
           <AnimatePresence>
             {resumeModalOpen && (
               <motion.div
@@ -113,7 +135,7 @@ export function PortfolioLanding() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+                className="resume-modal-overlay fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
                 role="dialog"
                 aria-modal="true"
                 aria-label="이력서"
@@ -121,32 +143,39 @@ export function PortfolioLanding() {
                 <div
                   className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                   onClick={() => setResumeModalOpen(false)}
+                  aria-hidden
                 />
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.96 }}
                   transition={{ duration: 0.2 }}
-                  className="relative w-full max-w-4xl h-[85vh] sm:h-[90vh] flex flex-col rounded-lg overflow-hidden shadow-2xl"
-                  style={{
-                    background: "#fff",
-                    border: "3px solid #1e293b",
-                  }}
+                  className="relative w-full max-w-4xl h-[85vh] sm:h-[90vh] flex flex-col rounded-lg overflow-hidden shadow-2xl bg-white border border-slate-200"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between shrink-0 px-4 py-2 border-b border-slate-200 bg-slate-50">
-                    <span className="text-sm font-semibold text-slate-700">이력서 (샘플)</span>
-                    <button
-                      type="button"
-                      onClick={() => setResumeModalOpen(false)}
-                      className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
-                      aria-label="닫기"
-                    >
-                      <X size={20} />
-                    </button>
+                  <div className="resume-modal-header flex items-center justify-between shrink-0 px-4 py-3 border-b border-slate-200 bg-slate-50">
+                    <span className="text-sm font-semibold text-slate-700">이력서</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResumePdf}
+                        className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition-colors"
+                      >
+                        <Download size={16} />
+                        PDF 다운로드
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setResumeModalOpen(false)}
+                        className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
+                        aria-label="닫기"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1 min-h-0 bg-white">
-                    <ResumeSampleContent variant="modal" />
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <ResumeModalContent />
                   </div>
                 </motion.div>
               </motion.div>

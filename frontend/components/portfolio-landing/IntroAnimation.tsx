@@ -22,7 +22,7 @@ const TAGLINE = "한 줄의 코드가 세상을 바꾼다";
 const PENCIL_W = 200;
 
 /** 글씨가 쓰여지는 걸 눈으로 따라갈 수 있도록 충분한 시간 — 한 획 한 획 정성스럽게 */
-const WRITE_DURATION = 8;
+const WRITE_DURATION = 2;
 
 type PathData = {
   pathD: string;
