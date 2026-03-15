@@ -61,7 +61,7 @@ export function AboutSection() {
               animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.55, delay: i * 0.1 }}
               style={{
-                fontSize: "0.9375rem",
+                fontSize: "1.2rem",
                 lineHeight: 1.85,
                 color,
                 fontWeight: 400,
@@ -86,7 +86,7 @@ export function AboutSection() {
               <div
                 style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "1.25rem",
+                  fontSize: "1.5rem",
                   fontWeight: 700,
                   color: "#8ef0d7",
                   letterSpacing: "-0.01em",
@@ -96,7 +96,7 @@ export function AboutSection() {
               </div>
               <div
                 style={{
-                  fontSize: "0.625rem",
+                  fontSize: "0.875rem",
                   color: "rgba(220,228,245,0.75)",
                   marginTop: 4,
                   letterSpacing: "0.04em",
@@ -124,7 +124,7 @@ export function AboutSection() {
             >
               <p
                 style={{
-                  fontSize: "0.8125rem",
+                  fontSize: "1.0625rem",
                   fontWeight: 500,
                   color: "rgba(220,228,245,0.92)",
                   marginBottom: 3,
@@ -134,7 +134,7 @@ export function AboutSection() {
               </p>
               <p
                 style={{
-                  fontSize: "0.6875rem",
+                  fontSize: "0.9375rem",
                   color: "rgba(220,228,245,0.78)",
                   lineHeight: 1.5,
                 }}
@@ -151,7 +151,7 @@ export function AboutSection() {
         >
           <p
             style={{
-              fontSize: "0.625rem",
+              fontSize: "0.875rem",
               color: "rgba(220,228,245,0.7)",
               letterSpacing: "0.15em",
               textTransform: "uppercase",
@@ -165,7 +165,7 @@ export function AboutSection() {
               <span
                 key={tag}
                 style={{
-                  fontSize: "0.75rem",
+                  fontSize: "1rem",
                   color: "rgba(142,240,215,0.6)",
                   background: "rgba(142,240,215,0.05)",
                   border: "1px solid rgba(142,240,215,0.1)",

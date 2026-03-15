@@ -49,7 +49,7 @@ export function SectionHeader({ num, label }: SectionHeaderProps) {
         </span>
         <h2
           style={{
-            fontSize: "clamp(1rem, 1.6vw, 1.15rem)",
+            fontSize: "clamp(1.25rem, 2.2vw, 1.55rem)",
             fontWeight: 600,
             color: "#ccd6f6",
             letterSpacing: "0.02em",

@@ -87,7 +87,7 @@ export function Navigation({ activeSection }: NavigationProps) {
       className={`
         hidden
         md:sticky md:top-0 md:h-screen
-        md:w-[240px] lg:w-[260px] xl:w-[300px] md:shrink-0
+        md:w-[280px] lg:w-[300px] xl:w-[340px] md:shrink-0
         md:flex md:flex-col md:justify-between
         md:py-20 lg:py-24
         ${jua.className}
@@ -102,7 +102,7 @@ export function Navigation({ activeSection }: NavigationProps) {
           <h1
             className={nanumPen.className}
             style={{
-              fontSize: "clamp(2.2rem, 3.4vw, 2.9rem)",
+              fontSize: "clamp(2.8rem, 4.5vw, 3.5rem)",
               fontWeight: 500,
               lineHeight: 1.02,
               letterSpacing: "-0.02em",
@@ -115,7 +115,7 @@ export function Navigation({ activeSection }: NavigationProps) {
         <span
           className={`flex items-center gap-2 mt-3 ${nanumBrush.className}`}
           style={{
-            fontSize: "clamp(1rem, 1.5vw, 1.2rem)",
+            fontSize: "clamp(1.25rem, 2vw, 1.5rem)",
             lineHeight: 1.5,
             color: "#ffffff",
             fontWeight: 400,
@@ -139,7 +139,7 @@ export function Navigation({ activeSection }: NavigationProps) {
                   <Icon size={iconSize} className="mr-2 shrink-0 opacity-70" style={{ color: iconColor }} />
                   <span
                     style={{
-                      fontSize: "1.05rem",
+                      fontSize: "1.25rem",
                       fontWeight: activeSection === id ? 600 : 400,
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",

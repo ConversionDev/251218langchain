@@ -95,9 +95,9 @@ export function PortfolioLanding() {
               AI DEVELOPER
             </span>
           </div>
-          <div className="relative z-10 w-full max-w-[1280px] mx-auto px-8 sm:px-12 lg:px-16 xl:px-24 md:flex md:items-start md:gap-16 lg:gap-24 xl:gap-32">
+          <div className="relative z-10 w-full max-w-[1520px] mx-auto px-8 sm:px-14 lg:px-24 xl:px-32 md:flex md:items-start md:gap-32 lg:gap-48 xl:gap-64">
             <Navigation activeSection={activeSection} />
-            <main className="flex-1 min-w-0 max-w-[720px] pt-14 md:pt-0 pb-40">
+            <main className="flex-1 min-w-0 max-w-[880px] pt-14 md:pt-0 pb-40">
               <AboutSection />
               <ProjectsSection />
               <StrengthsTechSection />

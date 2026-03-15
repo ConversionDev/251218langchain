@@ -52,7 +52,7 @@ export function ContactSection() {
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.55 }}
           style={{
-            fontSize: "0.9375rem",
+            fontSize: "1.0625rem",
             color: "rgba(220,228,245,0.85)",
             lineHeight: 1.85,
             marginBottom: "2rem",
@@ -75,7 +75,7 @@ export function ContactSection() {
               background: "rgba(142,240,215,0.06)",
               border: "1px solid rgba(142,240,215,0.15)",
               color: "#8ef0d7",
-              fontSize: "0.9375rem",
+              fontSize: "1.0625rem",
               fontWeight: 500,
             }}
             onMouseEnter={(e) => {
@@ -105,7 +105,7 @@ export function ContactSection() {
           onClick={copy}
           className="flex items-center gap-1.5 mb-10 transition-all duration-300"
           style={{
-            fontSize: "0.75rem",
+            fontSize: "0.875rem",
             color: copied ? "rgba(142,240,215,0.65)" : "rgba(220,228,245,0.7)",
           }}
           onMouseEnter={(e) => {
@@ -137,7 +137,7 @@ export function ContactSection() {
               rel={!item.download ? "noopener noreferrer" : undefined}
               className="flex items-center gap-2.5 rounded-lg transition-all duration-300"
               style={{
-                fontSize: "0.8125rem",
+                fontSize: "0.9375rem",
                 fontWeight: 500,
                 color: "rgba(220,228,245,0.82)",
                 background: "rgba(142,240,215,0.02)",

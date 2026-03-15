@@ -43,7 +43,7 @@ export function TimelineSection() {
                 <span
                   style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: "0.6875rem",
+                    fontSize: "0.75rem",
                     color: item.current ? "rgba(142,240,215,0.9)" : "rgba(220,228,245,0.65)",
                     lineHeight: 1.5,
                     letterSpacing: "0.01em",
@@ -56,7 +56,7 @@ export function TimelineSection() {
                 <div className="flex items-center gap-2.5 mb-0.5 flex-wrap">
                   <h3
                     style={{
-                      fontSize: "0.9375rem",
+                      fontSize: "1.0625rem",
                       fontWeight: 600,
                       color: item.current ? "#ccd6f6" : "rgba(220,228,245,0.9)",
                       lineHeight: 1.3,
@@ -82,8 +82,8 @@ export function TimelineSection() {
                     </span>
                   )}
                 </div>
-                <p style={{ fontSize: "0.8125rem", color: "rgba(220,228,245,0.85)", marginBottom: "0.6rem" }}>{item.org}</p>
-                <p style={{ fontSize: "0.8125rem", color: "rgba(220,228,245,0.82)", lineHeight: 1.78 }}>{item.desc}</p>
+                <p style={{ fontSize: "0.9375rem", color: "rgba(220,228,245,0.85)", marginBottom: "0.6rem" }}>{item.org}</p>
+                <p style={{ fontSize: "0.9375rem", color: "rgba(220,228,245,0.82)", lineHeight: 1.78 }}>{item.desc}</p>
                 {(item.tags.length > 0 || item.link) && (
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     {item.tags.map((t) => (
@@ -91,7 +91,7 @@ export function TimelineSection() {
                         key={t}
                         style={{
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: "0.65rem",
+                          fontSize: "0.75rem",
                           color: "rgba(142,240,215,0.5)",
                           background: "rgba(142,240,215,0.04)",
                           border: "1px solid rgba(142,240,215,0.08)",
@@ -109,7 +109,7 @@ export function TimelineSection() {
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1"
-                        style={{ fontSize: "0.7rem", color: "rgba(220,228,245,0.75)" }}
+                        style={{ fontSize: "0.8125rem", color: "rgba(220,228,245,0.75)" }}
                       >
                         <ExternalLink size={11} /> GitHub
                       </a>

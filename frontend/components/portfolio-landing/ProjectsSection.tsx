@@ -53,7 +53,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
       { label: "분석 속도 향상", value: "40%↑" },
       { label: "비용 절감", value: "60%↓" },
     ],
-    techStack: ["Python", "LangChain", "FastAPI"],
+    techStack: ["RAG", "OCR"],
     details: [
       "멀티 포맷 문서(PDF, 이미지, 스캔본) OCR 파이프라인 구축",
       "Chunking 전략 최적화로 RAG 검색 정확도 향상",
@@ -324,19 +324,19 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
 const PREVIEW_CLASS = "shrink-0 w-[140px] sm:w-[160px] h-[88px] sm:h-[96px] rounded-lg overflow-hidden";
 
 const titleStyle = {
-  fontSize: "0.9375rem",
+  fontSize: "1.2rem",
   fontWeight: 700 as const,
   color: "#ccd6f6",
   lineHeight: 1.3,
 };
 const subtitleStyle = {
-  fontSize: "0.8125rem",
+  fontSize: "1.0625rem",
   color: "rgba(220,228,245,0.88)",
   lineHeight: 1.55,
   marginTop: "0.35rem",
 };
 const tagStyle = {
-  fontSize: "0.6875rem",
+  fontSize: "0.8125rem",
   color: "rgba(142,240,215,0.7)",
   background: "rgba(142,240,215,0.06)",
   border: "1px solid rgba(142,240,215,0.12)",

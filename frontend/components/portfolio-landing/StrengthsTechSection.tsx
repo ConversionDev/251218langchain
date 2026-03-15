@@ -2,29 +2,40 @@
 
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { Brain, Database, Code2, Cloud } from "lucide-react";
+import { Brain, Database, Code2, Cloud, Server, Cpu } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 
+/** 이력서 PDF(components/portfolio/이력서.pdf) 좌측 스킬란과 동일 */
 const TECH = [
   {
-    label: "AI / ML",
-    icon: Brain,
-    items: ["Python", "LangChain", "RAG", "GPT-4", "Prompt Engineering", "OCR"],
-  },
-  {
-    label: "Backend",
-    icon: Database,
-    items: ["FastAPI", "Django", "PostgreSQL", "Redis", "REST API"],
+    label: "Core Language",
+    icon: Cpu,
+    items: ["Java", "Python"],
   },
   {
     label: "Frontend",
     icon: Code2,
-    items: ["React", "TypeScript", "Tailwind CSS", "Next.js"],
+    items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Framer", "PWA", "Potrace"],
   },
   {
-    label: "Infra / Tools",
+    label: "Backend",
+    icon: Database,
+    items: ["FastAPI", "SQLAlchemy", "Alembic", "Spring Boot", "JPA"],
+  },
+  {
+    label: "AI / ML / DL",
+    icon: Brain,
+    items: ["LangChain", "LangGraph", "Transformers", "BGE-M3", "Llama", "EXAONE"],
+  },
+  {
+    label: "Data Base",
     icon: Cloud,
-    items: ["Docker", "Git", "Linux", "AWS", "CI/CD"],
+    items: ["Postgre(Neon DB)", "FAISS", "Redis(Upstash)"],
+  },
+  {
+    label: "DevOps",
+    icon: Server,
+    items: ["Docker", "Vercel", "GitHub Actions", "CI/CD", "AWS", "NGINX"],
   },
 ];
 
@@ -62,7 +73,7 @@ export function StrengthsTechSection() {
               <cat.icon size={13} style={{ color: "rgba(142,240,215,0.35)" }} />
               <span
                 style={{
-                  fontSize: "0.625rem",
+                  fontSize: "0.875rem",
                   fontWeight: 600,
                   color: "rgba(220,228,245,0.82)",
                   letterSpacing: "0.15em",
@@ -77,7 +88,7 @@ export function StrengthsTechSection() {
                 <span
                   key={tech}
                   style={{
-                    fontSize: "0.8125rem",
+                    fontSize: "1.0625rem",
                     color: "rgba(142,240,215,0.58)",
                     background: "rgba(142,240,215,0.045)",
                     border: "1px solid rgba(142,240,215,0.08)",
