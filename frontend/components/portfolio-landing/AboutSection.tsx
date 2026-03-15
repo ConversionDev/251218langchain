@@ -21,8 +21,10 @@ const BIO = [
 
 const STATS = [
   { v: "95%", l: "OCR 정확도" },
-  { v: "40%↑", l: "추론 속도" },
-  { v: "60%↓", l: "비용 절감" },
+  { v: "+40%", l: "추론 속도" },
+  { v: "-60%", l: "비용 절감" },
+  { v: "92%", l: "리스크 탐지" },
+  { v: "85%", l: "자동화율" },
 ];
 
 const TRAITS = [
@@ -73,7 +75,7 @@ export function AboutSection() {
           initial={{ opacity: 0, y: 12 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.55, delay: 0.3 }}
-          className="flex gap-10 py-6 mb-8"
+          className="flex flex-wrap gap-8 sm:gap-10 py-6 mb-8"
           style={{
             borderTop: "1px solid rgba(142,240,215,0.07)",
             borderBottom: "1px solid rgba(142,240,215,0.07)",

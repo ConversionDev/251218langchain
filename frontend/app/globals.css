@@ -231,17 +231,206 @@
   box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4), 0 0 24px -4px rgb(16 185 129 / 0.12);
 }
 
-/* 포트폴리오 이력서: 인쇄 시 이력서 영역만 표시 (모달·섹션 구분, PDF 저장용) */
+/* 이력서: 섹션 제목·본문 글자 크기 통일 (이미 컴포넌트에서 10px/11px 적용) */
+.resume-modal-content .resume-section-title,
+.resume-standalone .resume-section-title {
+  letter-spacing: 0.12em;
+}
+
+/* 이력서: 글자체 통일 — 본문 sans, 기간/숫자는 var(--resume-mono) */
+#resume-modal-print-area,
+#resume-print-area .resume-content {
+  font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+#resume-print-area .resume-content {
+  --resume-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+}
+/* 표에서 기간 열 고정 폭(세로 정렬 맞춤) */
+#resume-modal-print-area .resume-col-period,
+#resume-print-area .resume-col-period {
+  width: 20%;
+  min-width: 4.5rem;
+}
+
+/* PDF 참고: 표·글자 크기 통일 (들쭉날쭉 방지) */
+#resume-modal-print-area .resume-modal-content table { font-size: 11px; }
+#resume-modal-print-area .resume-modal-content table th { font-size: 10px; }
+#resume-modal-print-area .resume-modal-content table td { font-size: 11px; }
+#resume-modal-print-area .resume-section-title { font-size: 10px; }
+#resume-print-area .resume-modal-content table { font-size: 11px; }
+#resume-print-area .resume-modal-content table th { font-size: 10px; }
+#resume-print-area .resume-modal-content table td { font-size: 11px; }
+#resume-print-area .resume-section-title { font-size: 10px; }
+
+/* 이력서 모달: 크기·레이아웃 (PPT처럼 좌측 폭 조절) */
+.resume-layout-grid {
+  align-items: stretch;
+}
+.resume-layout-grid .resume-tech-sidebar {
+  min-height: 100%;
+}
+@media (min-width: 1024px) {
+  .resume-layout-grid {
+    grid-template-columns: var(--resume-sidebar-width, 200px) 1fr;
+  }
+}
+
+/* 1페이지: 테이블 레이아웃 — 같은 행 셀은 항상 같은 높이, 사이드바 배경 자연스럽게 끝까지 */
+.resume-layout-table {
+  display: block;
+}
+.resume-layout-table .resume-tech-sidebar,
+.resume-layout-table .resume-main-content {
+  display: block;
+}
+@media (min-width: 1024px) {
+  .resume-layout-table {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+  .resume-layout-table .resume-tech-sidebar {
+    display: table-cell;
+    width: var(--resume-sidebar-width, 200px);
+    vertical-align: top;
+  }
+  .resume-layout-table .resume-main-content {
+    display: table-cell;
+    vertical-align: top;
+  }
+}
+
+/* edge-to-edge: 상·좌 여백 없이 헤더/사이드바가 문서 끝에 붙음 */
+.resume-edge-to-edge .resume-header-with-photo { margin-left: 0 !important; margin-top: 0 !important; }
+.resume-padding-narrow .resume-header-with-photo { margin-left: -1rem; margin-right: -1rem; margin-top: -1rem; }
+.resume-padding-normal .resume-header-with-photo { margin-left: -1.5rem; margin-right: -1.5rem; margin-top: -1.5rem; }
+@media (min-width: 640px) {
+  .resume-padding-normal .resume-header-with-photo { margin-left: -2rem; margin-right: -2rem; margin-top: -2rem; }
+}
+.resume-padding-wide .resume-header-with-photo { margin-left: -2rem; margin-right: -2rem; margin-top: -2rem; }
+@media (min-width: 640px) {
+  .resume-padding-wide .resume-header-with-photo { margin-left: -2.5rem; margin-right: -2.5rem; margin-top: -2.5rem; }
+}
+
+/* 이력서: 화면에서는 현재 페이지만 표시 (1/2 넘기기) */
+.resume-modal-paged[data-current-page="1"] .resume-page-2 {
+  display: none !important;
+}
+.resume-modal-paged[data-current-page="2"] .resume-page-1 {
+  display: none !important;
+}
+/* 한 번에 스크롤: 두 페이지 모두 표시 */
+.resume-modal-paged[data-current-page="all"] .resume-page-1,
+.resume-modal-paged[data-current-page="all"] .resume-page-2 {
+  display: block !important;
+}
+
+/* 이력서 전용 페이지(/resume): 세로형 문서, 전체 화면 높이 사용·가운데 정렬 */
+.resume-standalone .resume-standalone-body {
+  height: calc(100vh - 56px);
+  display: flex;
+  justify-content: center;
+  background: #e2e8f0;
+}
+.resume-standalone .resume-standalone-body #resume-modal-print-area {
+  width: 100%;
+  max-width: min(210mm, 96vw);
+  min-width: 280px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.1);
+  background: #fff;
+}
+.resume-standalone .resume-standalone-body .resume-modal-paged .resume-page-1,
+.resume-standalone .resume-standalone-body .resume-modal-paged .resume-page-2 {
+  min-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
+}
+/* 한 번에 스크롤 모드: 본문 높이 자동, 아래로 쭉 활용 */
+.resume-standalone .resume-standalone-body #resume-modal-print-area.resume-single-scroll {
+  height: auto;
+  min-height: 100%;
+  overflow-y: visible;
+}
+.resume-standalone .resume-standalone-body #resume-modal-print-area.resume-single-scroll .resume-page-1,
+.resume-standalone .resume-standalone-body #resume-modal-print-area.resume-single-scroll .resume-page-2 {
+  min-height: 0;
+  overflow-y: visible;
+}
+
+/* 왼쪽: 작은 미리보기 | 오른쪽: 선택한 페이지 본문(크게 제대로 된 정보) — 25% : 75% */
+.resume-standalone-split .resume-standalone-body {
+  display: flex;
+  flex-direction: row;
+  height: calc(100vh - 56px);
+}
+.resume-standalone-split .resume-preview-sidebar {
+  width: 25%;
+  min-width: 12rem;
+  max-width: 18rem;
+}
+.resume-standalone-split .resume-content-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 참고자료처럼 미리보기가 바로 보이게: 스크롤 영역이 높이를 채움 */
+.resume-standalone-split .resume-content-panel .resume-preview-scroll {
+  min-height: 0;
+  flex: 1 1 0;
+}
+/* 스크롤 영역 = 세로 flex + 가로 중앙, wrapper가 높이 상속받도록 */
+.resume-standalone-split .resume-content-panel .resume-preview-scroll {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* wrapper: height 고정 없이 콘텐츠 높이만 사용 → 내부 flex row의 aside stretch가 자연스럽게 동작 */
+.resume-standalone-split .resume-content-panel .resume-content-wrapper {
+  width: 100%;
+  max-width: min(210mm, 96vw);
+}
+.resume-standalone-split .resume-content-panel #resume-modal-print-area {
+  overflow: visible;
+}
+.resume-standalone-split .resume-content-panel .resume-modal-paged .resume-page-1,
+.resume-standalone-split .resume-content-panel .resume-modal-paged .resume-page-2 {
+  overflow: visible;
+  padding-bottom: 0;
+}
+/* 1페이지 Career: 리스트 마지막 줄 잘림 방지 */
+#resume-modal-print-area .resume-career-section table tbody tr:last-child td ul {
+  padding-bottom: 0;
+}
+/* 표 마지막 행 하단 여백 최소화 */
+#resume-modal-print-area .resume-modal-content table tbody tr:last-child td {
+  padding-bottom: 0.15rem;
+}
+/* 이력서 페이지 하단 여백 — 잘린 부분 없이 꽉 차게 완성도 있게 */
+#resume-modal-print-area .resume-page-1,
+#resume-modal-print-area .resume-page-2 {
+  padding-bottom: 0;
+}
+
+/* 포트폴리오 이력서: 인쇄 시 이력서 영역만 표시, 화면과 동일하게 출력 (PDF 저장용) */
 @media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
   body * {
     visibility: hidden;
   }
-  .resume-modal-overlay,
-  .resume-modal-header {
-    display: none !important;
-    visibility: hidden !important;
-  }
-  /* 섹션에서 인쇄할 때 */
+  /* 모달 바깥에서 인쇄할 때: 랜딩 섹션 이력서만 표시 */
   body:not(.resume-modal-open) #resume-print-area,
   body:not(.resume-modal-open) #resume-print-area * {
     visibility: visible;
@@ -257,15 +446,37 @@
     border: none !important;
     border-radius: 0 !important;
   }
-  /* 모달에서 인쇄할 때 */
+  /* 모달에서 인쇄할 때: overlay는 보이게, 헤더만 숨기고 #resume-modal-print-area 가 보이도록 */
+  body.resume-modal-open .resume-modal-overlay {
+    visibility: visible !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: #fff !important;
+    align-items: flex-start !important;
+    overflow: visible !important;
+  }
+  body.resume-modal-open .resume-modal-backdrop {
+    display: none !important;
+  }
+  body.resume-modal-open .resume-modal-box {
+    visibility: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+  }
+  body.resume-modal-open .resume-modal-body {
+    visibility: visible !important;
+    overflow: visible !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
   body.resume-modal-open #resume-modal-print-area,
   body.resume-modal-open #resume-modal-print-area * {
-    visibility: visible;
+    visibility: visible !important;
   }
   body.resume-modal-open #resume-modal-print-area {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
     max-width: 100% !important;
     min-height: auto !important;
@@ -273,26 +484,100 @@
     padding: 1.5rem 2rem !important;
     background: #fff !important;
     border: none !important;
-    border-radius: 0 !important;
-    overflow: visible !important;
     box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* 인쇄 시 2페이지: A4 한 장 높이(273mm)로 고정 */
+  body.resume-modal-open #resume-modal-print-area .resume-modal-paged .resume-page-1,
+  body.resume-modal-open #resume-modal-print-area .resume-modal-paged .resume-page-2 {
+    display: block !important;
+    height: 273mm !important;
+    max-height: 273mm !important;
+    min-height: 273mm !important;
+    overflow: hidden !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    box-sizing: border-box !important;
+  }
+  body.resume-modal-open #resume-modal-print-area .resume-modal-paged .resume-page-2 {
+    page-break-after: auto !important;
+  }
+  body.resume-modal-open #resume-modal-print-area {
+    padding: 0.75rem 1.25rem !important;
+  }
+  body.resume-modal-open #resume-modal-print-area .resume-page-1,
+  body.resume-modal-open #resume-modal-print-area .resume-page-2 {
+    padding: 0 !important;
+  }
+  body.resume-modal-open #resume-modal-print-area .resume-section-title,
+  body.resume-modal-open #resume-modal-print-area .resume-entry-block,
+  body.resume-modal-open #resume-modal-print-area .resume-write-space {
+    margin-bottom: 0.35rem !important;
+  }
+  body.resume-modal-open #resume-modal-print-area .resume-header-with-photo {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    margin-bottom: 0.35rem !important;
+  }
+  body.resume-modal-open #resume-modal-print-area .resume-tech-sidebar,
+  body.resume-modal-open #resume-modal-print-area .resume-page-1 .grid > div {
+    padding-top: 0.25rem !important;
+  }
+  body.resume-modal-open #resume-modal-print-area .resume-page-1 .space-y-3 > section {
+    margin-top: 0.35rem !important;
+  }
+  /* 인쇄 시에도 화면과 동일하게: 헤더·사진·좌측 배경색 유지 (덮어쓰기 제거) */
+  body.resume-modal-open .resume-header-with-photo {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-top: 0 !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+  #resume-modal-print-area .resume-header-with-photo,
+  #resume-modal-print-area .resume-photo-placeholder,
+  #resume-modal-print-area .resume-tech-sidebar {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   #resume-print-area .resume-content h1,
   #resume-print-area .resume-content h2,
   #resume-print-area .resume-content h3,
-  #resume-print-area .resume-content h4,
-  #resume-modal-print-area .resume-content h1,
-  #resume-modal-print-area .resume-content h2,
-  #resume-modal-print-area .resume-content h3,
-  #resume-modal-print-area .resume-content h4 {
+  #resume-print-area .resume-content h4 {
     color: #0f172a !important;
   }
   #resume-print-area .resume-content p,
   #resume-print-area .resume-content span,
-  #resume-print-area .resume-content li,
-  #resume-modal-print-area .resume-content p,
-  #resume-modal-print-area .resume-content span,
-  #resume-modal-print-area .resume-content li {
+  #resume-print-area .resume-content li {
     color: #334155 !important;
+  }
+
+  /* 이력서 전용 페이지(/resume) 인쇄: 헤더 숨기고 본문만 2페이지 A4 */
+  .resume-standalone .resume-standalone-header {
+    display: none !important;
+  }
+  .resume-standalone #resume-modal-print-area,
+  .resume-standalone #resume-modal-print-area * {
+    visibility: visible !important;
+  }
+  .resume-standalone .resume-standalone-body,
+  .resume-standalone #resume-modal-print-area {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+  .resume-standalone #resume-modal-print-area .resume-modal-paged .resume-page-1,
+  .resume-standalone #resume-modal-print-area .resume-modal-paged .resume-page-2 {
+    display: block !important;
+    height: 273mm !important;
+    max-height: 273mm !important;
+    min-height: 273mm !important;
+    overflow: hidden !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+  }
+  .resume-standalone #resume-modal-print-area .resume-modal-paged .resume-page-2 {
+    page-break-after: auto !important;
   }
 }

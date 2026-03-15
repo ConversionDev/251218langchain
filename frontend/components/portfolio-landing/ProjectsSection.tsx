@@ -53,7 +53,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
       { label: "분석 속도 향상", value: "40%↑" },
       { label: "비용 절감", value: "60%↓" },
     ],
-    techStack: ["Python", "LangChain", "GPT-4", "Tesseract OCR", "FastAPI", "ChromaDB"],
+    techStack: ["Python", "LangChain", "FastAPI"],
     details: [
       "멀티 포맷 문서(PDF, 이미지, 스캔본) OCR 파이프라인 구축",
       "Chunking 전략 최적화로 RAG 검색 정확도 향상",

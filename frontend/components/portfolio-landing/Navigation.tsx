@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { Mail, PenSquare, User, FolderKanban, Layers, Briefcase, FileText } from "lucide-react";
 import { Jua, Nanum_Pen_Script, Nanum_Brush_Script } from "next/font/google";
-import Image from "next/image";
 
 const jua = Jua({ weight: "400", subsets: ["latin"], display: "swap" });
 const nanumPen = Nanum_Pen_Script({ weight: "400", subsets: ["latin"], display: "swap" });
@@ -14,7 +13,7 @@ const NAV = [
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "strengths", label: "Tech Stack", icon: Layers },
   { id: "timeline", label: "Career", icon: Briefcase },
-  { id: "resume", label: "Resume", icon: FileText, openModal: true },
+  { id: "resume", label: "Resume", icon: FileText, href: "/resume", openInNewTab: true },
   { id: "contact", label: "Contact", icon: Mail },
 ] as const;
 
@@ -74,13 +73,9 @@ const SOCIALS = [
 
 type NavigationProps = {
   activeSection: string;
-  /** 사이드바 상단 로고/프로필 사진 URL. 있으면 이름 위에 크게 표시 */
-  logoImageSrc?: string;
-  /** Resume 클릭 시 내부 창(모달)으로 이력서 열기 */
-  onOpenResumeModal?: () => void;
 };
 
-export function Navigation({ activeSection, logoImageSrc, onOpenResumeModal }: NavigationProps) {
+export function Navigation({ activeSection }: NavigationProps) {
   const go = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 
@@ -103,13 +98,6 @@ export function Navigation({ activeSection, logoImageSrc, onOpenResumeModal }: N
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: [0.25, 0, 0, 1] }}
       >
-        {logoImageSrc && (
-          <div className="mb-4 flex justify-start">
-            <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden ring-2 ring-[#8ef0d7]/30">
-              <Image src={logoImageSrc} alt="강경구" fill className="object-cover" sizes="128px" priority />
-            </div>
-          </div>
-        )}
         <div className="flex items-center gap-2">
           <h1
             className={nanumPen.className}
@@ -123,14 +111,6 @@ export function Navigation({ activeSection, logoImageSrc, onOpenResumeModal }: N
           >
             강경구
           </h1>
-          <span
-            className="shrink-0 w-1.5 h-1.5 rounded-full"
-            style={{
-              background: "#8ef0d7",
-              boxShadow: "0 0 8px rgba(142,240,215,0.5)",
-            }}
-            aria-hidden
-          />
         </div>
         <span
           className={`flex items-center gap-2 mt-3 ${nanumBrush.className}`}
@@ -151,45 +131,50 @@ export function Navigation({ activeSection, logoImageSrc, onOpenResumeModal }: N
           <div className="pl-5 space-y-1.5">
             {NAV.map((item) => {
               const { id, label, icon: Icon } = item;
-              const openModal = "openModal" in item && item.openModal;
-              return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => (openModal ? onOpenResumeModal?.() : go(id))}
-                className="group relative flex items-center py-3 w-full text-left"
-              >
-                {activeSection === id && !openModal && (
-                  <motion.span
-                    layoutId="navDot"
-                    className="absolute -left-[5.5px] w-2.5 h-2.5 rounded-full"
+              const href = "href" in item ? item.href : undefined;
+              const openInNewTab = "openInNewTab" in item && item.openInNewTab;
+              const isLink = Boolean(href);
+              const content = (
+                <>
+                  <Icon size={iconSize} className="mr-2 shrink-0 opacity-70" style={{ color: iconColor }} />
+                  <span
                     style={{
-                      background: "#8ef0d7",
-                      boxShadow: "0 0 10px rgba(142,240,215,0.6)",
+                      fontSize: "1.05rem",
+                      fontWeight: activeSection === id ? 600 : 400,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: activeSection === id ? "#8ef0d7" : "rgba(220,228,245,0.65)",
+                      transition: "color 0.25s",
                     }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 380,
-                      damping: 28,
-                    }}
-                  />
-                )}
-                <Icon size={iconSize} className="mr-2 shrink-0 opacity-70" style={{ color: iconColor }} />
-                <span
-                  style={{
-                    fontSize: "1.05rem",
-                    fontWeight: activeSection === id ? 600 : 400,
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: activeSection === id ? "#8ef0d7" : "rgba(220,228,245,0.65)",
-                    transition: "color 0.25s",
-                  }}
-                  className={activeSection !== id ? "group-hover:!text-[rgba(220,228,245,0.9)]" : ""}
+                    className={activeSection !== id ? "group-hover:!text-[rgba(220,228,245,0.9)]" : ""}
+                  >
+                    {label}
+                  </span>
+                </>
+              );
+              if (isLink && href) {
+                return (
+                  <a
+                    key={id}
+                    href={href}
+                    target={openInNewTab ? "_blank" : undefined}
+                    rel={openInNewTab ? "noopener noreferrer" : undefined}
+                    className="group relative flex items-center py-3 w-full text-left"
+                  >
+                    {content}
+                  </a>
+                );
+              }
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => go(id)}
+                  className="group relative flex items-center py-3 w-full text-left"
                 >
-                  {label}
-                </span>
-              </button>
-            );
+                  {content}
+                </button>
+              );
             })}
           </div>
         </nav>

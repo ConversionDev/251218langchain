@@ -25,7 +25,7 @@ export function RoleSwitcher() {
   const [open, setOpen] = useState(false);
 
   if (!hydrated) return null;
-  if (pathname === "/") return null;
+  if (pathname === "/" || pathname === "/resume") return null;
 
   const handleSwitch = (role: DemoRole) => {
     setDemoRole(role);

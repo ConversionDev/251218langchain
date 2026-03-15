@@ -252,7 +252,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
             fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         >
-          Kang Kyung Gu
+          ConversionDev
         </motion.p>
 
         <motion.h1
