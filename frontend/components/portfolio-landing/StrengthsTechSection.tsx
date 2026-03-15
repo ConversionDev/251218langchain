@@ -70,7 +70,7 @@ export function StrengthsTechSection() {
             }}
           >
             <div className="flex items-center gap-2 mb-3.5">
-              <cat.icon size={13} style={{ color: "rgba(142,240,215,0.35)" }} />
+              <cat.icon size={20} style={{ color: "rgba(142,240,215,0.35)" }} />
               <span
                 style={{
                   fontSize: "0.875rem",

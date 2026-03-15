@@ -101,6 +101,53 @@
   }
 }
 
+/* 포트폴리오 About: 통계 위·아래 실선 — 콘텐츠 박스 밖으로 빼서 패딩 끝까지 꽉 채움 */
+.portfolio-about-divider {
+  display: block !important;
+  height: 1px !important;
+  background: rgba(255, 255, 255, 0.32) !important;
+  border: none !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  /* 상위 px-8 sm:px-14 lg:px-24 xl:px-32 에 맞춰 빠져나가기 */
+  margin-left: calc(-1 * 2rem) !important;
+  margin-right: calc(-1 * 2rem) !important;
+  width: calc(100% + 2 * 2rem) !important;
+  box-sizing: content-box !important;
+}
+@media (min-width: 640px) {
+  .portfolio-about-divider {
+    margin-left: calc(-1 * 3.5rem) !important;
+    margin-right: calc(-1 * 3.5rem) !important;
+    width: calc(100% + 2 * 3.5rem) !important;
+  }
+}
+@media (min-width: 1024px) {
+  .portfolio-about-divider {
+    margin-left: calc(-1 * 6rem) !important;
+    margin-right: calc(-1 * 6rem) !important;
+    width: calc(100% + 2 * 6rem) !important;
+  }
+}
+@media (min-width: 1280px) {
+  .portfolio-about-divider {
+    margin-left: calc(-1 * 8rem) !important;
+    margin-right: calc(-1 * 8rem) !important;
+    width: calc(100% + 2 * 8rem) !important;
+  }
+}
+
+/* 포트폴리오 Projects: 카드 섹션 위 실선 — 래퍼(-mx-4 sm:-mx-5) 안에서 100% 너비로 그리므로 여기선 높이/색만 */
+.portfolio-projects-divider {
+  display: block !important;
+  height: 1px !important;
+  background: rgba(255, 255, 255, 0.32) !important;
+  border: none !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  width: 100% !important;
+}
+
 /* 공시 리포트 미리보기: 라이트/다크 공통으로 용지 스타일 유지 (잘림 방지 + 다크에서도 가독) */
 .report-preview-modal {
   background: hsl(var(--muted)) !important;

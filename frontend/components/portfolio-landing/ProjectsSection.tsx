@@ -104,8 +104,10 @@ const SUB_PROJECTS: SubProject[] = [
   {
     id: "keyword",
     title: "KeyWord",
-    description: "약속의 시작부터 끝까지, 이용자 일정을 도와주는 서비스. 제로베이스 팀 프로젝트 (Back-End).",
+    description: "약속의 시작부터 끝까지, 이용자 일정을 도와주는 서비스.\n프론트엔드와 백엔드 팀 원격 협업 프로젝트",
     href: "https://github.com/ZB-Keyword",
+    previewImage:
+      "https://github.com/ZB-Keyword/.github/assets/130157565/45b3001f-1705-4d93-acf4-4b979b218186",
     techStack: ["Java", "Spring", "OAuth 2.0", "ElasticSearch"],
   },
 ];
@@ -135,7 +137,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
       >
         <div
           className="sticky top-0 z-10 px-7 pt-7 pb-5"
-          style={{ background: "#141d2e", borderBottom: "1px solid rgba(142,240,215,0.06)" }}
+          style={{ background: "#141d2e", borderBottom: "1px solid rgba(255,255,255,0.32)" }}
         >
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3.5">
@@ -187,6 +189,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
               fontSize: "0.875rem",
               color: "rgba(220,228,245,0.88)",
               lineHeight: 1.85,
+              whiteSpace: "pre-line",
             }}
           >
             {project.description}
@@ -286,7 +289,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
               >
                 <span
                   style={{
-                    fontSize: "0.8125rem",
+                    fontSize: "0.9375rem",
                     color: "rgba(220,228,245,0.85)",
                     lineHeight: 1.7,
                   }}
@@ -329,14 +332,15 @@ const titleStyle = {
   color: "#ccd6f6",
   lineHeight: 1.3,
 };
-const subtitleStyle = {
+const subtitleStyle: React.CSSProperties = {
   fontSize: "1.0625rem",
   color: "rgba(220,228,245,0.88)",
   lineHeight: 1.55,
   marginTop: "0.35rem",
+  whiteSpace: "pre-line",
 };
 const tagStyle = {
-  fontSize: "0.8125rem",
+  fontSize: "0.9375rem",
   color: "rgba(142,240,215,0.7)",
   background: "rgba(142,240,215,0.06)",
   border: "1px solid rgba(142,240,215,0.12)",
@@ -363,22 +367,28 @@ function MainProjectRow({
   const content = (
     <>
       <div
-        className={`${PREVIEW_CLASS} cursor-pointer`}
+        className={`${PREVIEW_CLASS} cursor-pointer relative`}
         style={{
           border: "1px solid rgba(142,240,215,0.08)",
           background: "rgba(0,0,0,0.25)",
         }}
       >
         {hasPreview ? (
-          <iframe
-            src={project.viewUrl}
-            title={`${project.title} 미리보기`}
-            className="pointer-events-none w-full h-full border-0 origin-top-left"
-            style={{ transform: "scale(0.5)", width: "200%", height: "200%" }}
-          />
+          <div className="absolute inset-0 overflow-hidden">
+            <iframe
+              src={project.viewUrl}
+              title={`${project.title} 미리보기`}
+              className="pointer-events-none border-0 absolute left-0 top-0 origin-top-left"
+              style={{
+                width: "400%",
+                height: "400%",
+                transform: "scale(0.25)",
+              }}
+            />
+          </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <project.icon size={28} style={{ color: "rgba(142,240,215,0.35)" }} />
+          <div className="w-full h-full flex items-center justify-center p-0 min-h-0 min-w-0">
+            <project.icon size={44} className="shrink-0" style={{ color: "rgba(142,240,215,0.4)" }} />
           </div>
         )}
       </div>
@@ -406,8 +416,24 @@ function MainProjectRow({
     initial: { opacity: 0, y: 12 },
     animate: inView ? { opacity: 1, y: 0 } : {},
     transition: { duration: 0.4, delay: index * 0.08 },
-    className: "group flex gap-5 sm:gap-6 items-start rounded-xl py-4 px-1 transition-colors",
-    style: { borderBottom: "1px solid rgba(142,240,215,0.06)" },
+    className: "group flex gap-5 sm:gap-6 items-start rounded-xl -mx-4 sm:-mx-5 px-4 sm:px-5 py-4 transition-all duration-300",
+    style: { border: "1px solid transparent", borderBottom: "1px solid rgba(255,255,255,0.32)" },
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
+      const el = e.currentTarget as HTMLElement;
+      el.style.background = "rgba(142,240,215,0.02)";
+      el.style.borderLeftColor = "rgba(142,240,215,0.06)";
+      el.style.borderTopColor = "rgba(142,240,215,0.06)";
+      el.style.borderRightColor = "rgba(142,240,215,0.06)";
+      el.style.borderBottomColor = "rgba(255,255,255,0.32)";
+    },
+    onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+      const el = e.currentTarget as HTMLElement;
+      el.style.background = "transparent";
+      el.style.borderLeftColor = "transparent";
+      el.style.borderTopColor = "transparent";
+      el.style.borderRightColor = "transparent";
+      el.style.borderBottomColor = "rgba(255,255,255,0.32)";
+    },
   };
 
   if (hasLink) {
@@ -444,17 +470,34 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
       initial={{ opacity: 0, y: 12 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.4, delay: index * 0.08 }}
-      className="group flex gap-5 sm:gap-6 items-start rounded-xl py-4 px-1 transition-colors"
+      className="group flex gap-5 sm:gap-6 items-start rounded-xl -mx-4 sm:-mx-5 px-4 sm:px-5 py-4 transition-all duration-300"
       style={{
-        borderBottom: "1px solid rgba(142,240,215,0.06)",
+        border: "1px solid transparent",
+        borderBottom: "1px solid rgba(255,255,255,0.32)",
         textDecoration: "none",
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget as HTMLAnchorElement;
+        el.style.background = "rgba(142,240,215,0.02)";
+        el.style.borderLeftColor = "rgba(142,240,215,0.06)";
+        el.style.borderTopColor = "rgba(142,240,215,0.06)";
+        el.style.borderRightColor = "rgba(142,240,215,0.06)";
+        el.style.borderBottomColor = "rgba(255,255,255,0.32)";
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget as HTMLAnchorElement;
+        el.style.background = "transparent";
+        el.style.borderLeftColor = "transparent";
+        el.style.borderTopColor = "transparent";
+        el.style.borderRightColor = "transparent";
+        el.style.borderBottomColor = "rgba(255,255,255,0.32)";
       }}
     >
       <div
-        className={PREVIEW_CLASS}
+        className={`${PREVIEW_CLASS} relative overflow-hidden`}
         style={{
           border: "1px solid rgba(142,240,215,0.08)",
-          background: "rgba(0,0,0,0.25)",
+          background: sub.previewImage ? "#fff" : "rgba(0,0,0,0.25)",
         }}
       >
         {sub.previewImage ? (
@@ -463,22 +506,22 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
             alt=""
             width={160}
             height={96}
-            className="w-full h-full object-cover object-top"
+            className="absolute inset-0 w-full h-full object-contain object-center rounded-lg"
             unoptimized
           />
         ) : (
           <div
-            className="w-full h-full flex flex-col items-center justify-center p-1"
+            className="w-full h-full flex flex-col items-center justify-center p-0 min-h-0 min-w-0"
             style={{ background: "rgba(142,240,215,0.08)" }}
           >
-            <Key size={28} style={{ color: "rgba(142,240,215,0.35)" }} />
+            <Key size={44} className="shrink-0" style={{ color: "rgba(142,240,215,0.4)" }} />
             <span
+              className="mt-1"
               style={{
-                fontSize: "0.6875rem",
+                fontSize: "0.625rem",
                 fontWeight: 700,
                 color: "rgba(220,228,245,0.9)",
                 letterSpacing: "0.02em",
-                marginTop: 4,
               }}
             >
               {sub.title}
@@ -487,8 +530,8 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h3 style={titleStyle} className="group-hover:!text-[#8ef0d7] transition-colors">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 style={{ ...titleStyle, whiteSpace: "nowrap" }} className="group-hover:!text-[#8ef0d7] transition-colors shrink-0">
             {sub.title}
           </h3>
           <ExternalLink size={14} style={{ color: "rgba(142,240,215,0.5)" }} className="shrink-0" />
@@ -509,9 +552,11 @@ function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
 }
 
 const blockLabelStyle = {
-  fontSize: "0.6875rem",
-  color: "rgba(220,228,245,0.8)",
-  letterSpacing: "0.12em",
+  fontFamily: '"Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+  fontSize: "0.875rem",
+  fontWeight: 500 as const,
+  color: "rgba(220,228,245,0.88)",
+  letterSpacing: "0.06em",
   textTransform: "uppercase" as const,
   marginBottom: "1rem",
 };
@@ -522,6 +567,10 @@ export function ProjectsSection() {
   return (
     <section id="projects" className="pt-10 pb-28 scroll-mt-14 md:scroll-mt-0">
       <SectionHeader num="02" label="Main Projects" />
+      {/* 카드 행과 동일한 수평 범위: -mx-4 sm:-mx-5 + 명시 너비로 실선이 같은 구간에 맞춤 */}
+      <div className="-mx-4 sm:-mx-5 w-[calc(100%+2rem)] sm:w-[calc(100%+2.5rem)] mb-6">
+        <div role="presentation" className="portfolio-projects-divider" />
+      </div>
       {/* Personal Project — 인사 */}
       <div className="mb-10">
         <p style={blockLabelStyle}>Personal Project</p>

@@ -49,10 +49,10 @@ export function AboutSection() {
   return (
     <section
       id="about"
-      className="pt-12 md:pt-24 lg:pt-28 pb-28 scroll-mt-14 md:scroll-mt-0"
+      className="pt-12 md:pt-24 lg:pt-28 pb-28 scroll-mt-40 md:scroll-mt-0 overflow-visible"
     >
       <SectionHeader num="01" label="About" />
-      <div ref={ref}>
+      <div ref={ref} className="w-full">
         <div className="space-y-5 mb-8">
           {BIO.map(({ text, color }, i) => (
             <motion.p
@@ -71,15 +71,17 @@ export function AboutSection() {
             </motion.p>
           ))}
         </div>
+        {/* About 섹션 실선 통일: 콘텐츠 너비 100% 기준 좌우 맞춤 */}
+        <div
+          role="presentation"
+          className="w-full"
+          style={{ height: 1, background: "rgba(255,255,255,0.32)" }}
+        />
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.55, delay: 0.3 }}
-          className="flex flex-wrap gap-8 sm:gap-10 py-6 mb-8"
-          style={{
-            borderTop: "1px solid rgba(142,240,215,0.07)",
-            borderBottom: "1px solid rgba(142,240,215,0.07)",
-          }}
+          className="w-full flex flex-wrap gap-8 sm:gap-10 py-6 mb-6"
         >
           {STATS.map((s) => (
             <div key={s.l}>
@@ -107,16 +109,22 @@ export function AboutSection() {
             </div>
           ))}
         </motion.div>
+        {/* About 섹션 실선 통일 */}
+        <div
+          role="presentation"
+          className="mb-10 w-full"
+          style={{ height: 1, background: "rgba(255,255,255,0.32)" }}
+        />
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.55, delay: 0.38 }}
-          className="flex flex-col sm:flex-row gap-3 mb-10"
+          className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 mb-12"
         >
           {TRAITS.map(({ label, desc }) => (
             <div
               key={label}
-              className="flex-1 rounded-lg px-4 py-3"
+              className="flex-1 min-w-0 sm:min-w-[220px] rounded-lg px-3 py-4 sm:px-3.5 sm:py-5"
               style={{
                 background: "rgba(142,240,215,0.025)",
                 border: "1px solid rgba(142,240,215,0.07)",
@@ -148,6 +156,7 @@ export function AboutSection() {
           initial={{ opacity: 0 }}
           animate={inView ? { opacity: 1 } : {}}
           transition={{ duration: 0.55, delay: 0.48 }}
+          className="mt-2"
         >
           <p
             style={{
@@ -160,7 +169,7 @@ export function AboutSection() {
           >
             관심 영역
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-x-2 gap-y-3">
             {INTERESTS.map((tag) => (
               <span
                 key={tag}

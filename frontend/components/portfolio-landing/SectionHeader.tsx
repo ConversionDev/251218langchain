@@ -35,32 +35,35 @@ export function SectionHeader({ num, label }: SectionHeaderProps) {
       >
         {num.padStart(2, "0")}
       </span>
-      <div className="relative z-10 flex items-center gap-3">
-        <span
-          style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.7rem",
-            color: "rgba(142,240,215,0.82)",
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-          }}
-        >
-          {num.padStart(2, "0")}.
-        </span>
-        <h2
-          style={{
-            fontSize: "clamp(1.25rem, 2.2vw, 1.55rem)",
-            fontWeight: 600,
-            color: "#ccd6f6",
-            letterSpacing: "0.02em",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {label}
-        </h2>
+      <div className="relative z-10 w-full">
+        <div className="flex items-center gap-3">
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "0.7rem",
+              color: "rgba(142,240,215,0.82)",
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+            }}
+          >
+            {num.padStart(2, "0")}.
+          </span>
+          <h2
+            style={{
+              fontSize: "clamp(1.25rem, 2.2vw, 1.55rem)",
+              fontWeight: 600,
+              color: "#ccd6f6",
+              letterSpacing: "0.02em",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {label}
+          </h2>
+        </div>
         <div
-          className="flex-1 h-px"
-          style={{ background: "rgba(142,240,215,0.2)" }}
+          className="w-full h-px mt-3"
+          style={{ background: "rgba(255,255,255,0.32)" }}
+          aria-hidden
         />
       </div>
     </motion.div>

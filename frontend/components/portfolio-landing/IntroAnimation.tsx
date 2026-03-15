@@ -4,16 +4,11 @@ import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
 import gsap from "gsap";
 import opentype from "opentype.js";
-import { Nanum_Brush_Script, Noto_Serif_KR } from "next/font/google";
+import { Nanum_Brush_Script } from "next/font/google";
 import { FeatherPenSVG, PENCIL_WRITE_ANGLE_DEG } from "./FeatherPenSVG";
 
 const nanumBrush = Nanum_Brush_Script({
   weight: "400",
-  subsets: ["latin"],
-  display: "swap",
-});
-const notoSerifKR = Noto_Serif_KR({
-  weight: ["700"],
   subsets: ["latin"],
   display: "swap",
 });
@@ -230,10 +225,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
   return (
     <motion.div
       className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden"
-      style={{
-        background:
-          "radial-gradient(ellipse 120% 100% at 50% 50%, #0d1c42 0%, #060c28 55%, #010511 100%)",
-      }}
+      style={{ background: "#060c28" }}
       animate={{ opacity: isOut ? 0 : 1 }}
       transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
     >
@@ -259,13 +251,13 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           initial={{ opacity: 0, y: 28 }}
           animate={{ opacity: showName ? 1 : 0, y: showName ? 0 : 28 }}
           transition={{ duration: 0.75, ease: [0.25, 0, 0, 1] }}
-          className={notoSerifKR.className}
+          className="font-sans"
           style={{
             fontSize: "clamp(1.8rem, 4vw, 3rem)",
-            fontWeight: 700,
+            fontWeight: 600,
             letterSpacing: "0.04em",
             lineHeight: 1.05,
-            color: "rgba(180,200,240,0.6)",
+            color: "rgba(204,214,246,0.95)",
             marginBottom: "0.8rem",
           }}
         >
@@ -279,8 +271,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
           style={{
             height: 1,
             width: "clamp(140px, 26vw, 260px)",
-            background:
-              "linear-gradient(90deg, transparent, #4fc3f7, transparent)",
+            background: "#4fc3f7",
             boxShadow: "0 0 10px rgba(79,195,247,0.5)",
             originX: 0.5,
             marginBottom: "2.2rem",
@@ -338,8 +329,7 @@ export function IntroAnimation({ onComplete }: { onComplete: () => void }) {
                   left: 0,
                   width: streakWidth,
                   height: 2,
-                  background:
-                    "linear-gradient(90deg, transparent 0%, rgba(226,232,244,0.5) 30%, rgba(226,232,244,0.85) 100%)",
+                  background: "rgba(226,232,244,0.85)",
                   transition: "none",
                 }}
               />

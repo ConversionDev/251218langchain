@@ -52,7 +52,7 @@ export function ContactSection() {
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.55 }}
           style={{
-            fontSize: "1.0625rem",
+            fontSize: "1.2rem",
             color: "rgba(220,228,245,0.85)",
             lineHeight: 1.85,
             marginBottom: "2rem",
@@ -65,7 +65,7 @@ export function ContactSection() {
           initial={{ opacity: 0, y: 12 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.55, delay: 0.1 }}
-          className="mb-3"
+          className="flex flex-wrap items-center gap-3 mb-10"
         >
           <a
             href="mailto:kanggyeonggu@gmail.com"
@@ -75,7 +75,7 @@ export function ContactSection() {
               background: "rgba(142,240,215,0.06)",
               border: "1px solid rgba(142,240,215,0.15)",
               color: "#8ef0d7",
-              fontSize: "1.0625rem",
+              fontSize: "1.2rem",
               fontWeight: 500,
             }}
             onMouseEnter={(e) => {
@@ -96,32 +96,38 @@ export function ContactSection() {
               className="opacity-55 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300"
             />
           </a>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              copy();
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg transition-all duration-300 shrink-0"
+            style={{
+              padding: "10px 14px",
+              fontSize: "0.9375rem",
+              fontWeight: 500,
+              color: copied ? "rgba(142,240,215,0.8)" : "rgba(220,228,245,0.7)",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+            onMouseEnter={(e) => {
+              if (!copied) {
+                (e.currentTarget as HTMLButtonElement).style.color = "rgba(220,228,245,0.95)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.18)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!copied) {
+                (e.currentTarget as HTMLButtonElement).style.color = "rgba(220,228,245,0.7)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.1)";
+              }
+            }}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "복사됐어요!" : "주소 복사"}
+          </button>
         </motion.div>
-        <motion.button
-          type="button"
-          initial={{ opacity: 0 }}
-          animate={inView ? { opacity: 1 } : {}}
-          transition={{ duration: 0.55, delay: 0.18 }}
-          onClick={copy}
-          className="flex items-center gap-1.5 mb-10 transition-all duration-300"
-          style={{
-            fontSize: "0.875rem",
-            color: copied ? "rgba(142,240,215,0.65)" : "rgba(220,228,245,0.7)",
-          }}
-          onMouseEnter={(e) => {
-            if (!copied)
-              (e.currentTarget as HTMLButtonElement).style.color =
-                "rgba(220,228,245,0.9)";
-          }}
-          onMouseLeave={(e) => {
-            if (!copied)
-              (e.currentTarget as HTMLButtonElement).style.color =
-                "rgba(220,228,245,0.7)";
-          }}
-        >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? "복사됐어요!" : "이메일 주소 복사"}
-        </motion.button>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -137,7 +143,7 @@ export function ContactSection() {
               rel={!item.download ? "noopener noreferrer" : undefined}
               className="flex items-center gap-2.5 rounded-lg transition-all duration-300"
               style={{
-                fontSize: "0.9375rem",
+                fontSize: "1.0625rem",
                 fontWeight: 500,
                 color: "rgba(220,228,245,0.82)",
                 background: "rgba(142,240,215,0.02)",
@@ -171,13 +177,14 @@ export function ContactSection() {
           animate={inView ? { opacity: 1 } : {}}
           transition={{ duration: 0.6, delay: 0.5 }}
           className="mt-20 pt-7"
-          style={{ borderTop: "1px solid rgba(142,240,215,0.06)" }}
+          style={{ borderTop: "1px solid rgba(255,255,255,0.32)" }}
         >
           <p
             style={{
-              fontSize: "0.6875rem",
-              color: "rgba(220,228,245,0.55)",
-              letterSpacing: "0.05em",
+              fontSize: "0.9375rem",
+              color: "rgba(220,228,245,0.6)",
+              letterSpacing: "0.04em",
+              lineHeight: 1.5,
             }}
           >
             © 2026 Kang Gyeonggu · Designed & Built in React

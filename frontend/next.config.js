@@ -29,6 +29,16 @@ const nextConfig = {
         hostname: 'images.unsplash.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'github.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'opengraph.githubassets.com',
+        pathname: '/**',
+      },
     ],
   },
   compress: true,

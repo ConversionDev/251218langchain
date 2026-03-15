@@ -2,11 +2,11 @@
 
 import { motion } from "framer-motion";
 import { Mail, PenSquare, User, FolderKanban, Layers, Briefcase, FileText } from "lucide-react";
-import { Jua, Nanum_Pen_Script, Nanum_Brush_Script } from "next/font/google";
+import { Jua, Nanum_Brush_Script, Nunito } from "next/font/google";
 
 const jua = Jua({ weight: "400", subsets: ["latin"], display: "swap" });
-const nanumPen = Nanum_Pen_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 const nanumBrush = Nanum_Brush_Script({ weight: "400", subsets: ["latin"], display: "swap" });
+const nunito = Nunito({ weight: ["400", "600"], subsets: ["latin"], display: "swap" });
 
 const NAV = [
   { id: "about", label: "About", icon: User },
@@ -71,6 +71,17 @@ const SOCIALS = [
   { type: "icon" as const, icon: Mail, href: "mailto:kanggyeonggu@gmail.com", label: "Email" },
 ];
 
+/** 좌측 슬라이드 전부 어두운 틸로 통일 */
+const ACTIVE_TEAL = "#5eead4";
+const ACTIVE_COLORS: Record<string, string> = {
+  about: ACTIVE_TEAL,
+  projects: ACTIVE_TEAL,
+  strengths: ACTIVE_TEAL,
+  timeline: ACTIVE_TEAL,
+  resume: ACTIVE_TEAL,
+  contact: ACTIVE_TEAL,
+};
+
 type NavigationProps = {
   activeSection: string;
 };
@@ -79,12 +90,13 @@ export function Navigation({ activeSection }: NavigationProps) {
   const go = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 
-  const iconColor = "rgba(220,228,245,0.6)";
-  const iconSize = 14;
+  const iconColorDefault = "rgba(220,228,245,0.6)";
+  const iconSize = 32;
 
   return (
     <header
       className={`
+        relative z-10
         hidden
         md:sticky md:top-0 md:h-screen
         md:w-[280px] lg:w-[300px] xl:w-[340px] md:shrink-0
@@ -100,25 +112,38 @@ export function Navigation({ activeSection }: NavigationProps) {
       >
         <div className="flex items-center gap-2">
           <h1
-            className={nanumPen.className}
+            className={nunito.className}
             style={{
-              fontSize: "clamp(2.8rem, 4.5vw, 3.5rem)",
-              fontWeight: 500,
+              fontSize: "clamp(2.5rem, 4.2vw, 3.2rem)",
+              fontWeight: 600,
               lineHeight: 1.02,
-              letterSpacing: "-0.02em",
-              color: "rgba(204,214,246,0.92)",
+              letterSpacing: "0.02em",
+              color: "rgba(204,214,246,0.95)",
             }}
           >
             강경구
           </h1>
         </div>
-        <span
-          className={`flex items-center gap-2 mt-3 ${nanumBrush.className}`}
+        <p
+          className={`${nunito.className} mt-6 mb-6`}
           style={{
-            fontSize: "clamp(1.25rem, 2vw, 1.5rem)",
+            fontSize: "clamp(0.95rem, 1.4vw, 1.1rem)",
+            fontWeight: 500,
+            letterSpacing: "0.2em",
+            color: "rgba(220,228,245,0.72)",
+            textTransform: "uppercase",
+          }}
+        >
+          AI Full-Stack Engineer
+        </p>
+        <span
+          className={`flex items-center gap-2 mt-6 ${nanumBrush.className}`}
+          style={{
+            fontSize: "clamp(1.35rem, 2.2vw, 2.65rem)",
             lineHeight: 1.5,
             color: "#ffffff",
             fontWeight: 400,
+            whiteSpace: "nowrap",
           }}
         >
           <span>&quot;한 줄의 코드가 세상을 바꾼다&quot;</span>
@@ -126,7 +151,7 @@ export function Navigation({ activeSection }: NavigationProps) {
         <nav className="mt-12 relative">
           <div
             className="absolute left-0 top-1 bottom-1 w-px"
-            style={{ background: "rgba(142,240,215,0.08)" }}
+            style={{ background: "rgba(255,255,255,0.32)", boxShadow: "0 0 6px rgba(255,255,255,0.06)" }}
           />
           <div className="pl-5 space-y-1.5">
             {NAV.map((item) => {
@@ -134,24 +159,39 @@ export function Navigation({ activeSection }: NavigationProps) {
               const href = "href" in item ? item.href : undefined;
               const openInNewTab = "openInNewTab" in item && item.openInNewTab;
               const isLink = Boolean(href);
+              const isActive = activeSection === id;
+              const activeColor = ACTIVE_COLORS[id] ?? "#8ef0d7";
               const content = (
                 <>
-                  <Icon size={iconSize} className="mr-2 shrink-0 opacity-70" style={{ color: iconColor }} />
+                  <Icon
+                    size={iconSize}
+                    className={`mr-7 shrink-0 opacity-90 ${isActive ? "group-hover:!text-[#8ef0d7]" : ""}`}
+                    style={{ color: isActive ? activeColor : iconColorDefault }}
+                  />
                   <span
                     style={{
                       fontSize: "1.25rem",
-                      fontWeight: activeSection === id ? 600 : 400,
+                      fontWeight: isActive ? 700 : 400,
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
-                      color: activeSection === id ? "#8ef0d7" : "rgba(220,228,245,0.65)",
-                      transition: "color 0.25s",
+                      color: isActive ? activeColor : "rgba(220,228,245,0.65)",
+                      transition: "color 0.25s, background 0.2s",
                     }}
-                    className={activeSection !== id ? "group-hover:!text-[rgba(220,228,245,0.9)]" : ""}
+                    className={isActive ? "group-hover:!text-[#8ef0d7]" : "group-hover:!text-[rgba(220,228,245,0.9)]"}
                   >
                     {label}
                   </span>
                 </>
               );
+              const activeStyle = isActive
+                ? {
+                    background: "rgba(255,255,255,0.06)",
+                    borderLeft: `3px solid ${activeColor}`,
+                    marginLeft: "-3px",
+                    paddingLeft: "3px",
+                    borderRadius: "0 8px 8px 0",
+                  }
+                : {};
               if (isLink && href) {
                 return (
                   <a
@@ -159,7 +199,8 @@ export function Navigation({ activeSection }: NavigationProps) {
                     href={href}
                     target={openInNewTab ? "_blank" : undefined}
                     rel={openInNewTab ? "noopener noreferrer" : undefined}
-                    className="group relative flex items-center py-3 w-full text-left"
+                    className="group relative flex items-center py-3 w-full text-left pl-5 -ml-5 pr-2 rounded-r-lg"
+                    style={activeStyle}
                   >
                     {content}
                   </a>
@@ -170,7 +211,8 @@ export function Navigation({ activeSection }: NavigationProps) {
                   key={id}
                   type="button"
                   onClick={() => go(id)}
-                  className="group relative flex items-center py-3 w-full text-left"
+                  className="group relative flex items-center py-3 w-full text-left pl-5 -ml-5 pr-2 rounded-r-lg"
+                  style={activeStyle}
                 >
                   {content}
                 </button>

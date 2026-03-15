@@ -11,17 +11,10 @@ import { ContactSection } from "./ContactSection";
 import { IntroAnimation } from "./IntroAnimation";
 
 const SECTIONS = ["about", "projects", "strengths", "timeline", "contact"] as const;
-const INTRO_SHOWN_KEY = "portfolio-intro-shown";
 
 export function PortfolioLanding() {
-  const [showIntro, setShowIntro] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return !sessionStorage.getItem(INTRO_SHOWN_KEY);
-  });
-  const [introComplete, setIntroComplete] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !!sessionStorage.getItem(INTRO_SHOWN_KEY);
-  });
+  const [showIntro, setShowIntro] = useState(true);
+  const [introComplete, setIntroComplete] = useState(false);
   const [activeSection, setActiveSection] = useState("about");
 
   useEffect(() => {
@@ -43,12 +36,10 @@ export function PortfolioLanding() {
 
   const handleIntroComplete = () => {
     setShowIntro(false);
-    if (typeof window !== "undefined") sessionStorage.setItem(INTRO_SHOWN_KEY, "1");
     setTimeout(() => setIntroComplete(true), 400);
   };
 
-  const introBackground =
-    "radial-gradient(ellipse 120% 100% at 50% 50%, #0d1c42 0%, #060c28 55%, #010511 100%)";
+  const introBackground = "#060c28";
 
   return (
     <div
@@ -70,7 +61,7 @@ export function PortfolioLanding() {
               background: "rgba(13, 28, 66, 0.85)",
               backdropFilter: "blur(20px)",
               WebkitBackdropFilter: "blur(20px)",
-              borderBottom: "1px solid rgba(168,230,207,0.08)",
+              borderBottom: "1px solid rgba(255,255,255,0.32)",
             }}
           >
             <span
@@ -97,7 +88,7 @@ export function PortfolioLanding() {
           </div>
           <div className="relative z-10 w-full max-w-[1520px] mx-auto px-8 sm:px-14 lg:px-24 xl:px-32 md:flex md:items-start md:gap-32 lg:gap-48 xl:gap-64">
             <Navigation activeSection={activeSection} />
-            <main className="flex-1 min-w-0 max-w-[880px] pt-14 md:pt-0 pb-40">
+            <main className="relative flex-1 min-w-0 max-w-[960px] pt-14 md:pt-0 pb-40">
               <AboutSection />
               <ProjectsSection />
               <StrengthsTechSection />
