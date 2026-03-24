@@ -1,0 +1,2 @@
+timestamp,line_id,process,usage,production,equipment_ct,scrap,waste,shift
+2026-03-23 14:00:00,mixing_L1,mixing,1000.0,20.0,5,0.5,0.2,day

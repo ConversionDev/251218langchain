@@ -112,6 +112,13 @@ def get_env_mapping_data_dir() -> Path:
     return d
 
 
+def get_esg_dummy_dir() -> Path:
+    """ESG 전력·손실량·폐기물 더미 데이터셋 출력. app/data/esg_dummy/"""
+    d = get_data_dir() / "esg_dummy"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_spam_data_dir() -> Path:
     """스팸 SFT 데이터 (ExaOne 합성·실제 레이블). app/data/spam/"""
     d = get_data_dir() / "spam"
