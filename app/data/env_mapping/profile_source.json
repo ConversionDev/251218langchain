@@ -1,7 +1,0 @@
-{
-  "_comment": "PDF/Excel 파싱 오류 수동 보정값. build_profile()에서 DEFAULT_PROFILE 위에 덮어씀.",
-  "contract_kwh_per_hour": 5500,
-  "_contract_note": "정상 최대 합계(10라인 × 600kW 평균 × 피크보정) ≈ 4,650kW 기준 × 1.18 = 5,487 → 5,500으로 반올림. 한전 전기요금표 PDF에서 10,020kW가 잘못 파싱되던 문제 수동 수정.",
-  "rule4_usage_per_production_max": 39.8,
-  "_rule4_note": "CATL 2021 Annual Report 기준 단위 생산당 전력 34.565 kWh/kWh × 1.15 = 39.75 → 39.8. mdpI/Battery factories impact.xlsx에서 46.0이 잘못 파싱되던 문제 수동 수정."
-}

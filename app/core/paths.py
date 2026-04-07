@@ -104,21 +104,6 @@ def get_performance_samples_dir() -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
-
-def get_env_mapping_data_dir() -> Path:
-    """환경 데이터 매핑(다국어·배터리 물질) 입출력. app/data/env_mapping/"""
-    d = get_data_dir() / "env_mapping"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def get_esg_dummy_dir() -> Path:
-    """ESG 전력·손실량·폐기물 더미 데이터셋 출력. app/data/esg_dummy/"""
-    d = get_data_dir() / "esg_dummy"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
 def get_spam_data_dir() -> Path:
     """스팸 SFT 데이터 (ExaOne 합성·실제 레이블). app/data/spam/"""
     d = get_data_dir() / "spam"
