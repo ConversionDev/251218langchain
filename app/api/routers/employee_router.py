@@ -98,6 +98,7 @@ class EmployeePayload(BaseModel):
     employmentType: str | None = None
     trainingHours: int | None = None
     resume: Dict[str, Any] | None = None
+    resumeText: str | None = Field(None, description="이력서 원본 추출 텍스트 (ATS AI 분석용)")
     resumeFileHash: str | None = Field(None, description="이력서 파일 SHA-256, 동일 이력서 중복 방지")
     matchedDepartment: str | None = None
     status: str | None = Field(None, description="채용 상태: pending|screening|hired|rejected")
@@ -321,9 +322,12 @@ async def analyze_employee_resume(
     if not one:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    # 1) 이력서 텍스트(선택)
+    # 1) 이력서 텍스트 — 원본 추출 텍스트 우선, 없으면 구조화 데이터로 대체
+    stored_resume_text = (one.get("resumeText") or "").strip()
     resume = one.get("resume")
-    resume_text = _resume_dict_to_text(resume) if isinstance(resume, dict) else ""
+    resume_text = stored_resume_text if stored_resume_text else (
+        _resume_dict_to_text(resume) if isinstance(resume, dict) else ""
+    )
 
     # 2) 성과 활동 텍스트(선택)
     perf_rows = repo_list_performance_by_employee(db, employee_id, limit=50)

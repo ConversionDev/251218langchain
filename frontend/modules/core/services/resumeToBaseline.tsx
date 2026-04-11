@@ -19,7 +19,9 @@ export interface ResumeParseResult {
   name: string;
   jobTitle: string;
   department: string;
+  phone?: string;
   email: string;
+  birthDate?: string;
   /** 지원일 (YYYY-MM-DD 등) */
   applicationDate?: string;
   joinedAt: string;
@@ -35,6 +37,8 @@ export interface ResumeParseResult {
   employmentType?: EmploymentType;
   /** 연간 교육·연수 시간 (공시용) */
   trainingHours?: number;
+  /** 이력서 원본 추출 텍스트 (ATS AI 분석용, 내부 전달용) */
+  _resumeText?: string;
 }
 
 export interface ParseResumeResponse {

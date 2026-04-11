@@ -119,23 +119,23 @@ export default function HRLandingPage() {
                 priority={i === 0}
                 sizes="100vw"
               />
-              {/* 슬로건 영역(오른쪽)만 밝게 — 이미지는 선명하게 유지 */}
+              {/* 슬로건 영역(왼쪽) 가독성 확보, 오른쪽은 이미지 유지 */}
               <div
-                className="absolute inset-0 bg-gradient-to-l from-white/85 via-white/30 to-transparent"
+                className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/60 to-transparent"
                 aria-hidden
               />
             </div>
           ))}
         </div>
 
-        {/* 3) 글자: 슬로건 — 왼쪽 정렬, 1줄 + (통해|오차 없는~) 2줄, 평면 스타일 */}
+        {/* 3) 글자: 슬로건 — 왼쪽 정렬, 크기·간격 강화 */}
         <div className="relative z-10 flex flex-1 items-center justify-start px-6 pt-24 pb-16 md:px-12 md:pt-28 lg:px-16">
           <div className="mx-auto w-full max-w-6xl flex justify-start">
-            <div className="max-w-3xl text-left">
-              <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 md:whitespace-nowrap md:text-4xl">
+            <div className="max-w-xl text-left">
+              <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-slate-900 md:text-5xl lg:text-[3.25rem]">
                 {HERO_SLOGAN.main}
               </h2>
-              <p className="mt-4 text-base leading-snug text-slate-700 md:text-lg md:leading-snug">
+              <p className="mt-6 text-base leading-relaxed text-slate-700 md:mt-8 md:text-xl md:leading-relaxed">
                 {HERO_SLOGAN.sub1}
                 <br />
                 {HERO_SLOGAN.sub2}

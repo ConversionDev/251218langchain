@@ -8,6 +8,7 @@ RAG: embedding_content·embedding·FAISS/pgvector 검색 지원.
 
 from datetime import datetime, timezone
 import random
+import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from langchain_core.documents import Document
@@ -85,6 +86,7 @@ def _row_to_dict(row: Employee) -> Dict[str, Any]:
         "employmentType": row.employment_type,
         "trainingHours": row.training_hours,
         "resume": row.resume,
+        "resumeText": getattr(row, "resume_text", None),
         "resumeFileHash": row.resume_file_hash,
         "matchedDepartment": row.matched_department,
         "status": getattr(row, "status", None),
@@ -112,6 +114,7 @@ def _apply_payload(row: Employee, data: Dict[str, Any]) -> None:
         ("employmentType", "employment_type"),
         ("trainingHours", "training_hours"),
         ("resume", "resume"),
+        ("resumeText", "resume_text"),
         ("resumeFileHash", "resume_file_hash"),
         ("matchedDepartment", "matched_department"),
         ("status", "status"),
@@ -446,21 +449,17 @@ def backfill_missing_profile_fields(
 
 
 def get_next_id(db: Session) -> str:
-    """직원 ID 중 숫자 부분 최대값+1로 다음 ID 제안 (예: E001, E002 → E003)."""
-    row = (
-        db.query(Employee.id)
-        .order_by(Employee.id.desc())
-        .limit(1)
-        .first()
-    )
-    if not row or not row[0]:
-        return "E001"
-    s = str(row[0])
-    num = 0
-    for c in s:
-        if c.isdigit():
-            num = num * 10 + int(c)
-    return f"E{num + 1:03d}"
+    """`E` + 숫자 형태 ID만 스캔해 다음 번호 제안 (E001, E002 → E003).
+
+    HP/NP/Apply 등 다른 접두어가 있어도 `E###` 시퀀스는 샘플·신입과 동일 규칙으로 유지."""
+    max_n = 0
+    for (eid,) in db.query(Employee.id).all():
+        if not eid:
+            continue
+        m = re.fullmatch(r"E(\d+)", str(eid).strip(), flags=re.IGNORECASE)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"E{max_n + 1:03d}"
 
 
 def update(db: Session, eid: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

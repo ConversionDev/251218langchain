@@ -145,6 +145,10 @@ export interface Employee {
   department: string;
   /** 이메일 (선택) */
   email?: string;
+  /** 전화번호 (선택, 예: 010-1234-5678) */
+  phone?: string;
+  /** 생년월일 YYYY-MM-DD (선택) */
+  birthDate?: string;
   /** 지원일 YYYY-MM-DD (지원서 제출일). 입사지원 시 저장 */
   applicationDate?: string;
   /** 입사일 YYYY-MM-DD. 입사 확정 후 설정, 지원 시점에는 미설정 */

@@ -260,10 +260,15 @@ export const APPLY_MESSAGES = {
     genderFemale: "여",
     ageLabel: "만 나이 (선택)",
     agePlaceholder: "25",
+    phoneLabel: "전화번호 (선택)",
+    birthDateLabel: "생년월일 (선택)",
   },
   toast: {
     cachedLoaded: "저장된 분석 결과를 불러왔습니다. 내용을 확인한 뒤 제출해 주세요.",
     duplicateResume: "이 이력서는 이미 등록되어 있어 제출할 수 없습니다. 다른 이력서를 업로드해 주세요.",
+    /** AI 추출 후 필수·중요 항목이 비었을 때 (항목명은 쉼표 구분) */
+    incompleteExtraction: (fields: string) =>
+      `일부 항목이 비어 있거나 확인이 필요합니다. 아래를 입력해 주세요: ${fields}`,
     analyzed: "이력서를 분석했습니다. 아래 항목을 확인한 뒤 제출해 주세요.",
     uploadFailed: "이력서 처리에 실패했습니다.",
     attachmentRemoved: "이력서 첨부를 해제했습니다.",
@@ -296,8 +301,10 @@ export const APPLY_MESSAGES = {
     itemLabel: (index: number) => `학력 ${index + 1}`,
     schoolLabel: "학교명",
     schoolPlaceholder: "OO대학교",
-    degreeLabel: "학위 / 전공",
-    degreePlaceholder: "예: 컴퓨터공학 학사",
+    degreeLabel: "졸업 여부",
+    degreePlaceholder: "예: 졸업, 재학, 수료, 중퇴",
+    fieldLabel: "전공",
+    fieldPlaceholder: "예: 컴퓨터공학, 중어중문학",
     graduationLabel: "졸업일 (YYYY-MM)",
   },
   experienceSection: {

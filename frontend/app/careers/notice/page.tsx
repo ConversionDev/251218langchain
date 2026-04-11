@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ExternalLink, FileText } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 /** 공지 — 한글 메뉴, 깔끔한 목록 */
 function CareersLogoIcon({ className }: { className?: string }) {
@@ -33,23 +33,26 @@ export default function CareersNoticePage() {
   return (
     <div className="min-h-screen bg-white dark:bg-[#0f0f0f]">
       <header className="sticky top-0 z-50 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between">
-          <Link href="/careers" className="flex items-center gap-3">
-            <CareersLogoIcon />
-            <span className="font-semibold tracking-tight text-slate-800 dark:text-slate-100">HRInsight 채용 · 공지</span>
+        {/* 왼쪽: 로고 */}
+        <Link href="/hr" className="flex items-baseline gap-1.5 shrink-0">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">AI Powered HR Intelligence</span>
+          <span className="text-base font-bold tracking-tight text-[#14532d] dark:text-emerald-800 md:text-lg">HR</span>
+          <span className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-base font-bold tracking-tight text-transparent dark:from-teal-400 dark:to-emerald-400 md:text-lg" style={{ WebkitBackgroundClip: "text" }}>Insight</span>
+        </Link>
+        {/* 중앙: 네비게이션 */}
+        <nav aria-label="채용 메뉴" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6 md:gap-8">
+          <Link href="/careers" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">채용 홈</Link>
+          <Link href="/careers/recruit" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">채용 공고</Link>
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 md:text-base">공지</span>
+          <Link href="/careers/faq" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">질의사항</Link>
+          <Link href="/resumes" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+            지원내역
           </Link>
-          <nav className="flex items-center gap-5">
-            <Link href="/careers/recruit" className="text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">채용</Link>
-            <Link href="/careers/faq" className="text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">질의사항</Link>
-            <Link href="/resumes" className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-              <FileText className="h-4 w-4" /> 지원내역
-            </Link>
-            <Link href="/hr" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
-              <ExternalLink className="h-4 w-4" />
-              메인
-            </Link>
-          </nav>
-        </div>
+        </nav>
+        {/* 오른쪽: 메인 */}
+        <Link href="/hr" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base shrink-0 dark:text-slate-300 dark:hover:text-slate-100">
+          <ExternalLink className="h-4 w-4" /> 메인
+        </Link>
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-10">

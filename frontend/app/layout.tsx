@@ -7,7 +7,11 @@ import "@/app/globals.css";
 export const metadata: Metadata = {
   title: "Success DNA | Enterprise HR Solution",
   description: "엔터프라이즈 HR 솔루션 - Core, Intelligence, Credential, Performance",
-  icons: { icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: "/icons/icon-192.png",
+  },
+  themeColor: "#0f172a",
 };
 
 const themeScript = `
@@ -27,6 +31,11 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <link
+          rel="stylesheet"
+          as="style"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css"
+        />
       </head>
       <body className="min-h-screen bg-background font-sans text-foreground">
         {children}

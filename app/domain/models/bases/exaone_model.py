@@ -195,11 +195,37 @@ class ExaoneLLM(BaseLLM):
         # 모델 로드
         self._load_model()
 
-    def _load_model(self) -> None:
-        """모델 및 토크나이저 로드."""
-        try:
-            print(f"[INFO] EXAONE 모델 로딩 중: {self._load_path}")
+    @staticmethod
+    def _find_prequantized_dir() -> Optional[Path]:
+        """사전 양자화 저장 경로를 반환. 없으면 None.
 
+        탐색 순서:
+        1. settings.exaone_prequantized_dir (.env EXAONE_PREQUANTIZED_DIR)
+        2. artifacts/fine_tuned/exaone/prequantized_bnb4 (기본 경로)
+        """
+        try:
+            from core.config import settings  # type: ignore
+            from core.paths import get_output_dir  # type: ignore
+
+            candidates: list[Path] = []
+            if settings.exaone_prequantized_dir:
+                candidates.append(Path(settings.exaone_prequantized_dir))
+            candidates.append(get_output_dir() / "exaone" / "prequantized_bnb4")
+
+            for p in candidates:
+                if (p / "config.json").exists():
+                    return p
+        except Exception:
+            pass
+        return None
+
+    def _load_model(self) -> None:
+        """모델 및 토크나이저 로드.
+
+        사전 양자화 파일(scripts/save_bnb_quantized.py 실행 결과)이 있으면
+        re-quantization 없이 ~4 GB만 읽으므로 로딩 속도가 대폭 개선됩니다.
+        """
+        try:
             # CUDA 사용 가능 여부 확인 (로컬=GPU 유지, 배포=GPU 없으면 CPU 폴백)
             cuda_available = torch.cuda.is_available()
             print(f"[INFO] CUDA 사용 가능: {cuda_available}")
@@ -212,59 +238,86 @@ class ExaoneLLM(BaseLLM):
                 print("[INFO] GPU 없음 → CPU로 로드 (배포 환경. 추론이 느릴 수 있음)")
 
             dtype = torch.float16
-            quantization_config = None
-            quantization_info = "없음 (FP16)"
-
-            if cuda_available and self.use_4bit:
-                print("[INFO] bitsandbytes 4-bit 양자화 적용 (GPU)")
-                quantization_config = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_quant_type="nf4",
-                    bnb_4bit_compute_dtype=torch.float16,
-                    bnb_4bit_use_double_quant=True,
-                )
-                quantization_info = "4-bit (NF4, bitsandbytes)"
-            elif cuda_available:
-                print("[INFO] GPU FP16 모드로 로딩")
-            # CPU일 때는 양자화 없이 FP16, device_map auto
-
             device_map: Any = "cuda:0" if cuda_available else "auto"
-            # dtype 명시 시 fp32 로드 후 캐스팅 방지. (torch_dtype deprecated → dtype 사용)
-            load_kwargs = {
-                "revision": EXAONE_MODEL_REVISION,
-                "torch_dtype": dtype,
-                "device_map": device_map,
-                "trust_remote_code": self.trust_remote_code,
-                "low_cpu_mem_usage": True,
-                "attn_implementation": "sdpa",
-                "use_safetensors": True,
-                "local_files_only": True,
-            }
-            if quantization_config is not None:
-                load_kwargs["quantization_config"] = quantization_config
+
+            # ------------------------------------------------------------------
+            # 사전 양자화 경로 확인 (있으면 re-quantization 없이 빠르게 로드)
+            # ------------------------------------------------------------------
+            prequantized_dir = self._find_prequantized_dir() if (cuda_available and self.use_4bit) else None
+
+            if prequantized_dir is not None:
+                print(f"[INFO] 사전 양자화 모델 감지 → 빠른 로드 모드: {prequantized_dir}")
+                print("[INFO] (re-quantization 생략 — ~4 GB 읽기만 수행)")
+                load_path = str(prequantized_dir)
+                # 저장된 config.json 에 quantization_config 가 포함되어 있으므로
+                # quantization_config 를 별도로 넘기지 않아야 재변환이 방지됨.
+                load_kwargs: dict[str, Any] = {
+                    "torch_dtype": dtype,
+                    "device_map": device_map,
+                    "trust_remote_code": self.trust_remote_code,
+                    "low_cpu_mem_usage": True,
+                    "attn_implementation": "sdpa",
+                    "use_safetensors": True,
+                    "local_files_only": True,
+                }
+                quantization_info = "4-bit NF4 (사전 양자화 로드 — re-quantization 없음)"
+            else:
+                # ------------------------------------------------------------------
+                # 기존 경로: HF 캐시에서 로드 + on-the-fly NF4 변환
+                # ------------------------------------------------------------------
+                print(f"[INFO] EXAONE 모델 로딩 중: {self._load_path}")
+                quantization_config = None
+                quantization_info = "없음 (FP16)"
+
+                if cuda_available and self.use_4bit:
+                    print("[INFO] bitsandbytes 4-bit 양자화 적용 (GPU)")
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_use_double_quant=True,
+                    )
+                    quantization_info = "4-bit (NF4, bitsandbytes) — on-the-fly 변환"
+                elif cuda_available:
+                    print("[INFO] GPU FP16 모드로 로딩")
+
+                load_path = self._load_path
+                load_kwargs = {
+                    "revision": EXAONE_MODEL_REVISION,
+                    "torch_dtype": dtype,
+                    "device_map": device_map,
+                    "trust_remote_code": self.trust_remote_code,
+                    "low_cpu_mem_usage": True,
+                    "attn_implementation": "sdpa",
+                    "use_safetensors": True,
+                    "local_files_only": True,
+                }
+                if quantization_config is not None:
+                    load_kwargs["quantization_config"] = quantization_config
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self._load_path,
+                load_path,
                 **load_kwargs,
             )
 
             from core.config import settings  # type: ignore
 
+            # 토크나이저: 사전 양자화 dir 에 저장된 것 우선, 없으면 HF 원본
+            tokenizer_path = load_path if prequantized_dir is not None else self._load_path
+            tokenizer_revision = None if prequantized_dir is not None else EXAONE_MODEL_REVISION
+            tok_kwargs: dict[str, Any] = {
+                "trust_remote_code": self.trust_remote_code,
+                "use_fast": True,
+                "local_files_only": True,
+            }
+            if tokenizer_revision:
+                tok_kwargs["revision"] = tokenizer_revision
+
             try:
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    self._load_path,
-                    revision=EXAONE_MODEL_REVISION,
-                    trust_remote_code=self.trust_remote_code,
-                    use_fast=True,
-                    local_files_only=True,
-                )
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, **tok_kwargs)
             except Exception:
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    self._load_path,
-                    revision=EXAONE_MODEL_REVISION,
-                    trust_remote_code=self.trust_remote_code,
-                    local_files_only=True,
-                )
+                tok_kwargs.pop("use_fast", None)
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, **tok_kwargs)
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id

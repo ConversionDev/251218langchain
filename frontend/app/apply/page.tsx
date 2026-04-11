@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Send, Plus, Trash2, Upload, FileText, CheckCircle2, X } from "lucide-react";
-import { createEmployeeApi, checkResumeHashApi } from "@/modules/core/services";
+import { createEmployeeApi, checkResumeHashApi, fetchNextEmployeeId } from "@/modules/core/services";
 import type { Employee, EducationEntry, ExperienceEntry } from "@/modules/shared/types";
 import type { ResumeParseResult } from "@/modules/core/services/resumeToBaseline";
 import {
@@ -17,10 +17,6 @@ import { RESUME_ACCEPT } from "@/lib/documentExtensions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-function nextId(): string {
-  return "APPLY-" + Date.now();
-}
 
 const emptyEducation = (): EducationEntry => ({
   school: "",
@@ -38,8 +34,27 @@ const emptyExperience = (): ExperienceEntry => ({
   description: "",
 });
 
+/** API/LLM 날짜 문자열을 <input type="month">에 맞는 YYYY-MM으로 정규화 */
+function normalizeYearMonthInput(v: string | undefined): string {
+  const s = (v ?? "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.slice(0, 7);
+  const slash = s.match(/^(\d{4})[/.\s-](\d{1,2})$/);
+  if (slash) {
+    const mo = parseInt(slash[2], 10);
+    if (mo >= 1 && mo <= 12) return `${slash[1]}-${String(mo).padStart(2, "0")}`;
+  }
+  const kr = s.match(/^(\d{4})\s*년\s*(\d{1,2})\s*월/);
+  if (kr) {
+    const mo = parseInt(kr[2], 10);
+    if (mo >= 1 && mo <= 12) return `${kr[1]}-${String(mo).padStart(2, "0")}`;
+  }
+  return "";
+}
+
 const defaultPayload = (): Employee => ({
-  id: nextId(),
+  id: "",
   name: "",
   jobTitle: APPLY_MESSAGES.form.defaultJobTitle,
   department: "",
@@ -100,6 +115,30 @@ function clearStoredApplyResume(): void {
   }
 }
 
+/** 분석 결과만 보고 비었거나 제출에 쓸 수 없는 항목 라벨 (폼 반영 전·후 동일 기준) */
+function missingApplyFieldsFromParseResult(r: ResumeParseResult): string[] {
+  const missing: string[] = [];
+  if (!(r.name ?? "").trim()) missing.push("이름");
+  if (!(r.email ?? "").trim()) missing.push("이메일");
+  const deptRaw = (r.department ?? "").trim();
+  if (!deptRaw) {
+    missing.push("희망 부서");
+  } else if (deptRaw.includes("지원할 수 없습니다")) {
+    missing.push("희망 부서");
+  } else if (deptRaw.includes(APPLY_MESSAGES.form.departmentFallbackKeyword)) {
+    missing.push("희망 부서");
+  }
+  if (!(r.jobTitle ?? "").trim()) missing.push("지원 직급");
+  return missing;
+}
+
+function warnIfIncompleteExtraction(result: ResumeParseResult): void {
+  const labels = missingApplyFieldsFromParseResult(result);
+  if (labels.length > 0) {
+    toast.warning(APPLY_MESSAGES.toast.incompleteExtraction(labels.join(", ")));
+  }
+}
+
 export default function ApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -107,6 +146,7 @@ export default function ApplyPage() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadPhase, setUploadPhase] = useState<"idle" | "uploading" | "extracting" | "analyzing">("idle");
   const [lastResumeFileHash, setLastResumeFileHash] = useState<string | null>(null);
+  const [lastResumeText, setLastResumeText] = useState<string | null>(null);
   const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [isDuplicateResume, setIsDuplicateResume] = useState(false);
@@ -152,8 +192,8 @@ export default function ApplyPage() {
             school: e.school ?? "",
             degree: e.degree ?? "",
             field: e.field ?? "",
-            startDate: e.startDate ?? "",
-            endDate: e.endDate ?? "",
+            startDate: normalizeYearMonthInput(e.startDate),
+            endDate: normalizeYearMonthInput(e.endDate),
           }))
         : [emptyEducation()];
     const expList =
@@ -161,8 +201,8 @@ export default function ApplyPage() {
         ? result.resume.experience.map((x: { company?: string; role?: string; startDate?: string; endDate?: string; description?: string }) => ({
             company: x.company ?? "",
             role: x.role ?? "",
-            startDate: x.startDate ?? "",
-            endDate: x.endDate ?? "",
+            startDate: normalizeYearMonthInput(x.startDate),
+            endDate: normalizeYearMonthInput(x.endDate),
             description: x.description ?? "",
           }))
         : [emptyExperience()];
@@ -175,6 +215,8 @@ export default function ApplyPage() {
           ? APPLY_MESSAGES.form.departmentFallbackValue
           : result.department) ?? prev.department,
       email: result.email ?? prev.email,
+      phone: result.phone ?? prev.phone,
+      birthDate: result.birthDate ?? prev.birthDate,
       gender: result.gender ?? prev.gender,
       age: result.age ?? prev.age,
       employmentType: result.employmentType ?? "new_hire",
@@ -199,7 +241,9 @@ export default function ApplyPage() {
       const cached = getCachedResumeResult(file);
       if (cached) {
         applyResumeToForm(cached);
+        warnIfIncompleteExtraction(cached);
         setAttachedFileName(file.name);
+        if (cached._resumeText) setLastResumeText(cached._resumeText);
         saveStoredApplyResume({ fileName: file.name, result: cached, fileHash });
         toast.success(APPLY_MESSAGES.toast.cachedLoaded);
         if (fileHash) {
@@ -217,7 +261,9 @@ export default function ApplyPage() {
       try {
         const { result } = await parseResumeToBaseline(file);
         applyResumeToForm(result);
+        warnIfIncompleteExtraction(result);
         setAttachedFileName(file.name);
+        if (result._resumeText) setLastResumeText(result._resumeText);
         saveStoredApplyResume({ fileName: file.name, result, fileHash });
         toast.success(APPLY_MESSAGES.toast.analyzed);
         if (fileHash) {
@@ -261,6 +307,7 @@ export default function ApplyPage() {
     setForm(defaultPayload());
     setAttachedFileName(null);
     setLastResumeFileHash(null);
+    setLastResumeText(null);
     setIsDuplicateResume(false);
     toast.info(APPLY_MESSAGES.toast.attachmentRemoved);
   }, []);
@@ -273,17 +320,19 @@ export default function ApplyPage() {
     }
     setSubmitting(true);
     try {
+      const employeeId = await fetchNextEmployeeId();
       // 지원 접수 시 successDna/successDnaReason은 보내지 않음 → DB에 null 저장.
       // 그러면 ATS에서 "AI 분석" 버튼만 보이고, 분석 후에만 평가 근거·심사 중으로 표시됨.
       const payload = {
         ...form,
-        id: nextId(),
+        id: employeeId,
         employmentType: "new_hire" as const,
         status: "pending" as const,
         joinedAt: undefined as string | undefined,
         successDna: undefined,
         successDnaReason: undefined,
         resumeFileHash: lastResumeFileHash ?? undefined,
+        resumeText: lastResumeText ?? undefined,
         resume: {
           education: education.filter((e) => e.school?.trim()),
           experience: experience.filter((x) => x.company?.trim()),
@@ -482,6 +531,27 @@ export default function ApplyPage() {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="phone">{APPLY_MESSAGES.form.phoneLabel}</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={form.phone ?? ""}
+                    onChange={(e) => update({ phone: e.target.value })}
+                    placeholder="010-0000-0000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="birthDate">{APPLY_MESSAGES.form.birthDateLabel}</Label>
+                  <Input
+                    id="birthDate"
+                    type="date"
+                    value={form.birthDate ?? ""}
+                    onChange={(e) => update({ birthDate: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
                   <Label htmlFor="department">{APPLY_MESSAGES.form.departmentLabel}</Label>
                   <Input
                     id="department"
@@ -584,6 +654,15 @@ export default function ApplyPage() {
                           value={edu.degree ?? ""}
                           onChange={(e) => updateEdu(index, { degree: e.target.value })}
                           placeholder={APPLY_MESSAGES.educationSection.degreePlaceholder}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>{APPLY_MESSAGES.educationSection.fieldLabel}</Label>
+                        <Input
+                          value={edu.field ?? ""}
+                          onChange={(e) => updateEdu(index, { field: e.target.value })}
+                          placeholder={APPLY_MESSAGES.educationSection.fieldPlaceholder}
                           className="mt-1"
                         />
                       </div>

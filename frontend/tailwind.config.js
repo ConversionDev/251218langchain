@@ -8,6 +8,9 @@ module.exports = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ["Pretendard", "-apple-system", "BlinkMacSystemFont", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", "system-ui", "sans-serif"],
+  		},
   		screens: {
   			xs: '475px',
   			sm: '640px',

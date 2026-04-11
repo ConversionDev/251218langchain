@@ -159,6 +159,16 @@ class Settings(BaseSettings):
         description="역량 SFT 어댑터(competency_adapters) 로드 여부. True면 artifacts/fine_tuned/exaone/competency_adapters 사용",
     )
 
+    exaone_prequantized_dir: Optional[str] = Field(
+        default=None,
+        description=(
+            "사전 양자화된 EXAONE 모델 저장 경로. "
+            "scripts/save_bnb_quantized.py 를 한 번 실행하면 해당 경로에 NF4 가중치가 저장됨. "
+            "이후 서버 시작 시 re-quantization 없이 ~4GB 파일만 읽으므로 로딩 속도가 대폭 개선됨. "
+            "비어 있으면 artifacts/fine_tuned/exaone/prequantized_bnb4 를 자동 감지."
+        ),
+    )
+
     # ===================
     # LLaMA (스팸 분류)
     # ===================

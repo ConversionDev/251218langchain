@@ -2,15 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, FileText, Search } from "lucide-react";
+import { ExternalLink, Search } from "lucide-react";
 
-/** 채용 공고 — 일반 부서 기준(인사·재무·영업·마케팅·개발·IT·경영지원·전략·기획), 한글 메뉴 */
+/** 채용 공고 — 개발·IT 신입 공고만 지원 활성화, 나머지는 표시만 */
 
-type TabId = "전체" | "신입" | "경력";
+const ACTIVE_JOB_ID = "5"; // 지원 가능한 공고 ID
+
+type JobType = "신입" | "경력";
 
 interface JobPosting {
   id: string;
-  type: TabId;
+  type: JobType;
   department: string;
   title: string;
   startDate: string;
@@ -19,71 +21,79 @@ interface JobPosting {
   daysLeft: number;
 }
 
+// 개발·IT 신입 공고를 최상단에 배치
 const MOCK_JOBS: JobPosting[] = [
+  { id: "5", type: "신입", department: "개발·IT", title: "개발·IT 부서 신입 개발자", startDate: "2026-02-01", endDate: "2026-03-10", endTime: "18:00", daysLeft: 22 },
+  { id: "3", type: "신입", department: "영업", title: "영업 부서 신입 채용", startDate: "2026-02-10", endDate: "2026-03-15", endTime: "18:00", daysLeft: 25 },
   { id: "1", type: "경력", department: "인사", title: "인사 부서 인력 기획·채용 담당", startDate: "2026-02-02", endDate: "2026-02-27", endTime: "23:59", daysLeft: 8 },
   { id: "2", type: "경력", department: "재무", title: "재무 부서 회계·재무 분석", startDate: "2026-02-01", endDate: "2026-02-20", endTime: "23:59", daysLeft: 11 },
-  { id: "3", type: "신입", department: "영업", title: "영업 부서 신입 채용", startDate: "2026-02-10", endDate: "2026-03-15", endTime: "18:00", daysLeft: 25 },
   { id: "4", type: "경력", department: "마케팅", title: "마케팅 부서 브랜드·디지털 마케팅", startDate: "2026-02-05", endDate: "2026-02-28", endTime: "23:59", daysLeft: 15 },
-  { id: "5", type: "신입", department: "개발·IT", title: "개발·IT 부서 신입 개발자", startDate: "2026-02-01", endDate: "2026-03-10", endTime: "18:00", daysLeft: 22 },
   { id: "6", type: "경력", department: "경영지원", title: "경영지원 부서 총무·인프라", startDate: "2026-02-03", endDate: "2026-02-25", endTime: "23:59", daysLeft: 6 },
   { id: "7", type: "경력", department: "전략·기획", title: "전략·기획 부서 기획 담당", startDate: "2026-02-01", endDate: "2026-02-28", endTime: "23:59", daysLeft: 9 },
 ];
+
+type TabId = "전체" | "신입";
 
 export default function CareersRecruitPage() {
   const [tab, setTab] = useState<TabId>("전체");
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
-    let list = MOCK_JOBS.filter((j) => tab === "전체" || j.type === tab);
+    let list = tab === "신입" ? MOCK_JOBS.filter((j) => j.type === "신입") : MOCK_JOBS;
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
         (j) =>
           j.title.toLowerCase().includes(q) ||
-          j.department.toLowerCase().includes(q) ||
-          j.type.toLowerCase().includes(q)
+          j.department.toLowerCase().includes(q)
       );
     }
     return list;
   }, [tab, search]);
 
-  const tabs: TabId[] = ["전체", "신입", "경력"];
+  const tabs: TabId[] = ["전체", "신입"];
 
   return (
     <div className="flex min-h-screen flex-col bg-white dark:bg-background">
       {/* 헤더: 채용 홈과 동일 — 채용지원 배지 + 한 줄 로고 + nav + 메인 */}
-      <header className="sticky top-0 z-50 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-white/85 px-6 py-3 backdrop-blur-md dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
-        <div className="flex flex-1 items-center gap-3 md:gap-4">
-          <Link href="/hr" className="flex items-baseline gap-1.5 shrink-0">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              AI Powered HR Intelligence
-            </span>
-            <span className="text-base font-bold tracking-tight text-[#14532d] dark:text-emerald-800 md:text-lg">HR</span>
-            <span
-              className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-base font-bold tracking-tight text-transparent dark:from-teal-400 dark:to-emerald-400 md:text-lg"
-              style={{ WebkitBackgroundClip: "text" }}
-            >
-              Insight
-            </span>
+      <header className="sticky top-0 z-50 flex min-h-[4.5rem] items-center justify-between border-b border-[#a8d5c4]/50 bg-gray-50 px-6 py-3 dark:border-primary/20 dark:bg-[#0f0f0f]/90 md:px-8 md:py-4">
+        {/* 왼쪽: 로고 */}
+        <Link href="/hr" className="flex items-baseline gap-1.5 shrink-0">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            AI Powered HR Intelligence
+          </span>
+          <span className="text-base font-bold tracking-tight text-[#14532d] dark:text-emerald-800 md:text-lg">HR</span>
+          <span
+            className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-base font-bold tracking-tight text-transparent dark:from-teal-400 dark:to-emerald-400 md:text-lg"
+            style={{ WebkitBackgroundClip: "text" }}
+          >
+            Insight
+          </span>
+        </Link>
+
+        {/* 중앙: 네비게이션 — absolute로 정중앙 고정 */}
+        <nav
+          aria-label="채용 메뉴"
+          className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6 md:gap-8"
+        >
+          <Link href="/careers" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+            채용 홈
           </Link>
-          <nav aria-label="채용 메뉴" className="flex items-center gap-6 md:gap-8">
-            <Link href="/careers" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
-              채용 홈
-            </Link>
-            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 md:text-base">
-              채용 공고
-            </span>
-            <Link href="/careers/notice" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
-              공지
-            </Link>
-            <Link href="/careers/faq" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
-              질의사항
-            </Link>
-            <Link href="/resumes" className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
-              <FileText className="h-4 w-4" /> 지원내역
-            </Link>
-          </nav>
-        </div>
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 md:text-base">
+            채용 공고
+          </span>
+          <Link href="/careers/notice" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+            공지
+          </Link>
+          <Link href="/careers/faq" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+            질의사항
+          </Link>
+          <Link href="/resumes" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+            지원내역
+          </Link>
+        </nav>
+
+        {/* 오른쪽: 메인 링크 */}
         <Link
           href="/hr"
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-900 md:text-base shrink-0 dark:text-slate-300 dark:hover:text-slate-100"
@@ -136,32 +146,52 @@ export default function CareersRecruitPage() {
             <p className="py-12 text-center text-slate-500 dark:text-slate-400">조건에 맞는 공고가 없습니다.</p>
           ) : (
             <ul className="space-y-4">
-              {filtered.map((job) => (
-                <li
-                  key={job.id}
-                  className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-[#e8f5ef]/50 p-5 shadow-sm dark:border-white/10 dark:bg-[#1a1a1a] sm:flex-row sm:items-center sm:justify-between"
-                >
-                <div className="min-w-0 flex-1">
-                  <span className="inline-block rounded border border-slate-200 bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
-                    D-{job.daysLeft}
-                  </span>
-                  <h2 className="mt-2 font-semibold text-slate-900 dark:text-slate-100">
-                    [{job.department}] {job.type} · {job.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {job.startDate} ~ {job.endDate} {job.endTime}
-                  </p>
-                </div>
-                <div className="shrink-0">
-                  <Link
-                    href="/apply"
-                    className="recruit-apply-btn inline-flex rounded-lg border-2 border-[#5a9b76] bg-[#b8dfce] px-5 py-2.5 text-sm font-semibold text-slate-800 transition-colors dark:border-emerald-600 dark:bg-[#2d5a45]/30 dark:text-slate-100"
+              {filtered.map((job) => {
+                const isActive = job.id === ACTIVE_JOB_ID;
+                return (
+                  <li
+                    key={job.id}
+                    className={`flex flex-col gap-3 rounded-lg border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
+                      isActive
+                        ? "border-[#7eb89e] bg-[#e8f5ef]/70 dark:border-emerald-700/60 dark:bg-[#1a2e24]/60"
+                        : "border-slate-200 bg-white opacity-60 dark:border-white/10 dark:bg-[#1a1a1a]"
+                    }`}
                   >
-                    지원하기
-                  </Link>
-                </div>
-              </li>
-              ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block rounded border border-slate-200 bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                          D-{job.daysLeft}
+                        </span>
+                        {isActive && (
+                          <span className="inline-block rounded bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
+                            지원 가능
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="mt-2 font-semibold text-slate-900 dark:text-slate-100">
+                        [{job.department}] {job.type} · {job.title}
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        {job.startDate} ~ {job.endDate} {job.endTime}
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      {isActive ? (
+                        <Link
+                          href="/apply"
+                          className="recruit-apply-btn inline-flex rounded-lg border-2 border-[#5a9b76] bg-[#b8dfce] px-5 py-2.5 text-sm font-semibold text-slate-800 transition-colors hover:bg-[#a8d5c4] dark:border-emerald-600 dark:bg-[#2d5a45]/30 dark:text-slate-100"
+                        >
+                          지원하기
+                        </Link>
+                      ) : (
+                        <span className="inline-flex cursor-not-allowed rounded-lg border-2 border-slate-200 bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-600">
+                          준비 중
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

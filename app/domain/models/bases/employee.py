@@ -40,6 +40,7 @@ class Employee(Base):  # type: ignore[misc]
     employment_type = Column(String(32), nullable=True, comment="고용 형태")
     training_hours = Column(Integer(), nullable=True, comment="연간 교육훈련 시간")
     resume = Column(JSONB(), nullable=True, comment="이력서 학력·경력·스킬·자격증")
+    resume_text = Column(Text(), nullable=True, comment="이력서 원본 추출 텍스트 (ATS AI 분석용 원문 보존)")
     resume_file_hash = Column(String(64), nullable=True, comment="이력서 파일 SHA-256, 동일 이력서 중복 방지")
     matched_department = Column(String(256), nullable=True, comment="추천 부서")
     embedding_content = Column(Text(), nullable=True, comment="RAG 임베딩용 텍스트")
