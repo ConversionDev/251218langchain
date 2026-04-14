@@ -155,12 +155,6 @@ export interface Employee {
   joinedAt?: string;
   /** Success DNA 역량 점수 (선택) */
   successDna?: SuccessDNA;
-  /** 비정형 데이터(회의록·메신저) 분석 기반 역량 점수 (선택) */
-  behavioralDna?: SuccessDNA;
-  /** behavioralDna 분석 출처 요약 (예: 최근 3개의 주간 회의록 기반 분석됨) */
-  behavioralSource?: string;
-  /** 분석에 사용된 원문 목록 — UI에서 회의록/이메일/슬랙 내용 직접 확인용 */
-  behavioralSourceItems?: BehavioralSourceItem[];
   /** 공시 지표 (선택). IFRS/ISO 30414 등 다중 표준. 레거시 flat 또는 items[] */
   disclosureMetrics?: DisclosureMetricsPayload;
   /** 성별 (남/여/미기입) */
@@ -185,14 +179,4 @@ export interface Employee {
   successDnaReason?: string | null;
   /** 탈락 사유 (ATS 관리자가 탈락 처리 시 입력) */
   rejectionReason?: string | null;
-}
-
-/** 비정형 분석 출처 한 건 (회의록·이메일·슬랙 등 원문 노출용) */
-export interface BehavioralSourceItem {
-  /** 출처 종류 */
-  kind: "meeting" | "email" | "slack";
-  /** 제목 (선택, 예: "2024-01-15 주간 회의") */
-  title?: string;
-  /** 원문 내용 */
-  content: string;
 }

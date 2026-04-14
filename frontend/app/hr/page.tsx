@@ -116,8 +116,10 @@ export default function HRLandingPage() {
                 alt=""
                 fill
                 className="object-cover"
-                priority={i === 0}
                 sizes="100vw"
+                unoptimized
+                loading="eager"
+                fetchPriority={i === 0 ? "high" : "low"}
               />
               {/* 슬로건 영역(왼쪽) 가독성 확보, 오른쪽은 이미지 유지 */}
               <div

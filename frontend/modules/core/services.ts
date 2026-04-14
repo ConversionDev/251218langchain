@@ -109,9 +109,13 @@ export async function deleteEmployeeApi(id: string): Promise<void> {
   }
 }
 
-/** 직원 이력서 AI 분석 (엑사원 Success DNA 생성 후 DB 반영, status → screening) */
-export async function analyzeEmployeeResumeApi(employeeId: string): Promise<Employee> {
-  const res = await fetch(`${API_BASE}/api/employees/${employeeId}/analyze`, { method: "POST" });
+/** 직원 이력서 AI 분석 (엑사원 Success DNA 생성 후 DB 반영, 신입은 status → screening) */
+export async function analyzeEmployeeResumeApi(
+  employeeId: string,
+  options?: { force?: boolean }
+): Promise<Employee & { analysisSkipped?: boolean }> {
+  const q = options?.force ? "?force=true" : "";
+  const res = await fetch(`${API_BASE}/api/employees/${employeeId}/analyze${q}`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail ?? `AI 분석 실패: ${res.status}`);

@@ -2,7 +2,14 @@
  * 비정형 행동 데이터 분석 (회의록·메신저 텍스트 → Success DNA 5대 역량 키워드 추출 및 점수화)
  */
 
-import type { BehavioralSourceItem, SuccessDNA } from "@/modules/shared/types";
+import type { SuccessDNA } from "@/modules/shared/types";
+
+/** 비정형 분석 결과에 붙는 출처 원문 한 건 (클라이언트 분석 유틸 전용, DB 비저장) */
+export interface BehavioralSourceItem {
+  kind: "meeting" | "email" | "slack";
+  title?: string;
+  content: string;
+}
 
 /** 기존 DNA(이력/평가)와 비정형 분석 결과를 합칠 때 기존 점수에 부여하는 가중치 (0~1) */
 export const EXISTING_DNA_WEIGHT = 0.7;

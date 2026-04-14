@@ -41,6 +41,29 @@ def _hub_result_to_str(result: Any) -> str:
     return str(result)
 
 
+def _ats_pipeline_status_breakdown_lines(pipeline_rows: List[Dict[str, Any]]) -> List[str]:
+    """신입·지원 풀 내 ATS status별 건수. '합격자'는 hired만 해당(전체 지원 풀 합계와 다름)."""
+    counts = {"pending": 0, "screening": 0, "hired": 0, "rejected": 0}
+    other = 0
+    for e in pipeline_rows:
+        st = str(e.get("status") or "").strip().lower()
+        if st in counts:
+            counts[st] += 1
+        else:
+            other += 1
+    total = len(pipeline_rows)
+    return [
+        "[신입·지원 풀 — ATS 상태별]",
+        f"- 풀 합계: {total}명 (지원·심사 단계 후보 전체; '합격자' 수와 동일하지 않음)",
+        f"- 미검토(pending): {counts['pending']}명",
+        f"- 심사 중(screening): {counts['screening']}명",
+        f"- 합격(hired): {counts['hired']}명  ← '합격자' 질문은 반드시 이 숫자만 사용",
+        f"- 탈락(rejected): {counts['rejected']}명",
+        f"- 기타/상태 없음: {other}명",
+        "※ 입사 확정 후에는 status가 비워지므로 과거 합격 이력은 DB에 남지 않습니다. '현재 신입 풀 합격자'만 위 hired 건수로 집계합니다.",
+    ]
+
+
 @tool
 def analyze_with_exaone(
     subject: str,
@@ -109,22 +132,23 @@ def define(term: str) -> str:
 
 @tool
 def get_hr_summary() -> str:
-    """등록된 일반 직원 수와 RAG 적재 상태(공시·역량·성과)를 반환합니다. '전체 직원 수', '공시 완성도', 'RAG에 어떤 문서가 있나요', '적재 상태' 등 질문에 사용합니다."""
+    """등록된 입사 확정(재직) 직원 수·신입·지원 단계 수와 RAG 적재 상태를 반환합니다.
+    입사 확정 = employment_type=regular 이고 입사일(joinedAt) 있음. '전체 직원 수', '공시 완성도', '적재 상태' 등 질문에 사용합니다."""
     try:
         from core.database import SessionLocal  # type: ignore
         from domain.hub.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
         from domain.hub.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
-        from domain.hub.repositories.employee_repository import list_all as repo_list_all  # type: ignore
+        from domain.hub.repositories.employee_repository import (  # type: ignore
+            is_new_hire_pipeline_employee_row,
+            is_onboarded_regular_employee_row,
+            list_all as repo_list_all,
+        )
         from domain.hub.repositories.performance_record_repository import get_performance_record_count  # type: ignore
 
         db = SessionLocal()
         try:
             employees = repo_list_all(db) or []
             employee_count = len(employees)
-
-            def _is_new_hire(emp: Dict[str, Any]) -> bool:
-                st = str(emp.get("status") or "").strip().lower()
-                return st in ("pending", "screening", "rejected")  # ATS 단계 = 신입, 빈값/hired = 기존
 
             def _is_high_performer(emp: Dict[str, Any]) -> bool:
                 dna = emp.get("successDna")
@@ -144,8 +168,8 @@ def get_hr_summary() -> str:
                     return False
                 return (sum(vals) / len(vals)) >= 80.0
 
-            new_hires = [e for e in employees if _is_new_hire(e)]
-            regulars = [e for e in employees if not _is_new_hire(e)]
+            new_hires = [e for e in employees if is_new_hire_pipeline_employee_row(e)]
+            regulars = [e for e in employees if is_onboarded_regular_employee_row(e)]
             high_performers = [e for e in employees if _is_high_performer(e)]
 
             def _completeness(rows: List[Dict[str, Any]]) -> int:
@@ -168,12 +192,16 @@ def get_hr_summary() -> str:
             disclosure_count = get_disclosure_doc_count(db)
             anchor_count = get_anchor_doc_count(db)
             perf_count = get_performance_record_count(db)
+            breakdown = _ats_pipeline_status_breakdown_lines(new_hires)
             return "\n".join(
                 [
-                    "[인원 구분(모두 DB 기준)]",
-                    f"- 전체 직원 수(신입 + 일반): {employee_count}명",
-                    f"- 일반 직원 수: {len(regulars)}명",
-                    f"- 신입사원 수(인턴·사원 포함): {len(new_hires)}명",
+                    "[인원 구분(DB 기준)]",
+                    "※ 일반 직원 = 입사 확정(employment_type=regular + 입사일 joinedAt 있음). 신입 = ATS·지원 단계.",
+                    f"- 전체 레코드 수: {employee_count}명",
+                    f"- 일반 직원 수(입사 확정·재직): {len(regulars)}명",
+                    f"- 신입·지원 단계 수(풀 합계): {len(new_hires)}명",
+                    *breakdown,
+                    "※ '합격자'는 DB status=hired 뿐이며, 신입 지원 풀 전체 인원과 혼동하지 마세요.",
                     f"- 고성과자 수(Success DNA 평균 80점 이상): {len(high_performers)}명",
                     "[공시 완성도]",
                     f"- 일반 직원 기준 공시 완성도: {regular_completeness}%",
@@ -235,6 +263,7 @@ def list_employees(
 ) -> str:
     """직원/신입/지원자 목록을 조회합니다.
     employment_type(all|new_hire|regular), performance_tier(all|high), department·job_title 부분 검색.
+    regular=입사 확정(재직): employment_type=regular 이고 joinedAt(입사일) 있음. new_hire=ATS·지원 단계.
     전체 직원·명단·목록·고성과자 질문에 사용합니다.
     """
     et = (employment_type or "all").strip().lower()
@@ -245,7 +274,11 @@ def list_employees(
         return "performance_tier는 all, high 중 하나여야 합니다."
     try:
         from core.database import SessionLocal  # type: ignore
-        from domain.hub.repositories.employee_repository import list_for_chat, count_for_chat  # type: ignore
+        from domain.hub.repositories.employee_repository import (  # type: ignore
+            count_for_chat,
+            is_new_hire_pipeline_employee_row,
+            list_for_chat,
+        )
 
         db = SessionLocal()
         try:
@@ -272,10 +305,6 @@ def list_employees(
                 job_title_part=title_filter,
                 exclude_sample=False,
             )
-
-            def _is_new_hire(emp: Dict[str, Any]) -> bool:
-                st = str(emp.get("status") or "").strip().lower()
-                return st in ("pending", "screening", "rejected")  # ATS 단계 = 신입, 빈값/hired = 기존
 
             def _is_high_performer(emp: Dict[str, Any]) -> bool:
                 dna = emp.get("successDna")
@@ -308,7 +337,7 @@ def list_employees(
                 if not rows:
                     return "조건에 맞는 직원이 없습니다."
                 high_count = len(rows)
-                new_hire_count = sum(1 for r in rows if _is_new_hire(r))
+                new_hire_count = sum(1 for r in rows if is_new_hire_pipeline_employee_row(r))
                 regular_count = len(rows) - new_hire_count
                 filtered_total = high_count
 
@@ -318,11 +347,11 @@ def list_employees(
             # 조건 일치 인원은 count_for_chat 결과 사용 (list limit와 무관하게 301 등 정확 반영)
             remainder = max(0, filtered_total - displayed)
             lines: List[str] = [
-                f"[조회 결과] 이번 조건에 맞는 인원: {filtered_total}명 (신입 {new_hire_count} / 일반 {regular_count} / 고성과 {high_count})",
+                f"[조회 결과] 이번 조건에 맞는 인원: {filtered_total}명 (신입·지원 {new_hire_count} / 입사확정·일반 {regular_count} / 고성과 {high_count})",
                 "※ 답변에는 반드시 아래 [1]~[5] 5줄을 그대로 복사해 넣고, 마지막에 '… 외 N명'만 추가하세요. 인원 수는 위 '이번 조건에 맞는 인원: N명'과 '… 외 K명'만 사용하세요.",
             ]
             for i, emp in enumerate(rows[:MAX_DISPLAY], 1):
-                cls = "신입" if _is_new_hire(emp) else "일반"
+                cls = "신입·지원" if is_new_hire_pipeline_employee_row(emp) else "입사확정"
                 hp = ",고성과" if _is_high_performer(emp) else ""
                 lines.append(
                     f"[{i}] 이름: {emp.get('name','')}, 부서: {emp.get('department') or '-'}, "
@@ -905,6 +934,7 @@ def _needs_hr_summary_prefetch(query: str) -> bool:
     keywords = (
         "직원수", "일반직원수", "임직원수", "총몇", "몇명", "몇명이", "전체직원", "전체임직원", "총원",
         "공시완성도", "적재상태", "rag문서", "rag", "등록되어",
+        "합격", "탈락", "미검토", "심사중", "지원자",
     )
     return any(k in q for k in keywords)
 
@@ -942,6 +972,8 @@ def _build_prefetch_context(
         try:
             from domain.hub.repositories.employee_repository import (  # type: ignore
                 count_all as repo_count_all,
+                is_new_hire_pipeline_employee_row,
+                is_onboarded_regular_employee_row,
                 list_all as repo_list_all,
             )
             from domain.hub.repositories.performance_record_repository import get_performance_record_count  # type: ignore
@@ -951,20 +983,22 @@ def _build_prefetch_context(
             employee_count = repo_count_all(db)
             rows_all = repo_list_all(db) or []
 
-            def _is_new_hire(emp: Dict[str, Any]) -> bool:
-                st = str(emp.get("status") or "").strip().lower()
-                return st in ("pending", "screening", "rejected")  # ATS 단계 = 신입, 빈값/hired = 기존
-
-            regular_count = sum(1 for e in rows_all if not _is_new_hire(e))
-            new_hire_count = len(rows_all) - regular_count
+            regular_count = sum(1 for e in rows_all if is_onboarded_regular_employee_row(e))
+            pipeline_rows = [e for e in rows_all if is_new_hire_pipeline_employee_row(e)]
+            new_hire_count = len(pipeline_rows)
+            breakdown_lines = _ats_pipeline_status_breakdown_lines(pipeline_rows)
             perf_count = get_performance_record_count(db)
             disclosure_count = get_disclosure_doc_count(db)
             anchor_count = get_anchor_doc_count(db)
             parts.append(
                 "[운영 요약]\n"
-                f"전체 직원 수(신입 + 일반): {employee_count}명\n"
-                f"일반 직원 수: {regular_count}명\n"
-                f"신입사원 수(인턴·사원 포함): {new_hire_count}명\n"
+                "※ 일반(입사 확정)=employment_type=regular + 입사일(joinedAt) 있음. 신입·지원=ATS 또는 new_hire.\n"
+                "※ '합격자'=DB status=hired(ATS 합격). 신입 지원 풀 전체(298 등)와 다름.\n"
+                f"전체 레코드 수: {employee_count}명\n"
+                f"입사 확정·재직 직원 수: {regular_count}명\n"
+                f"신입·지원 풀 합계: {new_hire_count}명\n"
+                + "\n".join(breakdown_lines)
+                + "\n"
                 f"성과(performance_records) 기록: {perf_count}건\n"
                 f"공시(disclosures) 문서 청크: {disclosure_count}건\n"
                 f"역량(competency_anchors) 문서: {anchor_count}건"

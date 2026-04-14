@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 import { RegisterSw } from "@/components/RegisterSw";
 import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
@@ -11,6 +11,9 @@ export const metadata: Metadata = {
     icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: "/icons/icon-192.png",
   },
+};
+
+export const viewport: Viewport = {
   themeColor: "#0f172a",
 };
 

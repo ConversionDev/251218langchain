@@ -12,7 +12,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from langchain_core.documents import Document
-from sqlalchemy import text as sql_text
+from sqlalchemy import and_, or_, text as sql_text
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 from domain.models.bases.employee import Employee  # type: ignore
 
@@ -76,9 +76,6 @@ def _row_to_dict(row: Employee) -> Dict[str, Any]:
         "successDna": row.success_dna,
         "successDnaReason": getattr(row, "success_dna_reason", None),
         "rejectionReason": getattr(row, "rejection_reason", None),
-        "behavioralDna": row.behavioral_dna,
-        "behavioralSource": row.behavioral_source,
-        "behavioralSourceItems": row.behavioral_source_items,
         "disclosureMetrics": row.disclosure_metrics,
         "gender": row.gender,
         "age": row.age,
@@ -93,6 +90,24 @@ def _row_to_dict(row: Employee) -> Dict[str, Any]:
     }
 
 
+def is_onboarded_regular_employee_row(emp: Dict[str, Any]) -> bool:
+    """RAG·채팅: 입사 확정(재직 시작) = employment_type=regular 이고 입사일(joinedAt)이 비어 있지 않음."""
+    et = str(emp.get("employmentType") or "").strip().lower()
+    ja = str(emp.get("joinedAt") or "").strip()
+    return et == "regular" and len(ja) > 0
+
+
+def is_new_hire_pipeline_employee_row(emp: Dict[str, Any]) -> bool:
+    """RAG·채팅: ATS·지원 단계(신입). 입사 확정(regular+joinedAt)이면 False."""
+    if is_onboarded_regular_employee_row(emp):
+        return False
+    st = str(emp.get("status") or "").strip().lower()
+    if st in ("pending", "screening", "rejected"):
+        return True
+    et = str(emp.get("employmentType") or "").strip().lower()
+    return et == "new_hire"
+
+
 def _apply_payload(row: Employee, data: Dict[str, Any]) -> None:
     """payload(camelCase)를 ORM 행에 반영."""
     mapping = (
@@ -105,9 +120,6 @@ def _apply_payload(row: Employee, data: Dict[str, Any]) -> None:
         ("successDna", "success_dna"),
         ("successDnaReason", "success_dna_reason"),
         ("rejectionReason", "rejection_reason"),
-        ("behavioralDna", "behavioral_dna"),
-        ("behavioralSource", "behavioral_source"),
-        ("behavioralSourceItems", "behavioral_source_items"),
         ("disclosureMetrics", "disclosure_metrics"),
         ("gender", "gender"),
         ("age", "age"),
@@ -202,20 +214,26 @@ def _build_chat_query(
     exclude_sample: bool = False,
 ):
     """list_for_chat / count_for_chat 공용 필터 빌더.
-    신입/기존은 status 기준: 신입=ATS 단계(pending/screening/rejected), 기존=빈값·hired(입사 확정 시 기존으로 이관).
+    - regular: 입사 확정·재직 시작 = employment_type=regular 이고 joined_at 비어 있지 않음.
+    - new_hire: 위에 해당하지 않으면서 ATS(pending/screening/rejected) 또는 employment_type=new_hire.
     """
     q = db.query(Employee)
-    # 신입 = ATS 진행 중 (pending/screening/rejected) → 301명
-    # 기존 = status 빈값 또는 hired(입사 확정 후 기존으로 넘어감) → 301명
     _ats_statuses = ("pending", "screening", "rejected")
+    _onboarded_regular = and_(
+        Employee.employment_type == "regular",
+        Employee.joined_at.isnot(None),
+        Employee.joined_at != "",
+    )
     if employment_type == "new_hire":
-        q = q.filter(Employee.status.in_(_ats_statuses))
-    elif employment_type == "regular":
         q = q.filter(
-            (Employee.status.is_(None))
-            | (Employee.status == "")
-            | (Employee.status.ilike("hired"))
+            ~_onboarded_regular,
+            or_(
+                Employee.status.in_(_ats_statuses),
+                Employee.employment_type == "new_hire",
+            ),
         )
+    elif employment_type == "regular":
+        q = q.filter(_onboarded_regular)
     if department_part and department_part.strip():
         pattern = f"%{department_part.strip()}%"
         q = q.filter(Employee.department.ilike(pattern))

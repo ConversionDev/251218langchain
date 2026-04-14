@@ -2,7 +2,17 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { FileUp, UserPlus, Sparkles, CheckCircle, XCircle, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import {
+  FileUp,
+  UserPlus,
+  Sparkles,
+  CheckCircle,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -132,17 +142,26 @@ export default function CoreNewHiresPage() {
     window.location.href = "/intelligence";
   };
 
-  const handleAnalyze = async (emp: Employee) => {
+  const handleAnalyze = async (emp: Employee, opts?: { force?: boolean }) => {
     setAnalyzingEmployeeId(emp.id);
     try {
-      await analyzeEmployeeResumeApi(emp.id);
-      toast.success(NEW_HIRES_MESSAGES.toast.analyzeSuccess(emp.name));
+      const result = await analyzeEmployeeResumeApi(emp.id, opts);
+      if (result.analysisSkipped) {
+        toast.success(NEW_HIRES_MESSAGES.toast.promoteScreening(emp.name));
+      } else {
+        toast.success(NEW_HIRES_MESSAGES.toast.analyzeSuccess(emp.name));
+      }
       refreshList();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : NEW_HIRES_MESSAGES.toast.analyzeFailed);
     } finally {
       setAnalyzingEmployeeId(null);
     }
+  };
+
+  const handleReanalyzeConfirm = (emp: Employee) => {
+    if (!window.confirm(NEW_HIRES_MESSAGES.confirm.reanalyzeAi(emp.name))) return;
+    void handleAnalyze(emp, { force: true });
   };
 
   const handleSetStatus = async (emp: Employee, status: RecruitStatus, rejectionReason?: string | null) => {
@@ -430,7 +449,7 @@ export default function CoreNewHiresPage() {
                         <TableHead>{NEW_HIRES_MESSAGES.table.headers.applicationDate}</TableHead>
                         <TableHead>{NEW_HIRES_MESSAGES.table.headers.status}</TableHead>
                         {tab === "rejected" && <TableHead>{NEW_HIRES_MESSAGES.table.headers.rejectionReason}</TableHead>}
-                        <TableHead className="w-[260px] text-right">{NEW_HIRES_MESSAGES.table.headers.actions}</TableHead>
+                        <TableHead className="min-w-[260px] text-right">{NEW_HIRES_MESSAGES.table.headers.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -462,49 +481,81 @@ export default function CoreNewHiresPage() {
                                 {emp.rejectionReason || "—"}
                               </TableCell>
                             )}
-                            <TableCell className="w-[260px] text-right align-middle">
-                              <div className="ml-auto inline-flex flex-nowrap items-center justify-end gap-1">
-                                {(tab === "pending" || (tab === "screening" && !emp.successDna)) && (
-                                  <>
-                                    {tab === "pending" && !!emp.successDna && (
+                            <TableCell className="min-w-[260px] text-right align-middle">
+                              <div className="ml-auto inline-flex flex-wrap items-center justify-end gap-1">
+                                {tab === "pending" && (
+                                  <div className="flex flex-col items-end gap-1">
+                                    <div className="inline-flex flex-nowrap items-center justify-end gap-1">
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled
-                                        className="h-8 w-[86px] justify-center whitespace-nowrap border-emerald-500/30 px-2 text-xs text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-400"
+                                        disabled={analyzingEmployeeId !== null}
+                                        onClick={() => handleAnalyze(emp)}
+                                        className="h-8 w-[86px] justify-center whitespace-nowrap px-2 text-xs"
+                                        title={
+                                          emp.successDna
+                                            ? "저장된 Success DNA가 있으면 LLM 없이 심사 중으로만 넘깁니다."
+                                            : undefined
+                                        }
                                       >
-                                        {NEW_HIRES_MESSAGES.buttons.analyzedDone}
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      disabled={analyzingEmployeeId !== null}
-                                      onClick={() => handleAnalyze(emp)}
-                                      className="h-8 w-[86px] justify-center whitespace-nowrap px-2 text-xs"
-                                    >
-                                      {analyzingEmployeeId === emp.id
-                                        ? NEW_HIRES_MESSAGES.buttons.analyzing
-                                        : (
+                                        {analyzingEmployeeId === emp.id ? (
+                                          NEW_HIRES_MESSAGES.buttons.analyzing
+                                        ) : (
                                           <>
-                                            <Sparkles className="mr-1 h-3.5 w-3.5" />{" "}
-                                            {tab === "pending" && emp.successDna
-                                              ? NEW_HIRES_MESSAGES.buttons.analyzeAgain
-                                              : NEW_HIRES_MESSAGES.buttons.analyze}
+                                            <Sparkles className="mr-1 h-3.5 w-3.5" />
+                                            {NEW_HIRES_MESSAGES.buttons.analyze}
                                           </>
                                         )}
-                                    </Button>
-                                  </>
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={updatingId !== null}
+                                        onClick={() => handleEdit(emp)}
+                                        className="h-8 w-[72px] justify-center px-2 text-xs"
+                                      >
+                                        <Pencil className="mr-1 h-3.5 w-3.5" />
+                                        {NEW_HIRES_MESSAGES.buttons.edit}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={updatingId !== null}
+                                        onClick={() => handleDelete(emp)}
+                                        className="h-8 w-[72px] justify-center px-2 text-xs text-muted-foreground hover:text-destructive"
+                                      >
+                                        <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                        {NEW_HIRES_MESSAGES.buttons.delete}
+                                      </Button>
+                                    </div>
+                                    {emp.successDna && (
+                                      <button
+                                        type="button"
+                                        disabled={analyzingEmployeeId !== null}
+                                        onClick={() => handleReanalyzeConfirm(emp)}
+                                        className="text-[11px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                                      >
+                                        {NEW_HIRES_MESSAGES.buttons.analyzeAgain}
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
-                                {tab === "pending" && emp.successDna && (
+                                {tab === "screening" && !emp.successDna && (
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    disabled={updatingId !== null}
-                                    onClick={() => handleSetStatus(emp, "screening")}
-                                    className="h-8 w-[72px] justify-center px-2 text-xs"
+                                    disabled={analyzingEmployeeId !== null}
+                                    onClick={() => handleAnalyze(emp)}
+                                    className="h-8 w-[86px] justify-center whitespace-nowrap px-2 text-xs"
                                   >
-                                    {NEW_HIRES_MESSAGES.buttons.screening}
+                                    {analyzingEmployeeId === emp.id ? (
+                                      NEW_HIRES_MESSAGES.buttons.analyzing
+                                    ) : (
+                                      <>
+                                        <Sparkles className="mr-1 h-3.5 w-3.5" />
+                                        {NEW_HIRES_MESSAGES.buttons.analyze}
+                                      </>
+                                    )}
                                   </Button>
                                 )}
                                 {tab === "screening" && (
@@ -576,7 +627,7 @@ export default function CoreNewHiresPage() {
                                     </Button>
                                   </>
                                 )}
-                                {tab !== "screening" && (
+                                {tab !== "screening" && tab !== "pending" && (
                                   <>
                                     <Button
                                       variant="outline"

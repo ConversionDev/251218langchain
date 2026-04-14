@@ -4,15 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/store/useStore";
 import { useHydrated } from "@/hooks/use-hydrated";
-import {
-  Brain,
-  Info,
-  FileText,
-  UserX,
-  ShieldCheck,
-  ArrowRight,
-  Target,
-} from "lucide-react";
+import { Brain, Info, UserX, ShieldCheck, ArrowRight, Target } from "lucide-react";
 import { DNARadarChart } from "@/modules/intelligence/components/DNARadarChart";
 import { DNAGrowthChart } from "@/modules/intelligence/components/DNAGrowthChart";
 import { DNAGrowthTrajectoryChart } from "@/modules/intelligence/components/DNAGrowthTrajectoryChart";
@@ -29,18 +21,9 @@ import {
 import { sendChatMessageStream } from "@/modules/chat/services";
 import { fetchEmployeesPaginated } from "@/modules/core/services";
 import { Button } from "@/components/ui/button";
-import { mergeDnaWithWeights } from "@/modules/intelligence/services/unstructuredAnalyzer";
 import type { IntelligenceEmployee } from "@/modules/intelligence/types";
 import type { Employee, SuccessDNA } from "@/modules/shared/types";
 import { getAverageSuccessDna } from "@/modules/shared/utils/employeeAggregates";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-
 export default function IntelligencePage() {
   const hydrated = useHydrated();
   const selectedEmployee = useStore((s) => s.selectedEmployee);
@@ -94,12 +77,8 @@ export default function IntelligencePage() {
     );
   };
 
-  const chartDna: SuccessDNA | undefined =
-    (employee &&
-      (employee.successDna && employee.behavioralDna
-        ? mergeDnaWithWeights(employee.successDna, employee.behavioralDna)
-        : employee.behavioralDna ?? employee.successDna)) ?? undefined;
-  const dataSourceLabel = employee?.behavioralSource ?? "이력/평가 기반 데이터";
+  const chartDna: SuccessDNA | undefined = employee?.successDna ?? undefined;
+  const dataSourceLabel = "이력서·ATS 분석 기반";
 
   if (!hydrated) {
     return (
@@ -206,43 +185,6 @@ export default function IntelligencePage() {
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Source: {dataSourceLabel}
           </span>
-          <Dialog>
-            <DialogTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded hover:underline focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                회의록 내용 보기
-              </button>
-            </DialogTrigger>
-            <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col overflow-hidden">
-              <DialogHeader>
-                <DialogTitle className="text-base">분석에 사용된 출처 원문</DialogTitle>
-              </DialogHeader>
-              <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-                {(employee?.behavioralSourceItems ?? []).length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    분석된 회의록이 없습니다.
-                  </p>
-                ) : (
-                  (employee?.behavioralSourceItems ?? []).map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-lg border border-border bg-muted/30 p-3"
-                    >
-                      <p className="mb-2 text-sm font-medium text-foreground">
-                        {item.title ?? `${item.kind} ${idx + 1}`}
-                      </p>
-                      <pre className="whitespace-pre-wrap break-words font-sans text-xs text-muted-foreground">
-                        {item.content}
-                      </pre>
-                    </div>
-                  ))
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
         <div className="mt-6 grid gap-8 lg:grid-cols-2">
           <div>

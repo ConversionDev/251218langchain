@@ -29,9 +29,6 @@ class Employee(Base):  # type: ignore[misc]
     success_dna = Column(JSONB(), nullable=True, comment="Success DNA 5대 역량")
     success_dna_reason = Column(Text(), nullable=True, comment="AI 평가 근거 (점수 산정 이유, ATS 관리자 표시용)")
     rejection_reason = Column(Text(), nullable=True, comment="탈락 사유 (ATS 관리자 입력, 이의 제기·감사 대응용)")
-    behavioral_dna = Column(JSONB(), nullable=True, comment="비정형 분석 기반 역량")
-    behavioral_source = Column(Text(), nullable=True, comment="behavioralDna 출처 요약")
-    behavioral_source_items = Column(JSONB(), nullable=True, comment="회의록/이메일 등 원문 목록")
     disclosure_metrics = Column(
         JSONB(), nullable=True, comment="공시 지표(다중 표준). IFRS/ISO 30414 등. docs/disclosure-metrics-design.md"
     )

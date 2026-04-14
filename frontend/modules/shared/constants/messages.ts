@@ -25,6 +25,8 @@ export const NEW_HIRES_MESSAGES = {
   },
   toast: {
     analyzeSuccess: (name: string) => `${name}님 AI 분석 완료. Success DNA가 저장되었습니다.`,
+    promoteScreening: (name: string) =>
+      `${name}님: 저장된 Success DNA를 유지한 채 심사 중 단계로 이동했습니다. (LLM 재호출 없음)`,
     analyzeFailed: "AI 분석에 실패했습니다.",
     statusUpdated: (name: string, status: RecruitStatus) =>
       `${name}님 상태가 ${NEW_HIRE_STATUS_LABELS[status]}(으)로 변경되었습니다.`,
@@ -43,6 +45,8 @@ export const NEW_HIRES_MESSAGES = {
   confirm: {
     deleteApplicant: (name: string) => `${name} 지원자 데이터를 삭제할까요?`,
     onboardApplicant: (name: string) => `${name}님을 입사 확정 처리하고 기존 직원으로 전환할까요?`,
+    reanalyzeAi: (name: string) =>
+      `${name}님 이력서를 AI로 다시 분석합니다. 기존 Success DNA가 덮어씌워지며 시간이 걸릴 수 있습니다. 진행할까요?`,
   },
   section: {
     registerTitle: "이력서로 신입 등록",
@@ -60,7 +64,7 @@ export const NEW_HIRES_MESSAGES = {
     emptyListTail: "을 누르거나, 위에서 이력서 업로드로 등록하세요.",
     emptyListHint: "(적재한 DB와 프론트가 같은 API를 쓰는지 확인하세요.)",
     footerGuide:
-      "미검토: 이력서 접수만 된 상태. [AI 분석]으로 엑사원이 Success DNA를 생성합니다. 심사 중에서 [합격]/[탈락]으로 결정하세요.",
+      "미검토: Success DNA가 없으면 [AI 분석]으로 생성합니다. DB에 DNA가 이미 있으면 [심사 중으로]는 재분석 없이 단계만 넘깁니다. 모델을 다시 돌리려면 [재분석]을 누르세요.",
   },
   table: {
     headers: {

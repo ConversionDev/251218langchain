@@ -14,7 +14,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
@@ -44,6 +44,24 @@ from domain.hub.repositories.audit_log_repository import create_log as repo_crea
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
+
+_DNA_KEYS = ("leadership", "technical", "creativity", "collaboration", "adaptability")
+
+
+def _row_has_success_dna(one: Dict[str, Any]) -> bool:
+    """5대 역량이 모두 숫자로 있으면 DB에 분석 결과가 있다고 본다."""
+    d = one.get("successDna")
+    if not isinstance(d, dict):
+        return False
+    for k in _DNA_KEYS:
+        v = d.get(k)
+        if v is None:
+            return False
+        try:
+            float(v)
+        except (TypeError, ValueError):
+            return False
+    return True
 
 
 def _resolve_actor(request: Request) -> str:
@@ -89,9 +107,6 @@ class EmployeePayload(BaseModel):
     applicationDate: str | None = Field(None, description="지원일 YYYY-MM-DD (지원서 제출일)")
     joinedAt: str | None = Field(None, description="입사일 YYYY-MM-DD (입사 확정 후 설정)")
     successDna: Dict[str, Any] | None = None
-    behavioralDna: Dict[str, Any] | None = None
-    behavioralSource: str | None = None
-    behavioralSourceItems: List[Dict[str, Any]] | None = None
     disclosureMetrics: Dict[str, Any] | None = None
     gender: str | None = None
     age: int | None = None
@@ -313,14 +328,49 @@ async def analyze_employee_resume(
     employee_id: str,
     request: Request,
     db: Session = Depends(get_db),
+    force: bool = Query(
+        False,
+        description="true면 Success DNA가 있어도 LLM 재분석. false면 신입만 기존 DNA 유지하고 LLM 생략 가능",
+    ),
 ) -> Dict[str, Any]:
     """직원 AI 분석.
     - 신입(new_hire): resume 중심 분석 후 status → screening
     - 기존 직원(regular): resume + 성과활동(performance_records) 기반 분석 (status 변경 없음)
+    - 신입이고 DB에 Success DNA가 이미 있으면 force=false일 때 LLM을 호출하지 않음(pending이면 screening만 반영).
     """
     one = repo_get_by_id(db, employee_id)
     if not one:
         raise HTTPException(status_code=404, detail="Employee not found")
+
+    is_new_hire = (one.get("employmentType") or "").strip().lower() == "new_hire"
+    if is_new_hire and _row_has_success_dna(one) and not force:
+        st = str(one.get("status") or "").strip().lower()
+        if st == "pending":
+            updated = repo_update(db, employee_id, {"status": "screening"})
+            out = dict(updated or one)
+            out["analysisSkipped"] = True
+            _write_audit_log(
+                db,
+                request=request,
+                action="analyze",
+                entity_id=employee_id,
+                before_data=one,
+                after_data=updated or one,
+                reason="ai analyze skipped (existing successDna); status→screening",
+            )
+            return out
+        out = dict(one)
+        out["analysisSkipped"] = True
+        _write_audit_log(
+            db,
+            request=request,
+            action="analyze",
+            entity_id=employee_id,
+            before_data=one,
+            after_data=one,
+            reason="ai analyze skipped (existing successDna)",
+        )
+        return out
 
     # 1) 이력서 텍스트 — 원본 추출 텍스트 우선, 없으면 구조화 데이터로 대체
     stored_resume_text = (one.get("resumeText") or "").strip()
@@ -379,7 +429,9 @@ async def analyze_employee_resume(
         after_data=updated or one,
         reason="ai analyze",
     )
-    return updated or one
+    out = dict(updated or one)
+    out["analysisSkipped"] = False
+    return out
 
 
 @router.post("", response_model=Dict[str, Any], status_code=201)
