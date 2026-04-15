@@ -1,0 +1,97 @@
+# EC2 / GitHub Actions 추론 배포 전용
+# - torch/torchvision/torchaudio 줄 없음 → 워크플로에서 CPU wheel 별도 설치
+# - 학습(SFT/TRL/Unsloth)·시각화(umap/plotly)·datasets·torchao 제외 (디스크·시간 절약)
+# 로컬 학습·실험은 루트 requirements.txt 사용
+# ===============================
+# FastAPI / Server (CPU Orchestrator)
+# ===============================
+fastapi==0.125.0
+uvicorn[standard]==0.38.0
+pydantic==2.12.5
+pydantic-settings==2.12.0
+python-multipart==0.0.21
+python-dotenv==1.2.1
+orjson==3.11.5
+
+# ===============================
+# LangChain / LangGraph
+# ===============================
+langchain==1.2.0
+langchain-core==1.2.2
+langchain-community==0.4.1
+langchain-huggingface==1.2.0
+langchain-text-splitters==1.1.0
+
+langgraph==1.0.5
+langgraph-checkpoint==3.0.1
+langgraph-prebuilt==1.0.7
+langgraph-sdk==0.3.3
+
+# ===============================
+# Database / Vector Store
+# ===============================
+psycopg2-binary==2.9.11
+pgvector==0.4.2
+faiss-cpu>=1.9.0
+SQLAlchemy==2.0.46
+alembic==1.18.1
+
+# ===============================
+# HuggingFace / NLP Core (추론)
+# ===============================
+transformers==4.57.3
+accelerate==1.12.0
+huggingface-hub==0.36.0
+sentence-transformers==5.2.0
+sentencepiece==0.2.1
+tokenizers==0.22.2
+safetensors==0.7.0
+
+# ===============================
+# Embedding (BGE-m3 / Disclosure·RAG)
+# ===============================
+FlagEmbedding==1.3.5
+
+# ===============================
+# Vision (Gemini)
+# ===============================
+google-generativeai==0.8.6
+
+# ===============================
+# PEFT (어댑터 로드 — exaone/llama 런타임)
+# ===============================
+peft==0.18.1
+
+# ===============================
+# GPU Optimization (4bit 등)
+# ===============================
+bitsandbytes==0.49.1
+
+# ===============================
+# Scientific / Utils
+# ===============================
+numpy==2.3.5
+scipy==1.17.0
+scikit-learn==1.8.0
+pandas==3.0.0
+tqdm==4.67.1
+psutil==7.2.1
+regex==2026.1.15
+
+# ===============================
+# HTTP / Async
+# ===============================
+httpx==0.28.1
+aiohttp==3.13.3
+websockets==16.0
+
+fastmcp>=2.14.0,<3
+
+# ===============================
+# PDF / Excel / Word / HWP
+# ===============================
+pymupdf==1.25.1
+pdfplumber==0.11.9
+openpyxl==3.1.5
+python-docx==1.2.0
+pyhwp>=0.1b15

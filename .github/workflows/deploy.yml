@@ -311,7 +311,7 @@ jobs:
             echo "📥 Installing packages (skip if already satisfied)..."
             pip install --upgrade pip --no-cache-dir
             pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
-            sed -e '/^torch==/d' -e '/^torchvision==/d' -e '/^torchaudio==/d' $APP_DIR/requirements.txt > /tmp/requirements-no-torch.txt
+            sed -e '/^torch==/d' -e '/^torchvision==/d' -e '/^torchaudio==/d' $APP_DIR/requirements-prod.txt > /tmp/requirements-no-torch.txt
             pip install -r /tmp/requirements-no-torch.txt --no-cache-dir
 
             # 기존 프로세스 종료
