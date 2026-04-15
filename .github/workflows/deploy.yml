@@ -403,6 +403,14 @@ jobs:
         run: |
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" bash -s << 'GWSH'
+          # Java 21 설치 (없을 때만)
+          if ! command -v java &>/dev/null; then
+            echo "📦 Installing Java 21..."
+            sudo apt-get update -q
+            sudo apt-get install -y -q openjdk-21-jre-headless
+          fi
+          echo "☕ Java: $(java -version 2>&1 | head -1)"
+
           # 기존 Gateway 프로세스 종료
           OLD_PID=$(pgrep -f "gateway.jar" || true)
           if [ -n "$OLD_PID" ]; then
@@ -427,17 +435,17 @@ jobs:
           echo $! > /home/ubuntu/gateway.pid
           echo "Gateway PID: $(cat /home/ubuntu/gateway.pid)"
 
-          # 기동 대기 (최대 30초)
-          for i in $(seq 1 10); do
+          # 기동 대기 (최대 60초)
+          for i in $(seq 1 20); do
             sleep 3
             if curl -sf http://127.0.0.1:8080/actuator/health > /dev/null 2>&1; then
               echo "✅ Gateway is UP"
               exit 0
             fi
-            echo "⏳ Waiting for Gateway... ($i/10)"
+            echo "⏳ Waiting for Gateway... ($i/20)"
           done
           echo "❌ Gateway failed to start. Last logs:"
-          tail -30 /home/ubuntu/gateway.log
+          tail -50 /home/ubuntu/gateway.log
           exit 1
           GWSH
 
