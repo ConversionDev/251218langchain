@@ -85,20 +85,18 @@ jobs:
       - name: Free disk space on EC2 (before rsync)
         run: |
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
-          # 러너 bash가 "find ... ! -name" 의 ! 를 히스토리 확장으로 처리하면 SSH 명령이 깨져 exit 255
-          set +o histexpand 2>/dev/null || true
           set -e
           WIPE_FULL=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.wipe_full_app_dir }}" = "true" ]; then
             WIPE_FULL=true
           fi
-          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "pkill -f 'python.*main.py' 2>/dev/null || true; pkill -f '${VENV_DIR}/bin/python.*main.py' 2>/dev/null || true; sleep 2"
+          # pkill + 정리를 한 번의 SSH로 (연속 접속 시 MaxAuthTries/255 방지)
           if [ "$WIPE_FULL" = "true" ]; then
             echo "Full wipe: removing entire APP_DIR (including artifacts/models)"
-            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf '${APP_DIR}' && mkdir -p '${APP_DIR}'"
+            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "pkill -f 'python.*main.py' 2>/dev/null || true; pkill -f '${VENV_DIR}/bin/python.*main.py' 2>/dev/null || true; sleep 2; rm -rf '${APP_DIR}' && mkdir -p '${APP_DIR}'"
           else
             echo "Partial clean: keep APP_DIR/artifacts, remove other top-level app files for code refresh"
-            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "mkdir -p '${APP_DIR}'; if [ -d '${APP_DIR}' ]; then find '${APP_DIR}' -mindepth 1 -maxdepth 1 \\! -name artifacts -exec rm -rf {} +; fi"
+            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "pkill -f 'python.*main.py' 2>/dev/null || true; pkill -f '${VENV_DIR}/bin/python.*main.py' 2>/dev/null || true; sleep 2; mkdir -p '${APP_DIR}'; if [ -d '${APP_DIR}' ]; then find '${APP_DIR}' -mindepth 1 -maxdepth 1 -not -name artifacts -exec rm -rf {} +; fi"
           fi
           ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf \"\$HOME/.cache/pip\" \"\$HOME/.cache/pip-tools\" 2>/dev/null || true"
           ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf \"\$HOME/.cache/huggingface/hub\"/*.incomplete 2>/dev/null || true"
@@ -313,14 +311,15 @@ jobs:
 
       - name: Health check
         run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           echo "🏥 Running health check..."
           for i in $(seq 1 $MAX_RETRIES); do
             echo "⏳ Attempt $i/$MAX_RETRIES..."
 
             # 프로세스 확인
-            if ssh $EC2_USERNAME@$EC2_HOST "ps -p \$(cat $PID_FILE 2>/dev/null) > /dev/null 2>&1"; then
+            if ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "ps -p \$(cat $PID_FILE 2>/dev/null) > /dev/null 2>&1"; then
               # Health check
-              if ssh $EC2_USERNAME@$EC2_HOST "curl -f http://localhost:8000/health > /dev/null 2>&1"; then
+              if ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "curl -f http://localhost:8000/health > /dev/null 2>&1"; then
                 echo "✅ Health check passed!"
                 exit 0
               else
@@ -328,7 +327,7 @@ jobs:
               fi
             else
               echo "❌ Process not found. Checking logs..."
-              ssh $EC2_USERNAME@$EC2_HOST "tail -50 $LOG_FILE 2>/dev/null || echo 'No log file'"
+              ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "tail -50 $LOG_FILE 2>/dev/null || echo 'No log file'"
             fi
 
             # 마지막 시도가 아니면 대기
