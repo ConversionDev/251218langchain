@@ -373,6 +373,12 @@ jobs:
             fi
           ENDSSH
 
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
       - name: Build Spring Gateway jar
         run: |
           echo "☕ Building Spring Gateway jar..."
