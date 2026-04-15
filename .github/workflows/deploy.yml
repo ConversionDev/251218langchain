@@ -13,6 +13,14 @@ on:
         options:
           - "false"
           - "true"
+      wipe_full_app_dir:
+        description: "true면 /home/ubuntu/app 전체 삭제(모델 포함). false면 코드만 갱신·artifacts는 유지"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -73,13 +81,47 @@ jobs:
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "echo SSH_OK user=\$(whoami) host=\$(hostname)"
 
+      # rsync 전에 공간 확보: 이전 배포·실패 잔여물·캐시가 꽉 찬 상태면 No space left on device 발생
+      - name: Free disk space on EC2 (before rsync)
+        run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          set -e
+          WIPE_FULL=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.wipe_full_app_dir }}" = "true" ]; then
+            WIPE_FULL=true
+          fi
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "pkill -f 'python.*main.py' 2>/dev/null || true; pkill -f '${VENV_DIR}/bin/python.*main.py' 2>/dev/null || true; sleep 2"
+          if [ "$WIPE_FULL" = "true" ]; then
+            echo "Full wipe: removing entire APP_DIR (including artifacts/models)"
+            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf '${APP_DIR}' && mkdir -p '${APP_DIR}'"
+          else
+            echo "Partial clean: keep APP_DIR/artifacts, remove other top-level app files for code refresh"
+            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "mkdir -p '${APP_DIR}'; if [ -d '${APP_DIR}' ]; then find '${APP_DIR}' -mindepth 1 -maxdepth 1 ! -name artifacts -exec rm -rf {} +; fi"
+          fi
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf \"\$HOME/.cache/pip\" \"\$HOME/.cache/pip-tools\" 2>/dev/null || true"
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf \"\$HOME/.cache/huggingface/hub\"/*.incomplete 2>/dev/null || true"
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "sudo apt-get clean -y 2>/dev/null || true; sudo journalctl --vacuum-size=40M 2>/dev/null || true"
+          avail="$(ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "df -m / | awk 'NR==2 {print \$4}'")"
+          echo "Disk free on / (df -m, field 4): ${avail:-unknown} MiB (approx.)"
+          if echo "${avail:-}" | grep -Eq '^[0-9]+$' && [ "$avail" -lt 1800 ]; then
+            echo "::warning::Low disk — removing ${VENV_DIR} so deploy can recreate (saves several GiB)"
+            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf '${VENV_DIR}'"
+            avail="$(ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "df -m / | awk 'NR==2 {print \$4}'")"
+            echo "Disk free after venv removal: ${avail:-unknown} MiB (approx.)"
+          fi
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "df -h /"
+          if echo "${avail:-}" | grep -Eq '^[0-9]+$' && [ "$avail" -lt 400 ]; then
+            echo "::error::EC2 root volume still under ~400 MiB free after cleanup. Enlarge EBS or remove large files manually, then re-run deploy."
+            exit 1
+          fi
+
       - name: Deploy application files
         run: |
           if [ ! -d "$APP_SRC" ]; then echo "::error::APP_SRC directory missing: $APP_SRC"; exit 1; fi
-          echo "Creating app dir and transferring files from $APP_SRC (max 90s)..."
+          echo "Creating app dir and transferring files from $APP_SRC (max 180s)..."
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR"
-          timeout 90 rsync -avz --delete --info=progress2 \
+          timeout 180 rsync -avz --delete --info=progress2 \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='.git' \
@@ -92,10 +134,14 @@ jobs:
             --exclude='*.egg-info/' \
             --exclude='artifacts/' \
             --exclude='data/' \
-            --exclude='training/pipelines/' \
-            --exclude='training/models/' \
-            --exclude='training/data/' \
             --exclude='scripts/' \
+            --exclude='workers/' \
+            --exclude='domain/spokes/soccer/' \
+            --include='training/' \
+            --include='training/__init__.py' \
+            --include='training/shared/' \
+            --include='training/shared/**' \
+            --exclude='training/**' \
             --exclude='*.safetensors' \
             --exclude='*.pt' \
             --exclude='*.pth' \
@@ -103,32 +149,52 @@ jobs:
             --exclude='*.bin' \
             --exclude='checkpoint-*/' \
             --exclude='prequantized_bnb4/' \
-            --timeout=60 \
+            --timeout=120 \
             -e "ssh $SSH_OPTS" \
             "$APP_SRC/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/ || { echo "::error::rsync timed out or failed"; exit 1; }
           echo "Files transferred OK"
 
-      - name: Deploy fine-tuned adapters only
+      # 메인 rsync는 artifacts/ 전체 제외. ExaOne + 메일 스팸용 LLaMA(fine_tuned/llama 전체)는 별도 동기화.
+      - name: Deploy ExaONE + LLaMA (mail/spam) artifacts
         run: |
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           APP_DIR=/home/ubuntu/app
-          # ExaOne 역량 어댑터, LLaMA 스팸 어댑터만 EC2로 전송 (경로 있을 때만)
-          for rel in "artifacts/fine_tuned/exaone/competency_adapters" "artifacts/fine_tuned/llama/spam_adapters"; do
-            if [ -d "$APP_SRC/$rel" ]; then
-              echo "Syncing $rel..."
-              ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR/$rel"
-              rsync -avz --timeout=60 \
+          for rel in \
+            "artifacts/fine_tuned/exaone/prequantized_bnb4" \
+            "artifacts/fine_tuned/exaone/competency_adapters" \
+            "artifacts/fine_tuned/llama"; do
+            if [ ! -d "$APP_SRC/$rel" ]; then
+              echo "Skip $rel (not found on runner — 로컬/self-hosted에 아티팩트가 있어야 동기화됨)"
+              continue
+            fi
+            echo "Syncing $rel..."
+            ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR/$rel"
+            if [[ "$rel" == *"/prequantized_bnb4" ]]; then
+              timeout 900 rsync -avz --timeout=600 --info=progress2 \
+                --exclude='checkpoint-*/' \
+                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ \
+                || { echo "::error::rsync failed for $rel"; exit 1; }
+            elif [[ "$rel" == *"/competency_adapters" ]]; then
+              rsync -avz --timeout=180 --info=progress2 \
                 --exclude='checkpoint-*/' \
                 --exclude='prequantized_bnb4/' \
                 --exclude='*.pt' \
                 --exclude='*.pth' \
                 --exclude='*.ckpt' \
-                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ || true
+                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ \
+                || { echo "::error::rsync failed for $rel"; exit 1; }
             else
-              echo "Skip $rel (not found)"
+              # LLaMA: spam_adapters 등 메일 분류용. 체크포인트만 제외( final_model·토크나이저 등 유지 )
+              rsync -avz --timeout=300 --info=progress2 \
+                --exclude='checkpoint-*/' \
+                --exclude='*.pt' \
+                --exclude='*.pth' \
+                --exclude='*.ckpt' \
+                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ \
+                || { echo "::error::rsync failed for $rel"; exit 1; }
             fi
           done
-          echo "Adapters sync done"
+          echo "ExaONE + LLaMA artifacts sync done"
 
       - name: Setup virtual environment & start app
         run: |
