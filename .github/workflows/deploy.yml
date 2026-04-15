@@ -385,7 +385,7 @@ jobs:
           cd backend/gateway
           chmod +x ./gradlew
           ./gradlew bootJar -x test --no-daemon
-          JAR=$(ls build/libs/*.jar | head -1)
+          JAR=$(ls "$GITHUB_WORKSPACE/backend/gateway/build/libs/"*.jar | head -1)
           echo "✅ Built: $JAR"
           echo "GATEWAY_JAR=$JAR" >> $GITHUB_ENV
 
