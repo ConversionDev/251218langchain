@@ -81,39 +81,51 @@ jobs:
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "echo SSH_OK user=\$(whoami) host=\$(hostname)"
 
-      # rsync 전에 공간 확보: 이전 배포·실패 잔여물·캐시가 꽉 찬 상태면 No space left on device 발생
+      # 모든 EC2 정리를 SSH 단 한 번으로: 여러 번 연결하면 sshd 제한으로 exit 255 발생
       - name: Free disk space on EC2 (before rsync)
         run: |
-          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
-          set -e
           WIPE_FULL=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.wipe_full_app_dir }}" = "true" ]; then
             WIPE_FULL=true
           fi
-          # pkill + 정리를 한 번의 SSH로 (연속 접속 시 MaxAuthTries/255 방지)
+          SSH_OPTS="-o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=6 -o StrictHostKeyChecking=accept-new"
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" \
+            "EC2_APP_DIR=${APP_DIR} EC2_VENV_DIR=${VENV_DIR} WIPE_FULL=$WIPE_FULL bash -s" << 'CLEANUP'
+          pkill -f 'python.*main.py' 2>/dev/null || true
+          pkill -f "$EC2_VENV_DIR/bin/python" 2>/dev/null || true
+          sleep 2
+
           if [ "$WIPE_FULL" = "true" ]; then
-            echo "Full wipe: removing entire APP_DIR (including artifacts/models)"
-            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "pkill -f 'python.*main.py' 2>/dev/null || true; pkill -f '${VENV_DIR}/bin/python.*main.py' 2>/dev/null || true; sleep 2; rm -rf '${APP_DIR}' && mkdir -p '${APP_DIR}'"
+            echo "Full wipe..."
+            rm -rf "$EC2_APP_DIR" && mkdir -p "$EC2_APP_DIR"
           else
-            echo "Partial clean: keep APP_DIR/artifacts, remove other top-level app files for code refresh"
-            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "pkill -f 'python.*main.py' 2>/dev/null || true; pkill -f '${VENV_DIR}/bin/python.*main.py' 2>/dev/null || true; sleep 2; mkdir -p '${APP_DIR}'; if [ -d '${APP_DIR}' ]; then find '${APP_DIR}' -mindepth 1 -maxdepth 1 -not -name artifacts -exec rm -rf {} +; fi"
+            echo "Partial clean (keep artifacts)..."
+            mkdir -p "$EC2_APP_DIR"
+            find "$EC2_APP_DIR" -mindepth 1 -maxdepth 1 -not -name artifacts -exec rm -rf {} + 2>/dev/null || true
           fi
-          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf \"\$HOME/.cache/pip\" \"\$HOME/.cache/pip-tools\" 2>/dev/null || true"
-          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf \"\$HOME/.cache/huggingface/hub\"/*.incomplete 2>/dev/null || true"
-          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "sudo apt-get clean -y 2>/dev/null || true; sudo journalctl --vacuum-size=40M 2>/dev/null || true"
-          avail="$(ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "df -m / | awk 'NR==2 {print \$4}'")"
-          echo "Disk free on / (df -m, field 4): ${avail:-unknown} MiB (approx.)"
-          if echo "${avail:-}" | grep -Eq '^[0-9]+$' && [ "$avail" -lt 1800 ]; then
-            echo "::warning::Low disk — removing ${VENV_DIR} so deploy can recreate (saves several GiB)"
-            ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "rm -rf '${VENV_DIR}'"
-            avail="$(ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "df -m / | awk 'NR==2 {print \$4}'")"
-            echo "Disk free after venv removal: ${avail:-unknown} MiB (approx.)"
+
+          rm -rf "$HOME/.cache/pip" "$HOME/.cache/pip-tools" 2>/dev/null || true
+          find "$HOME/.cache/huggingface/hub" -name "*.incomplete" -delete 2>/dev/null || true
+          sudo apt-get clean -y 2>/dev/null || true
+          sudo journalctl --vacuum-size=40M 2>/dev/null || true
+
+          avail=$(df -m / | awk 'NR==2 {print $4}')
+          echo "Disk free: ${avail} MiB"
+          df -h /
+
+          if [ "${avail:-9999}" -lt 1800 ]; then
+            echo "Low disk — removing venv to free space"
+            rm -rf "$EC2_VENV_DIR" || true
+            avail=$(df -m / | awk 'NR==2 {print $4}')
+            echo "Disk free after venv removal: ${avail} MiB"
+            df -h /
           fi
-          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "df -h /"
-          if echo "${avail:-}" | grep -Eq '^[0-9]+$' && [ "$avail" -lt 400 ]; then
-            echo "::error::EC2 root volume still under ~400 MiB free after cleanup. Enlarge EBS or remove large files manually, then re-run deploy."
+
+          if [ "${avail:-9999}" -lt 400 ]; then
+            echo "ERROR: Disk still under 400 MiB. Enlarge EBS and re-run."
             exit 1
           fi
+          CLEANUP
 
       - name: Deploy application files
         run: |
