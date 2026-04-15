@@ -49,6 +49,27 @@ jobs:
       MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
       MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
       CORS_ORIGINS: "https://www.kanggyeonggu.store,https://kanggyeonggu.store"
+      # Spring Gateway (OAuth) — EC2 gateway.env 작성용
+      KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+      KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+      KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
+      NEON_DEV_HOST: ${{ secrets.NEON_DEV_HOST }}
+      NEON_DEV_PORT: ${{ secrets.NEON_DEV_PORT }}
+      NEON_DEV_DATABASE: ${{ secrets.NEON_DEV_DATABASE }}
+      NEON_DEV_USER: ${{ secrets.NEON_DEV_USER }}
+      NEON_DEV_PASSWORD: ${{ secrets.NEON_DEV_PASSWORD }}
+      NEON_DEV_SSL_MODE: ${{ secrets.NEON_DEV_SSL_MODE }}
+      NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+      NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+      NAVER_REDIRECT_URI: ${{ secrets.NAVER_REDIRECT_URI }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+      FRONTEND_CALLBACK_URL: ${{ secrets.FRONTEND_CALLBACK_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      UPSTASH_REDIS_HOST: ${{ secrets.UPSTASH_REDIS_HOST }}
+      UPSTASH_REDIS_PORT: ${{ secrets.UPSTASH_REDIS_PORT }}
+      UPSTASH_REDIS_PASSWORD: ${{ secrets.UPSTASH_REDIS_PASSWORD }}
       APP_DIR: /home/ubuntu/app
       VENV_DIR: /home/ubuntu/venv
       LOG_FILE: /home/ubuntu/app.log
@@ -207,6 +228,39 @@ jobs:
             fi
           done
           echo "ExaONE + LLaMA artifacts sync done"
+
+      - name: Write gateway.env on EC2
+        run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" bash -s << EOF
+          cat > /home/ubuntu/gateway.env << 'ENVEOF'
+NEON_DEV_HOST=${NEON_DEV_HOST}
+NEON_DEV_PORT=${NEON_DEV_PORT:-5432}
+NEON_DEV_DATABASE=${NEON_DEV_DATABASE}
+NEON_DEV_USER=${NEON_DEV_USER}
+NEON_DEV_PASSWORD=${NEON_DEV_PASSWORD}
+NEON_DEV_SSL_MODE=${NEON_DEV_SSL_MODE:-require}
+UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT:-6379}
+UPSTASH_REDIS_PASSWORD=${UPSTASH_REDIS_PASSWORD}
+JWT_SECRET=${JWT_SECRET}
+KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
+KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI}
+NAVER_CLIENT_ID=${NAVER_CLIENT_ID}
+NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
+NAVER_REDIRECT_URI=${NAVER_REDIRECT_URI}
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+FRONTEND_CALLBACK_URL=${FRONTEND_CALLBACK_URL}
+APP_COOKIE_SECURE=true
+APP_COOKIE_DOMAIN=kanggyeonggu.store
+SPRING_PROFILES_ACTIVE=prod
+ENVEOF
+          chmod 600 /home/ubuntu/gateway.env
+          echo "gateway.env written OK"
+          EOF
 
       - name: Setup virtual environment & start app
         run: |
