@@ -4,12 +4,31 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      ssh_smoke_only:
+        description: "true면 SSH·시크릿 검증만 하고 rsync/배포는 생략"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-ec2-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.ssh_smoke_only == 'true') }}
     runs-on: ubuntu-latest
 
     env:
+      # 모노레포: 실제 FastAPI 앱 루트 (구 app/ 이전 위치)
+      APP_SRC: backend/ontology/apps
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -49,24 +68,44 @@ jobs:
           ssh-keyscan "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           echo "Known hosts entries for $EC2_HOST: $(grep -c . ~/.ssh/known_hosts || echo 0)"
 
+      - name: Verify SSH login (EC2)
+        run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "echo SSH_OK user=\$(whoami) host=\$(hostname)"
+
       - name: Deploy application files
         run: |
-          echo "Creating app dir and transferring files (max 90s)..."
+          if [ ! -d "$APP_SRC" ]; then echo "::error::APP_SRC directory missing: $APP_SRC"; exit 1; fi
+          echo "Creating app dir and transferring files from $APP_SRC (max 90s)..."
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR"
           timeout 90 rsync -avz --delete --info=progress2 \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='.git' \
+            --exclude='.venv/' \
+            --exclude='venv/' \
+            --exclude='.mypy_cache/' \
+            --exclude='.ruff_cache/' \
+            --exclude='.pytest_cache/' \
+            --exclude='.cache/' \
+            --exclude='*.egg-info/' \
             --exclude='artifacts/' \
             --exclude='data/' \
             --exclude='training/pipelines/' \
             --exclude='training/models/' \
             --exclude='training/data/' \
             --exclude='scripts/' \
+            --exclude='*.safetensors' \
+            --exclude='*.pt' \
+            --exclude='*.pth' \
+            --exclude='*.ckpt' \
+            --exclude='*.bin' \
+            --exclude='checkpoint-*/' \
+            --exclude='prequantized_bnb4/' \
             --timeout=60 \
             -e "ssh $SSH_OPTS" \
-            app/ $EC2_USERNAME@$EC2_HOST:$APP_DIR/ || { echo "::error::rsync timed out or failed"; exit 1; }
+            "$APP_SRC/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/ || { echo "::error::rsync timed out or failed"; exit 1; }
           echo "Files transferred OK"
 
       - name: Deploy fine-tuned adapters only
@@ -75,10 +114,16 @@ jobs:
           APP_DIR=/home/ubuntu/app
           # ExaOne 역량 어댑터, LLaMA 스팸 어댑터만 EC2로 전송 (경로 있을 때만)
           for rel in "artifacts/fine_tuned/exaone/competency_adapters" "artifacts/fine_tuned/llama/spam_adapters"; do
-            if [ -d "app/$rel" ]; then
+            if [ -d "$APP_SRC/$rel" ]; then
               echo "Syncing $rel..."
               ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR/$rel"
-              rsync -avz --timeout=60 -e "ssh $SSH_OPTS" "app/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ || true
+              rsync -avz --timeout=60 \
+                --exclude='checkpoint-*/' \
+                --exclude='prequantized_bnb4/' \
+                --exclude='*.pt' \
+                --exclude='*.pth' \
+                --exclude='*.ckpt' \
+                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ || true
             else
               echo "Skip $rel (not found)"
             fi
@@ -239,3 +284,33 @@ jobs:
             cat /home/ubuntu/app.pid 2>/dev/null || echo "No PID file found"
           ENDSSH
           exit 1
+
+  # Actions 탭 → Deploy to EC2 → Run workflow → ssh_smoke_only: true 로 SSH·시크릿만 검증
+  ssh-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.ssh_smoke_only == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Add EC2 to known hosts
+        run: |
+          if [ -z "$EC2_HOST" ]; then echo "::error::EC2_HOST secret is not set"; exit 1; fi
+          if [ -z "$EC2_USERNAME" ]; then echo "::error::EC2_USERNAME secret is not set"; exit 1; fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Verify SSH login (EC2)
+        run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" "echo SSH_SMOKE_OK user=\$(whoami) host=\$(hostname)"

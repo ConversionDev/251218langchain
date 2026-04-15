@@ -1,0 +1,45 @@
+# ============================================================================
+# Gateway Service Docker Compose 설정
+# ============================================================================
+# API Gateway + OAuth Service + User Service 통합 실행용
+#
+# 사용 예시 (레포 루트 .env 단일 사용):
+#   cd backend/gateway
+#   docker compose up -d
+#
+# 포함 서비스:
+#   - Gateway (8080) - OAuth Service와 User Service 포함
+# ============================================================================
+
+services:
+  # ===================
+  # API Gateway (OAuth Service + User Service 통합)
+  # ===================
+  gateway:
+    # Docker Hub 이미지 사용
+    image: rkdrudrn1031/api.kanggyeonggu.store:v2
+    # 로컬 빌드 사용 시 아래 주석 해제하고 위 image 주석 처리
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: gateway
+    ports:
+      - "8080:8080"
+    env_file:
+      - ../../.env # 레포 루트 .env (compose 파일 위치: backend/gateway → ../../)
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-default-secret-key}
+    networks:
+      - gateway-network
+    restart: on-failure
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+networks:
+  gateway-network:
+    driver: bridge
+    name: gateway-network

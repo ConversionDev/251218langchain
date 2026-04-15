@@ -61,26 +61,40 @@ libs/langchain/
 
 # Fine-tuned models and artifacts
 app/artifacts/
+backend/ontology/apps/artifacts/
+
+# 학습 체크포인트·대용량 양자화 디렉터리(실수 커밋 방지, 레포 내 어느 경로든)
+**/fine_tuned/**/checkpoint-*/
+**/fine_tuned/**/prequantized_bnb4/
+**/artifacts/**/*.safetensors
 
 # Unsloth compiled cache (기존 위치 및 새 위치 모두)
 app/unsloth_compiled_cache/
 app/core/resource_manager/unsloth_compiled_cache/
+backend/ontology/apps/unsloth_compiled_cache/
+backend/ontology/apps/core/resource_manager/unsloth_compiled_cache/
 
 # Disclosure: PDF 원본·추출 텍스트 (용량 큼, 로컬에서 pdf_extract로 생성)
 app/data/disclosure/*.pdf
 app/data/disclosure/*_alter.txt
+backend/ontology/apps/data/disclosure/*.pdf
+backend/ontology/apps/data/disclosure/*_alter.txt
 
 # 대용량 생성 데이터 (로컬 학습/파이프라인 결과물)
 app/data/competency_anchors/prepared/
 app/data/competency_anchors/sft/
 app/data/sft_dataset/
+backend/ontology/apps/data/competency_anchors/prepared/
+backend/ontology/apps/data/competency_anchors/sft/
+backend/ontology/apps/data/sft_dataset/
 
-# env_mapping: 대용량·외부 데이터·생성물 (푸시 제외)
-app/data/env_mapping/electricity_hourly_dataset.tsf
-app/data/env_mapping/zvg-cas-list-d.xlsx
-app/data/env_mapping/*.pdf
-app/data/env_mapping/check_battery_final_result.txt
-app/data/env_mapping/한국전력거래소_시간별*.csv
+# 스팸 SFT 전체 학습본 (용량 큼)
+**/data/spam/sft/train_full.jsonl
+
+# Gateway / JVM 빌드 산출물
+backend/gateway/.gradle/
+backend/gateway/build/
+backend/gateway/**/build/
 
 # Python 가상환경·캐시
 .venv/

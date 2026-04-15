@@ -7,6 +7,7 @@ import { LogIn, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { startOAuthLogin, type OAuthProvider } from "@/modules/auth/gatewayAuth";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 6;
@@ -41,7 +42,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const validate = (): boolean => {
@@ -68,15 +69,17 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     if (!validate()) return;
+    setError("계정 로그인은 Spring 게이트웨이에서 소셜(카카오·네이버·구글)로 제공합니다. 아래 소셜 버튼을 이용해 주세요.");
+  };
 
-    setLoading(true);
+  const handleOAuth = async (provider: OAuthProvider) => {
+    setError(null);
+    setOauthLoading(provider);
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      router.push("/demo");
-    } catch {
-      setError("로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.");
-    } finally {
-      setLoading(false);
+      await startOAuthLogin(provider);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "소셜 로그인을 시작할 수 없습니다. 게이트웨이(8080)가 켜져 있는지 확인해 주세요.");
+      setOauthLoading(null);
     }
   };
 
@@ -96,10 +99,70 @@ export default function LoginPage() {
             <h2 className="text-lg font-semibold">로그인</h2>
           </div>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            HR Insight 계정으로 로그인하세요.
+            Spring 게이트웨이(8080) OAuth로 로그인합니다. 로그인 후 대시보드로 이동합니다.
           </p>
 
-          <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+          <div className="mt-6 space-y-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={oauthLoading !== null}
+              onClick={() => handleOAuth("kakao")}
+              className="h-11 w-full border-[#FEE500] bg-[#FEE500] text-[#191919] hover:bg-[#fdd835] disabled:opacity-70"
+            >
+              {oauthLoading === "kakao" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  카카오 연결 중…
+                </>
+              ) : (
+                "카카오로 로그인"
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={oauthLoading !== null}
+              onClick={() => handleOAuth("naver")}
+              className="h-11 w-full border-[#03C75A] bg-[#03C75A] text-white hover:bg-[#02b350] disabled:opacity-70"
+            >
+              {oauthLoading === "naver" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  네이버 연결 중…
+                </>
+              ) : (
+                "네이버로 로그인"
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={oauthLoading !== null}
+              onClick={() => handleOAuth("google")}
+              className="h-11 w-full border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-white/20 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15"
+            >
+              {oauthLoading === "google" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Google 연결 중…
+                </>
+              ) : (
+                "Google로 로그인"
+              )}
+            </Button>
+          </div>
+
+          <div className="relative my-8">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <span className="w-full border-t border-slate-200 dark:border-white/10" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-slate-500 dark:bg-slate-800 dark:text-slate-400">또는 (데모)</span>
+            </div>
+          </div>
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
             {error && (
               <div
                 role="alert"
@@ -122,7 +185,7 @@ export default function LoginPage() {
                 placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
+                disabled={oauthLoading !== null}
                 className="border-slate-200 bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500"
                 aria-invalid={!!error}
               />
@@ -148,7 +211,7 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
+                disabled={oauthLoading !== null}
                 className="border-slate-200 bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500"
                 aria-invalid={!!error}
               />
@@ -160,7 +223,7 @@ export default function LoginPage() {
                 id="login-remember"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                disabled={loading}
+                disabled={oauthLoading !== null}
                 className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-white/20 dark:bg-white/5"
               />
               <Label
@@ -173,20 +236,12 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              disabled={loading}
-              className="mt-2 w-full gap-2 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 disabled:opacity-70"
+              disabled={oauthLoading !== null}
+              variant="secondary"
+              className="mt-2 w-full gap-2 disabled:opacity-70"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  로그인 중...
-                </>
-              ) : (
-                <>
-                  로그인
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
+              이메일 로그인 안내
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
 
@@ -198,7 +253,7 @@ export default function LoginPage() {
               type="button"
               variant="outline"
               onClick={handleDemoProceed}
-              disabled={loading}
+              disabled={oauthLoading !== null}
               className="mt-3 w-full gap-2 border-slate-200 dark:border-white/10"
             >
               데모: 로그인 없이 역할 선택하기

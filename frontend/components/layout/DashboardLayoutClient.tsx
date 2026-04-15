@@ -1,6 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
+import { GatewayTokenCapture } from "@/components/auth/GatewayTokenCapture";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { ChatPanel } from "@/modules/chat/components/ChatPanel";
@@ -15,6 +17,9 @@ export function DashboardLayoutClient({
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-[#e8f5ef] via-[#f0f5f0] to-[#e8f5ef]/80 dark:from-[#0a0a0a] dark:via-[#0f0f0f] dark:to-[#0a0a0a]">
+      <Suspense fallback={null}>
+        <GatewayTokenCapture />
+      </Suspense>
       <Sidebar />
       <main className="pl-56">
         <Header />

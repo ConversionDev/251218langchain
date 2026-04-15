@@ -1,0 +1,19 @@
+# Gradle 설정 파일 (Windows 경로 포함 - Docker 빌드 시 제외)
+gradle.properties
+
+# 빌드 결과물 (Docker 빌드 시 재빌드)
+build/
+bin/
+
+# IDE 설정
+.idea/
+.vscode/
+*.iml
+
+# 로그 파일
+*.log
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
