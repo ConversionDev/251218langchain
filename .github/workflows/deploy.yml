@@ -232,35 +232,33 @@ jobs:
       - name: Write gateway.env on EC2
         run: |
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
-          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" bash -s << EOF
-          cat > /home/ubuntu/gateway.env << 'ENVEOF'
-NEON_DEV_HOST=${NEON_DEV_HOST}
-NEON_DEV_PORT=${NEON_DEV_PORT:-5432}
-NEON_DEV_DATABASE=${NEON_DEV_DATABASE}
-NEON_DEV_USER=${NEON_DEV_USER}
-NEON_DEV_PASSWORD=${NEON_DEV_PASSWORD}
-NEON_DEV_SSL_MODE=${NEON_DEV_SSL_MODE:-require}
-UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
-UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT:-6379}
-UPSTASH_REDIS_PASSWORD=${UPSTASH_REDIS_PASSWORD}
-JWT_SECRET=${JWT_SECRET}
-KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
-KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
-KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI}
-NAVER_CLIENT_ID=${NAVER_CLIENT_ID}
-NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
-NAVER_REDIRECT_URI=${NAVER_REDIRECT_URI}
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
-FRONTEND_CALLBACK_URL=${FRONTEND_CALLBACK_URL}
-APP_COOKIE_SECURE=true
-APP_COOKIE_DOMAIN=kanggyeonggu.store
-SPRING_PROFILES_ACTIVE=prod
-ENVEOF
-          chmod 600 /home/ubuntu/gateway.env
+          {
+            printf 'NEON_DEV_HOST=%s\n'          "${NEON_DEV_HOST}"
+            printf 'NEON_DEV_PORT=%s\n'          "${NEON_DEV_PORT:-5432}"
+            printf 'NEON_DEV_DATABASE=%s\n'      "${NEON_DEV_DATABASE}"
+            printf 'NEON_DEV_USER=%s\n'          "${NEON_DEV_USER}"
+            printf 'NEON_DEV_PASSWORD=%s\n'      "${NEON_DEV_PASSWORD}"
+            printf 'NEON_DEV_SSL_MODE=%s\n'      "${NEON_DEV_SSL_MODE:-require}"
+            printf 'UPSTASH_REDIS_HOST=%s\n'     "${UPSTASH_REDIS_HOST}"
+            printf 'UPSTASH_REDIS_PORT=%s\n'     "${UPSTASH_REDIS_PORT:-6379}"
+            printf 'UPSTASH_REDIS_PASSWORD=%s\n' "${UPSTASH_REDIS_PASSWORD}"
+            printf 'JWT_SECRET=%s\n'             "${JWT_SECRET}"
+            printf 'KAKAO_REST_API_KEY=%s\n'     "${KAKAO_REST_API_KEY}"
+            printf 'KAKAO_CLIENT_SECRET=%s\n'    "${KAKAO_CLIENT_SECRET}"
+            printf 'KAKAO_REDIRECT_URI=%s\n'     "${KAKAO_REDIRECT_URI}"
+            printf 'NAVER_CLIENT_ID=%s\n'        "${NAVER_CLIENT_ID}"
+            printf 'NAVER_CLIENT_SECRET=%s\n'    "${NAVER_CLIENT_SECRET}"
+            printf 'NAVER_REDIRECT_URI=%s\n'     "${NAVER_REDIRECT_URI}"
+            printf 'GOOGLE_CLIENT_ID=%s\n'       "${GOOGLE_CLIENT_ID}"
+            printf 'GOOGLE_CLIENT_SECRET=%s\n'   "${GOOGLE_CLIENT_SECRET}"
+            printf 'GOOGLE_REDIRECT_URI=%s\n'    "${GOOGLE_REDIRECT_URI}"
+            printf 'FRONTEND_CALLBACK_URL=%s\n'  "${FRONTEND_CALLBACK_URL}"
+            printf 'APP_COOKIE_SECURE=true\n'
+            printf 'APP_COOKIE_DOMAIN=kanggyeonggu.store\n'
+            printf 'SPRING_PROFILES_ACTIVE=prod\n'
+          } | ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" \
+              "cat > /home/ubuntu/gateway.env && chmod 600 /home/ubuntu/gateway.env"
           echo "gateway.env written OK"
-          EOF
 
       - name: Setup virtual environment & start app
         run: |
