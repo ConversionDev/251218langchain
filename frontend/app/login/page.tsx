@@ -237,7 +237,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={oauthLoading !== null}
-              variant="secondary"
+              variant="outline"
               className="mt-2 w-full gap-2 disabled:opacity-70"
             >
               이메일 로그인 안내
