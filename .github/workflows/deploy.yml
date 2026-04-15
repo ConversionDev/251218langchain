@@ -373,6 +373,68 @@ jobs:
             fi
           ENDSSH
 
+      - name: Build Spring Gateway jar
+        run: |
+          echo "☕ Building Spring Gateway jar..."
+          cd backend/gateway
+          chmod +x ./gradlew
+          ./gradlew bootJar -x test --no-daemon
+          JAR=$(ls build/libs/*.jar | head -1)
+          echo "✅ Built: $JAR"
+          echo "GATEWAY_JAR=$JAR" >> $GITHUB_ENV
+
+      - name: Deploy Gateway jar to EC2
+        run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          echo "📦 Uploading Gateway jar to EC2..."
+          rsync -avz --info=progress2 \
+            -e "ssh $SSH_OPTS" \
+            "$GATEWAY_JAR" \
+            "$EC2_USERNAME@$EC2_HOST:/home/ubuntu/gateway.jar"
+          echo "✅ Gateway jar uploaded"
+
+      - name: Start Gateway on EC2
+        run: |
+          SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
+          ssh $SSH_OPTS "$EC2_USERNAME@$EC2_HOST" bash -s << 'GWSH'
+          # 기존 Gateway 프로세스 종료
+          OLD_PID=$(pgrep -f "gateway.jar" || true)
+          if [ -n "$OLD_PID" ]; then
+            echo "🛑 Stopping old Gateway (PID: $OLD_PID)..."
+            kill "$OLD_PID" || true
+            sleep 3
+          fi
+
+          # gateway.env 존재 확인
+          if [ ! -f /home/ubuntu/gateway.env ]; then
+            echo "❌ /home/ubuntu/gateway.env not found"
+            exit 1
+          fi
+
+          # Gateway 실행
+          echo "🚀 Starting Gateway..."
+          set -a
+          source /home/ubuntu/gateway.env
+          set +a
+          nohup java -jar /home/ubuntu/gateway.jar \
+            > /home/ubuntu/gateway.log 2>&1 &
+          echo $! > /home/ubuntu/gateway.pid
+          echo "Gateway PID: $(cat /home/ubuntu/gateway.pid)"
+
+          # 기동 대기 (최대 30초)
+          for i in $(seq 1 10); do
+            sleep 3
+            if curl -sf http://127.0.0.1:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ Gateway is UP"
+              exit 0
+            fi
+            echo "⏳ Waiting for Gateway... ($i/10)"
+          done
+          echo "❌ Gateway failed to start. Last logs:"
+          tail -30 /home/ubuntu/gateway.log
+          exit 1
+          GWSH
+
       - name: Health check
         run: |
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
