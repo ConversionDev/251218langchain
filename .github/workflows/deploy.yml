@@ -407,7 +407,12 @@ jobs:
           if ! command -v java &>/dev/null; then
             echo "📦 Installing Java 21..."
             sudo apt-get update -q
+            sudo apt --fix-broken install -y -q || true
             sudo apt-get install -y -q openjdk-21-jre-headless
+          fi
+          if ! command -v java &>/dev/null; then
+            echo "❌ Java installation failed"
+            exit 1
           fi
           echo "☕ Java: $(java -version 2>&1 | head -1)"
 
