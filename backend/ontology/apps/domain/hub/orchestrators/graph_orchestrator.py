@@ -513,6 +513,17 @@ def _build_forced_tool_calls(user_query: str) -> List[Dict[str, Any]]:
     q_raw = (user_query or "").strip()
     employee_name = _extract_employee_name_from_query(user_query)
 
+    # 단일 직원 속성 질의("강경구의 직급과 부서 알려줘" 등)는
+    # get_employee_info 하나로 충분하다. 불필요한 list_employees·hr_summary
+    # 강제 호출을 피해 프롬프트 토큰을 절감하고 응답 품질을 높인다.
+    _SINGLE_EMP_ATTR_KWS = (
+        "직급", "부서", "직무", "이메일", "기본 정보", "직원 정보",
+        "성과", "실적", "활동", "지표", "역량", "입사일",
+    )
+    is_single_employee_attr = bool(employee_name) and any(
+        k in q_raw for k in _SINGLE_EMP_ATTR_KWS
+    )
+
     def _append_forced(name: str, args: Dict[str, Any]) -> None:
         if name in forced_names:
             return
@@ -526,11 +537,12 @@ def _build_forced_tool_calls(user_query: str) -> List[Dict[str, Any]]:
             }
         )
 
-    if _needs_hr_summary_prefetch(user_query):
+    if _needs_hr_summary_prefetch(user_query) and not is_single_employee_attr:
         _append_forced("get_hr_summary", {})
 
     # 부서+신입/일반+몇명 질의는 hr_summary 여부와 관계없이 list_employees로 정확한 인원 수 제공
-    if _needs_employee_list_prefetch(user_query):
+    # 단, 단일 직원 속성 질의는 제외한다.
+    if _needs_employee_list_prefetch(user_query) and not is_single_employee_attr:
         is_new_hire_query = ("신입" in q or "지원자" in q)
         is_regular_query = ("기존 직원" in q or "일반 직원" in q)
         is_high_query = ("고성과" in q or "high performer" in q or "highperformer" in q)
@@ -1050,6 +1062,20 @@ def rag_node(state: ChatState) -> ChatState:
     # 로그 레벨과 관계없이 RAG 진입을 확인할 수 있도록 WARNING 사용
     _q = (user_query[:80] + "…") if len(user_query) > 80 else user_query
     logger.warning("[RAG] 질의 처리 중: %s", _q)
+
+    # 단일 직원 속성 질의("강경구의 직급과 부서 알려줘" 등)는 get_employee_info
+    # 도구가 정답을 바로 제공하므로, 긴 employees RAG 문서 주입을 생략해
+    # 프롬프트 토큰과 CPU 추론 시간을 크게 줄인다.
+    _fast_name = _extract_employee_name_from_query(user_query)
+    if _fast_name and any(
+        k in user_query for k in ("직급", "부서", "직무", "이메일", "기본 정보", "직원 정보")
+    ):
+        logger.info(
+            "[RAG] 단일 직원 속성 질의 감지(name=%s) → RAG 생략, get_employee_info 전용 경로",
+            _fast_name,
+        )
+        return {"context": "", "rag_sources": []}
+
     routes = _infer_query_routes(user_query)
     logger.info(
         "[RAG] route: employees=%s, performance_records=%s, competency_anchors=%s, disclosures=%s",
