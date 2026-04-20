@@ -300,6 +300,7 @@ jobs:
             # LLM 설정을 .env 파일로 고정 (export만으로는 nohup 프로세스에 전달 안 되는 경우 대비)
             printf 'LLM_PROVIDER=llama_cpp\n' > $APP_DIR/.env
             printf 'EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf\n' >> $APP_DIR/.env
+            printf 'EXAONE_GGUF_N_CTX=4096\n' >> $APP_DIR/.env
 
             # 앱 시작
             echo "🚀 Starting application..."
