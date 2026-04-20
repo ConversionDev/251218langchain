@@ -74,6 +74,8 @@ jobs:
       VENV_DIR: /home/ubuntu/venv
       LOG_FILE: /home/ubuntu/app.log
       PID_FILE: /home/ubuntu/app.pid
+      LLM_PROVIDER: llama_cpp
+      EXAONE_GGUF_PATH: /home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf
       MAX_RETRIES: 15
       RETRY_INTERVAL: 3
 
@@ -187,47 +189,22 @@ jobs:
             "$APP_SRC/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/ || { echo "::error::rsync timed out or failed"; exit 1; }
           echo "Files transferred OK"
 
-      # 메인 rsync는 artifacts/ 전체 제외. ExaOne + 메일 스팸용 LLaMA(fine_tuned/llama 전체)는 별도 동기화.
-      - name: Deploy ExaONE + LLaMA (mail/spam) artifacts
+      # 메인 rsync는 artifacts/ 전체 제외. GGUF만 별도 동기화 (prequantized_bnb4·competency_adapters·llama 불필요).
+      - name: Deploy GGUF artifact
         run: |
           SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new"
           APP_DIR=/home/ubuntu/app
-          for rel in \
-            "artifacts/fine_tuned/exaone/prequantized_bnb4" \
-            "artifacts/fine_tuned/exaone/competency_adapters" \
-            "artifacts/fine_tuned/llama"; do
-            if [ ! -d "$APP_SRC/$rel" ]; then
-              echo "Skip $rel (not found on runner — 로컬/self-hosted에 아티팩트가 있어야 동기화됨)"
-              continue
-            fi
+          rel="artifacts/fine_tuned/exaone/gguf"
+          if [ ! -d "$APP_SRC/$rel" ]; then
+            echo "Skip $rel (CI 러너에 GGUF 없음 — scp로 직접 업로드 필요)"
+          else
             echo "Syncing $rel..."
             ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "mkdir -p $APP_DIR/$rel"
-            if [[ "$rel" == *"/prequantized_bnb4" ]]; then
-              timeout 900 rsync -avz --timeout=600 --info=progress2 \
-                --exclude='checkpoint-*/' \
-                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ \
-                || { echo "::error::rsync failed for $rel"; exit 1; }
-            elif [[ "$rel" == *"/competency_adapters" ]]; then
-              rsync -avz --timeout=180 --info=progress2 \
-                --exclude='checkpoint-*/' \
-                --exclude='prequantized_bnb4/' \
-                --exclude='*.pt' \
-                --exclude='*.pth' \
-                --exclude='*.ckpt' \
-                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ \
-                || { echo "::error::rsync failed for $rel"; exit 1; }
-            else
-              # LLaMA: spam_adapters 등 메일 분류용. 체크포인트만 제외( final_model·토크나이저 등 유지 )
-              rsync -avz --timeout=300 --info=progress2 \
-                --exclude='checkpoint-*/' \
-                --exclude='*.pt' \
-                --exclude='*.pth' \
-                --exclude='*.ckpt' \
-                -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ \
-                || { echo "::error::rsync failed for $rel"; exit 1; }
-            fi
-          done
-          echo "ExaONE + LLaMA artifacts sync done"
+            rsync -avz --timeout=900 --info=progress2 \
+              -e "ssh $SSH_OPTS" "$APP_SRC/$rel/" $EC2_USERNAME@$EC2_HOST:$APP_DIR/$rel/ \
+              || { echo "::error::rsync failed for $rel"; exit 1; }
+            echo "GGUF artifact sync done"
+          fi
 
       - name: Write gateway.env on EC2
         run: |
@@ -320,6 +297,10 @@ jobs:
             pkill -f "$VENV_DIR/bin/python.*main.py" || true
             sleep 2
 
+            # LLM 설정을 .env 파일로 고정 (export만으로는 nohup 프로세스에 전달 안 되는 경우 대비)
+            printf 'LLM_PROVIDER=llama_cpp\n' > $APP_DIR/.env
+            printf 'EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf\n' >> $APP_DIR/.env
+
             # 앱 시작
             echo "🚀 Starting application..."
             cd $APP_DIR
@@ -341,6 +322,8 @@ jobs:
             export HOST=0.0.0.0
             export PORT=8000
             export MODE=api
+            export LLM_PROVIDER=llama_cpp
+            export EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf
             # 배포 환경: Unsloth/LLaMA 캐시를 /tmp로 두어 앱 디스크 부족 방지
             export UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 

@@ -9,11 +9,18 @@ export interface EmployeesPaginatedResult {
   pageSize: number;
 }
 
-/** Neon 직원 목록 조회 (전체, 페이징 없음) */
+/** Neon 직원 목록 조회 (전체). 내부는 페이징 API로 나눠 호출 — 단일 대용량 응답으로 인한 게이트웨이 타임아웃·실패 방지. */
 export async function fetchEmployees(): Promise<Employee[]> {
-  const res = await fetch(`${API_BASE}/api/employees`);
-  if (!res.ok) throw new Error(`Employees fetch failed: ${res.status}`);
-  return res.json();
+  const pageSize = 100;
+  const first = await fetchEmployeesPaginated({ page: 1, pageSize });
+  const totalCount = first.total ?? 0;
+  const collected: Employee[] = [...(first.items ?? [])];
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  for (let p = 2; p <= totalPages; p++) {
+    const next = await fetchEmployeesPaginated({ page: p, pageSize });
+    if (next.items?.length) collected.push(...next.items);
+  }
+  return collected;
 }
 
 /** 직원 목록 페이징 조회. employmentType: 'regular'(기존직원), 'new_hire'(신입) */

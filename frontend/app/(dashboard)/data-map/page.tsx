@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { notFound } from "next/navigation";
 
 const API_BASE =
   typeof window !== "undefined"
@@ -8,6 +9,9 @@ const API_BASE =
     : "http://localhost:8000";
 
 export default function DataMapPage() {
+  if (process.env.NODE_ENV !== "development") {
+    notFound();
+  }
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {

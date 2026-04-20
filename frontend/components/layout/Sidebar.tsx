@@ -20,6 +20,8 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { useDemoRoleStore } from "@/store/useDemoRoleStore";
 import { cn } from "@/lib/utils";
 
+const DATA_MAP_ENABLED = process.env.NODE_ENV === "development";
+
 const navItems: {
   href: string;
   label: string;
@@ -30,7 +32,7 @@ const navItems: {
   { href: "/hr", label: "메인", icon: Home, exact: true },
   { href: "/dashboard", label: "전사 현황", icon: LayoutDashboard },
   { href: "/chat", label: "AI 질의", icon: MessageCircle },
-  { href: "/data-map", label: "데이터 지도", icon: Map },
+  ...(DATA_MAP_ENABLED ? [{ href: "/data-map", label: "데이터 지도", icon: Map }] : []),
   { href: "/core/new-hires", label: "신입 관리", icon: UserPlus },
   { href: "/core/employees", label: "기존 직원", icon: Users },
   { href: "/performance/activities", label: "활동기록", icon: FileText },
