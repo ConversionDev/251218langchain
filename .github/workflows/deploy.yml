@@ -76,6 +76,7 @@ jobs:
       PID_FILE: /home/ubuntu/app.pid
       LLM_PROVIDER: llama_cpp
       EXAONE_GGUF_PATH: /home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf
+      EXAONE_GGUF_N_CTX: 4096
       MAX_RETRIES: 15
       RETRY_INTERVAL: 3
 
@@ -297,10 +298,25 @@ jobs:
             pkill -f "$VENV_DIR/bin/python.*main.py" || true
             sleep 2
 
-            # LLM 설정을 .env 파일로 고정 (export만으로는 nohup 프로세스에 전달 안 되는 경우 대비)
-            printf 'LLM_PROVIDER=llama_cpp\n' > $APP_DIR/.env
-            printf 'EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf\n' >> $APP_DIR/.env
-            printf 'EXAONE_GGUF_N_CTX=4096\n' >> $APP_DIR/.env
+            # FastAPI용 .env 파일 고정: LLM 설정 + DB 연결 정보 + 핵심 시크릿
+            # (export만으로는 nohup 재시작 시 환경변수가 유지되지 않으므로 .env에도 기록)
+            # DATABASE_URL 값에 '&'가 포함되므로 반드시 따옴표로 감쌀 것
+            {
+              printf 'LLM_PROVIDER=llama_cpp\n'
+              printf 'EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf\n'
+              printf 'EXAONE_GGUF_N_CTX=4096\n'
+              printf 'AUTO_MIGRATE=false\n'
+              printf 'DATABASE_URL="%s"\n'            "\$DATABASE_URL_VALUE"
+              printf 'OPENAI_API_KEY="%s"\n'          "\$OPENAI_API_KEY_VALUE"
+              printf 'GEMINI_API_KEY="%s"\n'          "\$GEMINI_API_KEY_VALUE"
+              printf 'UPSTASH_REDIS_REST_URL="%s"\n'  "\$UPSTASH_REDIS_REST_URL_VALUE"
+              printf 'UPSTASH_REDIS_REST_TOKEN="%s"\n' "\$UPSTASH_REDIS_REST_TOKEN_VALUE"
+              printf 'CORS_ORIGINS="%s"\n'            "\$CORS_ORIGINS_VALUE"
+              printf 'HOST=0.0.0.0\n'
+              printf 'PORT=8000\n'
+              printf 'MODE=api\n'
+            } > $APP_DIR/.env
+            chmod 600 $APP_DIR/.env
 
             # 앱 시작
             echo "🚀 Starting application..."
@@ -325,6 +341,7 @@ jobs:
             export MODE=api
             export LLM_PROVIDER=llama_cpp
             export EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf
+            export EXAONE_GGUF_N_CTX=4096
             # 배포 환경: Unsloth/LLaMA 캐시를 /tmp로 두어 앱 디스크 부족 방지
             export UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 
