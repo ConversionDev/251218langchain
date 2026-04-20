@@ -30,10 +30,10 @@ def generate_text(
         생성된 문자열.
     """
     try:
-        from domain.hub.llm.exaone_provider import get_llm  # type: ignore
+        from domain.hub.llm.exaone_provider import get_llm, get_provider_name  # type: ignore
         from langchain_core.messages import HumanMessage  # type: ignore
 
-        llm = get_llm(provider="exaone", max_tokens=max_tokens, temperature=temperature)
+        llm = get_llm(provider=get_provider_name(), max_tokens=max_tokens, temperature=temperature)
         messages = [HumanMessage(content=prompt.strip())]
         response = llm.invoke(messages)
         content = getattr(response, "content", None) or str(response)
@@ -56,12 +56,11 @@ def get_llm(
 
     채팅 에이전트·도구 호출 등에서 사용합니다.
     """
-    from domain.hub.llm.exaone_provider import get_llm as _get_llm  # type: ignore
+    from domain.hub.llm.exaone_provider import get_llm as _get_llm, get_provider_name  # type: ignore
 
-    # provider 중복 전달 방지 (graph_orchestrator 등에서 get_llm(provider=...) 호출 시 kwargs에도 들어감)
-    kwargs.pop("provider", None)
+    prov = kwargs.pop("provider", None) or get_provider_name()
     return _get_llm(
-        provider="exaone",
+        provider=prov,
         temperature=temperature,
         max_tokens=max_tokens,
         **kwargs,

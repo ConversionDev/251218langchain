@@ -16,10 +16,10 @@ class _ExaoneWrapper:
 
     def _get_llm(self) -> Any:
         if self._llm is None:
-            from domain.hub.llm.exaone_provider import get_llm  # type: ignore
+            from domain.hub.llm.exaone_provider import get_llm, get_provider_name  # type: ignore
 
             self._llm = get_llm(
-                provider="exaone",
+                provider=get_provider_name(),
                 temperature=0.3,
                 max_tokens=2048,
             )

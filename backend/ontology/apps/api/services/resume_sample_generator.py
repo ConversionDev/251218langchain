@@ -198,8 +198,9 @@ def _invoke_exaone_for_batch(
     """한 번의 LLM 호출로 count명 분량 생성. dimension이 두드러진 신입 프로필."""
     from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
     from domain.hub.llm import get_llm  # type: ignore
+    from domain.hub.llm.exaone_provider import get_provider_name  # type: ignore
 
-    llm = get_llm(provider="exaone", temperature=temperature, max_tokens=max_tokens)
+    llm = get_llm(provider=get_provider_name(), temperature=temperature, max_tokens=max_tokens)
     # 다이어트 파라미터 전달 (top_p 등은 invoke kwargs로 전달)
     invoke_kwargs = {"max_new_tokens": max_tokens, "temperature": temperature}
     invoke_kwargs["top_p"] = _GENERATION_PARAMS.get("top_p", 0.85)

@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     # ===================
     llm_provider: str = Field(
         default="exaone",
-        description="LLM 프로바이더 (exaone)",
+        description="텍스트 채팅 LLM: exaone(GPU) | llama_cpp(CPU GGUF). 이미지는 gemini_adapter 별도.",
     )
 
     # ===================
@@ -167,6 +167,21 @@ class Settings(BaseSettings):
             "이후 서버 시작 시 re-quantization 없이 ~4GB 파일만 읽으므로 로딩 속도가 대폭 개선됨. "
             "비어 있으면 artifacts/fine_tuned/exaone/prequantized_bnb4 를 자동 감지."
         ),
+    )
+
+    exaone_gguf_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "LLM_PROVIDER=llama_cpp 일 때 로드할 GGUF 파일 경로. "
+            "비어 있으면 EXAONE_GGUF_PATH 환경변수 또는 artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf"
+        ),
+    )
+
+    exaone_gguf_n_ctx: int = Field(
+        default=8192,
+        ge=2048,
+        le=131072,
+        description="llama.cpp 컨텍스트 길이 (GGUF 추론 시)",
     )
 
     # ===================

@@ -681,7 +681,7 @@ def _normalize_ats_result(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def analyze_resume_text(text: str, ats_only: bool = False) -> Dict[str, Any]:
-    """이력서 텍스트 → ExaOne 분석.
+    """이력서 텍스트 → LLM 분석 (LLM_PROVIDER: exaone | llama_cpp).
     ats_only=True: ATS [AI 분석]용 — successDna+successDnaReason만 반환, 텍스트 해시 캐시 사용, 경량 프롬프트.
     ats_only=False: 파일 업로드용 — 전체 정보 반환."""
     if not text or len(text.strip()) < 10:
@@ -689,6 +689,9 @@ def analyze_resume_text(text: str, ats_only: bool = False) -> Dict[str, Any]:
     from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
 
     from domain.hub.llm import get_llm  # type: ignore
+    from domain.hub.llm.exaone_provider import get_provider_name  # type: ignore
+
+    _prov = get_provider_name()
 
     if ats_only:
         cache_key = hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -698,7 +701,7 @@ def analyze_resume_text(text: str, ats_only: bool = False) -> Dict[str, Any]:
             return dict(_text_resume_cache[cache_key])
 
         llm = get_llm(
-            provider="exaone",
+            provider=_prov,
             temperature=_RESUME_TEMPERATURE,
             max_tokens=_RESUME_ATS_MAX_TOKENS,
         )
@@ -722,7 +725,7 @@ def analyze_resume_text(text: str, ats_only: bool = False) -> Dict[str, Any]:
     # apply 폼 채우기 전용 경량 경로 — successDna 제외, 입력·출력 토큰 축소
     user_message = f"[이력서 원문]\n{text[:_RESUME_FORM_TEXT_LIMIT]}"
     llm = get_llm(
-        provider="exaone",
+        provider=_prov,
         temperature=_RESUME_TEMPERATURE,
         max_tokens=_RESUME_FORM_MAX_TOKENS,
     )

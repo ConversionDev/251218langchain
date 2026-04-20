@@ -1,26 +1,33 @@
-"""LLM Provider - ExaOne 통합 인터페이스.
+"""LLM Provider — 텍스트 채팅용 (ExaOne / GGUF).
 
-환경 변수나 설정에 따라 ExaOne LLM을 반환합니다.
-역할: Hub Adapter(domain.hub.llm)의 백엔드.
+이미지·멀티모달 응답은 graph에서 gemini_adapter 직접 호출(LLM Provider 아님).
+
+LLM_PROVIDER 환경변수:
+  - exaone (기본): GPU 로컬. bitsandbytes NF4 + 역량 어댑터.
+  - llama_cpp: CPU 배포. merge+GGUF 단일 파일 + llama-cpp-python.
 """
 
 import os
 import threading
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from langchain_core.language_models import BaseChatModel
 
 _lock_direct_load = threading.Lock()
 
+_SUPPORTED_PROVIDERS = {"exaone", "llama_cpp"}
+
 
 class LLMProvider:
-    """LLM 제공자 - ExaOne 관리."""
+    """텍스트 채팅 LLM — ExaOne 또는 GGUF(llama.cpp)."""
 
     _instances: Dict[str, BaseChatModel] = {}
     _creating: Set[str] = set()  # 순환 호출 방지: 생성 중인 cache_key
     _direct_loaded_llm: Optional[BaseChatModel] = None  # _load_exaone_direct()로 한 번만 로드, 재사용
     _supports_tool_calling: Dict[str, bool] = {
-        "exaone": True,  # EXAONE은 JSON Tool Calling 지원 (프롬프트 기반)
+        "exaone": True,
+        "llama_cpp": True,
     }
 
     @classmethod
@@ -42,12 +49,12 @@ class LLMProvider:
         max_tokens: int = 2048,
         **kwargs,
     ) -> BaseChatModel:
-        """LLM 인스턴스 반환 (ExaOne).
+        """LLM 인스턴스 반환.
 
         Args:
-            provider: LLM 제공자 (기본: exaone)
+            provider: LLM 제공자 (기본: LLM_PROVIDER 환경변수, 없으면 exaone)
             temperature: 생성 온도
-            max_tokens: 생성 시 최대 토큰 수 (HF max_new_tokens와 동일, max_length와 혼용 금지)
+            max_tokens: 최대 생성 토큰 수
             **kwargs: 추가 인자
 
         Returns:
@@ -59,10 +66,15 @@ class LLMProvider:
         if cache_key in cls._instances:
             return cls._instances[cache_key]
 
-        if provider != "exaone":
-            raise ValueError(f"지원하지 않는 LLM Provider: {provider}")
+        if provider not in _SUPPORTED_PROVIDERS:
+            raise ValueError(f"지원하지 않는 LLM Provider: {provider}. 가능: {_SUPPORTED_PROVIDERS}")
 
-        # 순환 호출: ExaoneManager -> wrapper.get_langchain_model() -> get_llm() 재진입 시 직접 로드
+        if provider == "llama_cpp":
+            llm = cls._create_llama_cpp_llm(temperature, max_tokens)
+            cls._instances[cache_key] = llm
+            return llm
+
+        # exaone: 순환 호출 방지
         if cache_key in cls._creating:
             llm = cls._load_exaone_direct()
             cls._instances[cache_key] = llm
@@ -76,6 +88,31 @@ class LLMProvider:
             return llm
         finally:
             cls._creating.discard(cache_key)
+
+    @classmethod
+    def _create_llama_cpp_llm(cls, _temperature: float, _max_tokens: int) -> BaseChatModel:
+        """GGUF + llama.cpp. exaone_gguf_path / EXAONE_GGUF_PATH / 기본 파일명 순으로 경로 결정."""
+        from core.config import get_settings  # type: ignore
+        from core.paths import get_output_dir  # type: ignore
+        from domain.hub.llm.gguf_exaone_chat import (  # type: ignore
+            GgufCompetencyChatModel,
+            load_gguf_llama_singleton,
+        )
+
+        settings = get_settings()
+        path = getattr(settings, "exaone_gguf_path", None) or os.getenv("EXAONE_GGUF_PATH", "").strip()
+        if not path:
+            path = str(get_output_dir() / "exaone" / "gguf" / "exaone_competency_q4_k_m.gguf")
+        p = Path(path)
+        if not p.is_file():
+            raise FileNotFoundError(
+                f"GGUF 파일이 없습니다: {p.resolve()}\n"
+                "scripts/export_exaone_merged_hf_for_gguf.py 실행 후 llama.cpp로 .gguf 변환하고 "
+                "artifacts/fine_tuned/exaone/gguf/ 에 두거나 EXAONE_GGUF_PATH 를 설정하세요."
+            )
+        n_ctx = int(getattr(settings, "exaone_gguf_n_ctx", 8192) or 8192)
+        llama = load_gguf_llama_singleton(str(p.resolve()), n_ctx=n_ctx)
+        return GgufCompetencyChatModel(llama=llama)
 
     @classmethod
     def _load_exaone_direct(cls) -> BaseChatModel:
@@ -105,11 +142,17 @@ class LLMProvider:
     @classmethod
     def list_providers(cls) -> List[str]:
         """지원하는 Provider 목록 반환."""
-        return ["exaone"]
+        return list(_SUPPORTED_PROVIDERS)
 
     @classmethod
     def clear_cache(cls) -> None:
         """캐시된 LLM 인스턴스 정리."""
+        try:
+            from domain.hub.llm.gguf_exaone_chat import reset_gguf_singleton  # type: ignore
+
+            reset_gguf_singleton()
+        except Exception:
+            pass
         cls._instances.clear()
         cls._direct_loaded_llm = None
 
