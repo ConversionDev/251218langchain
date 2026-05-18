@@ -6,8 +6,10 @@ LangGraph 기반 에이전트 API 엔드포인트를 제공합니다.
 """
 
 import base64
+import importlib
 import json
 import logging
+import sys
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
@@ -72,6 +74,14 @@ async def _parse_chat_payload(request: Request) -> Dict[str, Any]:
 
 
 _IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
+def _get_chat_orchestrator() -> Any:
+    """chat_orchestrator 모듈 반환. 이미 로드된 경우 sys.modules 재사용."""
+    key = "domain.hub.orchestrators.chat_orchestrator"
+    if key in sys.modules:
+        return sys.modules[key]
+    return importlib.import_module(key)
 
 
 def _resolve_file_ids_to_payload(payload: Dict[str, Any]) -> None:
@@ -144,8 +154,8 @@ async def agent_upload(files: List[UploadFile] = File(default=[], description="�
     """채팅 첨부용 파일 업로드. 용량·개수 제한 적용 후 임시 저장, file_ids 반환. (BP)"""
     files = files or []
     settings = get_settings()
-    max_count = getattr(settings, "upload_max_files", 5)
-    max_bytes = int(getattr(settings, "upload_max_file_size_mb", 5) * 1024 * 1024)
+    max_count = settings.upload_max_files
+    max_bytes = int(settings.upload_max_file_size_mb * 1024 * 1024)
 
     if len(files) > max_count:
         raise HTTPException(
@@ -173,19 +183,13 @@ async def agent_chat_stream(request: Request):
     _resolve_file_ids_to_payload(payload)
     message = payload.get("message", "")
     try:
-        import importlib
-        import sys
-
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
         from domain.hub.llm import get_provider_name  # type: ignore
 
         provider = payload.get("provider") or get_provider_name()
 
-        if "domain.hub.orchestrators.chat_orchestrator" in sys.modules:
-            graph_module = sys.modules["domain.hub.orchestrators.chat_orchestrator"]
-        else:
-            graph_module = importlib.import_module("domain.hub.orchestrators.chat_orchestrator")
+        graph_module = _get_chat_orchestrator()
         run_agent_stream = graph_module.run_agent_stream
 
         chat_history = None
@@ -267,32 +271,6 @@ async def agent_health():
         return {"status": "error", "error": str(e)}
 
 
-@router.get("/threads/{thread_id}/history")
-async def get_thread_history(thread_id: str):
-    import importlib
-    import sys
-    if "domain.hub.orchestrators.chat_orchestrator" in sys.modules:
-        graph_module = sys.modules["domain.hub.orchestrators.chat_orchestrator"]
-    else:
-        graph_module = importlib.import_module("domain.hub.orchestrators.chat_orchestrator")
-    messages = graph_module.get_thread_history(thread_id)
-    history = []
-    for msg in messages:
-        msg_type = type(msg).__name__
-        role = "user" if msg_type == "HumanMessage" else ("assistant" if msg_type == "AIMessage" else ("system" if msg_type == "SystemMessage" else "tool"))
-        history.append({"role": role, "content": str(msg.content) if hasattr(msg, "content") else str(msg), "type": msg_type})
-    return {"thread_id": thread_id, "messages": history, "message_count": len(history)}
+from api.routers.chat_thread_router import router as _thread_router  # noqa: E402
 
-
-@router.delete("/threads/{thread_id}")
-async def delete_thread(thread_id: str):
-    import importlib
-    import sys
-    if "domain.hub.orchestrators.chat_orchestrator" in sys.modules:
-        graph_module = sys.modules["domain.hub.orchestrators.chat_orchestrator"]
-    else:
-        graph_module = importlib.import_module("domain.hub.orchestrators.chat_orchestrator")
-    success = graph_module.clear_thread_history(thread_id)
-    if success:
-        return {"status": "deleted", "thread_id": thread_id}
-    return {"status": "not_found", "thread_id": thread_id, "message": "스레드를 찾을 수 없거나 이미 삭제되었습니다."}
+router.include_router(_thread_router)

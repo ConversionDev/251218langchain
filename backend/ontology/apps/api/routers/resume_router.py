@@ -12,6 +12,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from api.services.resume_analyzer import analyze_resume_file  # type: ignore
+from core.config import settings  # type: ignore
 from domain.shared.document_extract import SUPPORTED_TEXT_EXTENSIONS  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -44,9 +45,9 @@ async def resume_analyze(file: UploadFile = File(..., description="이력서 파
     if not data or len(data) < 10:
         raise HTTPException(status_code=400, detail="파일 내용이 비어있거나 너무 짧습니다.")
 
-    # 최대 10MB
-    if len(data) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="파일 크기는 10MB를 초과할 수 없습니다.")
+    max_bytes = int(settings.resume_max_file_size_mb * 1024 * 1024)
+    if len(data) > max_bytes:
+        raise HTTPException(status_code=400, detail=f"파일 크기는 {settings.resume_max_file_size_mb:.0f}MB를 초과할 수 없습니다.")
 
     try:
         result: Dict[str, Any] = await asyncio.to_thread(

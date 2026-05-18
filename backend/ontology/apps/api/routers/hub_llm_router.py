@@ -40,6 +40,7 @@ async def llama_classify_spam_endpoint(request: ClassifySpamRequest) -> Classify
         result = classify_spam(request.email_metadata)
         return ClassifySpamResponse(result=result)
     except Exception as e:
+        logger.exception("Llama 스팸 분류 실패")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -88,6 +89,7 @@ async def exaone_generate_endpoint(request: GenerateRequest) -> GenerateResponse
         result = generate_text(prompt=request.prompt.strip(), max_tokens=request.max_tokens)
         return GenerateResponse(result=result)
     except Exception as e:
+        logger.exception("ExaOne 텍스트 생성 실패")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -109,6 +111,7 @@ async def exaone_analyze_email_endpoint(request: AnalyzeEmailRequest) -> Analyze
         )
         return AnalyzeEmailResponse(result=result)
     except Exception as e:
+        logger.exception("ExaOne 이메일 분석 실패")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -159,6 +162,7 @@ async def spam_call_endpoint(request: CallRequest) -> Dict[str, Any]:
                 return {"result": result.data}
             return {"result": result_to_str(result)}
     except Exception as e:
+        logger.exception("/internal/spam/call 실패: tool=%s", request.tool)
         raise HTTPException(status_code=500, detail=str(e))
 
 

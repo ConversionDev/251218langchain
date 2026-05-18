@@ -76,8 +76,10 @@ class Settings(BaseSettings):
         if self.postgres_connection_string:
             return self.postgres_connection_string
 
-        # 기본값 (fallback)
-        return "postgresql://neondb_owner:npg_bNXv7Ll1mrBJ@ep-empty-tree-a15rzl4v-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+        raise ValueError(
+            "DATABASE_URL 또는 POSTGRES_CONNECTION_STRING 환경 변수가 설정되지 않았습니다. "
+            ".env 파일을 확인하세요."
+        )
 
     # ===================
     # LLM 설정
@@ -249,7 +251,13 @@ class Settings(BaseSettings):
         default=5.0,
         ge=0.5,
         le=20.0,
-        description="파일당 최대 크기(MB)",
+        description="채팅 첨부 파일당 최대 크기(MB)",
+    )
+    resume_max_file_size_mb: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=50.0,
+        description="이력서 파일 최대 크기(MB)",
     )
 
     # ===================

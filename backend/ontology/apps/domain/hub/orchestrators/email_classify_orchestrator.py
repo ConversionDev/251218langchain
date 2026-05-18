@@ -8,8 +8,11 @@
 """
 
 import json
+import logging
 import re
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
@@ -126,8 +129,10 @@ def run_email_classify_and_record(
             )
             performance_record_id = record.get("id")
         except Exception:
-            # 기록 실패 시 분류 결과는 그대로 반환, record_id만 없음
-            pass
+            logger.warning(
+                "성과 기록 실패 (employee_id=%s, period=%s) — 분류 결과는 반환",
+                employee_id, period, exc_info=True,
+            )
 
     return {
         "classification": classification,

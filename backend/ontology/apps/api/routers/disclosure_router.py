@@ -8,11 +8,12 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from core.database import SessionLocal  # type: ignore
+from core.database import SessionLocal, get_db  # type: ignore
 from domain.hub.repositories.disclosure_repository import (  # type: ignore
     get_disclosure_doc_count,
     get_disclosure_embedded_count,
@@ -167,21 +168,17 @@ def _run_disclosure_check(payload: DisclosureCheckRequest) -> DisclosureCheckRes
 
 
 @router.get("/status", response_model=DisclosureStatusResponse)
-async def get_disclosure_status() -> DisclosureStatusResponse:
+async def get_disclosure_status(db: Session = Depends(get_db)) -> DisclosureStatusResponse:
     """ISO 30414 문서가 disclosures 테이블에 적재되었는지 조회."""
-    db = SessionLocal()
-    try:
-        total = get_disclosure_doc_count(db)
-        embedded = get_disclosure_embedded_count(db)
-        ratio = (embedded / total) if total > 0 else 0.0
-        return DisclosureStatusResponse(
-            ingested=total > 0,
-            document_count=total,
-            embedded_count=embedded,
-            embedding_ratio=round(ratio, 4),
-        )
-    finally:
-        db.close()
+    total = get_disclosure_doc_count(db)
+    embedded = get_disclosure_embedded_count(db)
+    ratio = (embedded / total) if total > 0 else 0.0
+    return DisclosureStatusResponse(
+        ingested=total > 0,
+        document_count=total,
+        embedded_count=embedded,
+        embedding_ratio=round(ratio, 4),
+    )
 
 
 class EmbeddingRunResponse(BaseModel):
@@ -195,9 +192,8 @@ class EmbeddingRunResponse(BaseModel):
 
 
 @router.post("/embedding/run", response_model=EmbeddingRunResponse)
-async def run_disclosure_embedding() -> EmbeddingRunResponse:
+async def run_disclosure_embedding(db: Session = Depends(get_db)) -> EmbeddingRunResponse:
     """embedding이 null인 공시 문서에 임베딩을 채웁니다."""
-    db = SessionLocal()
     try:
         from domain.shared.embedding import get_disclosure_embedding_model  # type: ignore
 
@@ -219,9 +215,8 @@ async def run_disclosure_embedding() -> EmbeddingRunResponse:
         )
     except Exception as e:
         logger.exception("임베딩 실행 실패: %s", e)
+        db.rollback()
         return EmbeddingRunResponse(success=False, message=f"실패: {str(e)}")
-    finally:
-        db.close()
 
 
 class DisclosureCheckJobResponse(BaseModel):
