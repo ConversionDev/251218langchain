@@ -431,7 +431,16 @@ MCP 서버는 별도 인바운드 어댑터(FastAPI lifespan에서 마운트됨)
 
 ---
 
-### Phase 6 — Port 인터페이스 정의 (선택적, 1주)
+### Phase 6 — Port 인터페이스 정의 (⏸️ 의도적 보류, 2026-06-14)
+
+**보류 결정 근거**: 고려 조건이 현재 충족되지 않음 —
+- DB 전환 계획 없음(Neon Postgres 고정)
+- 테스트 스위트가 아직 없음(무-DB Service 테스트 수요 없음)
+- 멀티 LLM 제공자는 **이미 함수형 provider 패턴으로 구현됨**(`llm_provider` + `get_provider_name`/`list_providers`/`supports_tool_calling`)
+
+→ 지금 Port(ABC/Protocol)를 도입하면 실익 없이 추상화·DI 배선만 늘어남(YAGNI). **트리거 발생 시 해당 부분만 도입**:
+- 테스트 스위트 착수 → 그 Service 의존만 Port화(mock 주입)
+- 새 LLM 제공자/DB 실제 추가 → 해당 어댑터만 Port화
 
 **현실적 조언**: 팀이 작거나 단일 DB/LLM 환경이면 Phase 6는 불필요.  
 다음 조건 중 하나라도 해당하면 고려:
