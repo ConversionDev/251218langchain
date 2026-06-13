@@ -4,6 +4,6 @@
 """
 
 from .middleware import add_cors_middleware
-from api.routers.register_router import register_routes  # noqa: E402
+from api.rest.register_router import register_routes  # noqa: E402
 
 __all__ = ["add_cors_middleware", "register_routes"]

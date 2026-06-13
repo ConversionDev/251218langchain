@@ -181,8 +181,8 @@ def delete_employee(
 
 
 # 서브라우터 include (prefix 없음 — 이 router의 /employees 아래로 마운트됨)
-from api.routers.employee_embedding_router import router as _embedding_router  # noqa: E402
-from api.routers.employee_analysis_router import router as _analysis_router  # noqa: E402
+from api.rest.employee_embedding_router import router as _embedding_router  # noqa: E402
+from api.rest.employee_analysis_router import router as _analysis_router  # noqa: E402
 
 router.include_router(_embedding_router)
 router.include_router(_analysis_router)

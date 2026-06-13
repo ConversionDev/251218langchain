@@ -214,6 +214,6 @@ async def agent_health():
     return ChatService().get_health()
 
 
-from api.routers.chat_thread_router import router as _thread_router  # noqa: E402
+from api.rest.chat_thread_router import router as _thread_router  # noqa: E402
 
 router.include_router(_thread_router)

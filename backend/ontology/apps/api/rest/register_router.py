@@ -51,7 +51,7 @@ def register_routes(
     app.include_router(resume_router, prefix="/api")  # /api/resume/...
 
     # Hub MCP: Llama·ExaOne 호출 수신 (spokes가 HTTP로 호출)
-    from api.routers.hub_llm_router import router as hub_llm_router  # type: ignore
+    from api.rest.hub_llm_router import router as hub_llm_router  # type: ignore
 
     app.include_router(hub_llm_router)
 
