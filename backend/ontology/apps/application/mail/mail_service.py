@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from core.config import get_settings  # type: ignore
-from domain.hub.mail.send_mailgun import send_email as mailgun_send_email  # type: ignore
+from infrastructure.mail.send_mailgun import send_email as mailgun_send_email  # type: ignore
 from infrastructure.orchestration import run_email_classify_and_record  # type: ignore
 from infrastructure.persistence.repositories.employee_repository import get_by_id as employee_get_by_id  # type: ignore
 from infrastructure.persistence.repositories.mail_item_repository import (  # type: ignore

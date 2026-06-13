@@ -7,7 +7,7 @@ verify/parse 분리 없이 parse_and_verify 단일 진입점만 사용 (호출�
 from abc import ABC, abstractmethod
 from typing import Any
 
-from domain.hub.mail.schemas import NormalizedInboundMail  # type: ignore
+from infrastructure.mail.schemas import NormalizedInboundMail  # type: ignore
 
 
 class InboundMailProvider(ABC):

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from application.mail.mail_service import MailService  # type: ignore
 from core.database import SessionLocal, get_db  # type: ignore
-from domain.hub.mail import MailgunProvider  # type: ignore
+from infrastructure.mail import MailgunProvider  # type: ignore
 from infrastructure.orchestration import run_spam_detection  # type: ignore
 from domain.models import EmailRequest, EmailResponse  # type: ignore
 from domain.models import ExaoneResult, LLaMAResult  # type: ignore

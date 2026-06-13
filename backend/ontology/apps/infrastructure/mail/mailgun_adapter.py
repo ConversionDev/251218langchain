@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from core.config import get_settings  # type: ignore
-from domain.hub.mail.schemas import NormalizedInboundMail  # type: ignore
-from domain.hub.mail.providers.base import InboundMailProvider  # type: ignore
+from infrastructure.mail.schemas import NormalizedInboundMail  # type: ignore
+from infrastructure.mail.providers.base import InboundMailProvider  # type: ignore
 
 logger = logging.getLogger(__name__)
 
