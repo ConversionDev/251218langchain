@@ -200,9 +200,15 @@ class Settings(BaseSettings):
     spam_agent_escalation: bool = Field(
         default=False,
         description=(
-            "애매한 스팸 판정(low confidence/UNCERTAIN 등)을 LLM 에이전트로 에스컬레이션할지. "
-            "기본 False(결정론 파이프라인만). True여도 tool-calling 지원 제공자에서만 동작하고, "
-            "실패 시 기존 판정을 유지한다."
+            "애매한 스팸 판정(low confidence/UNCERTAIN 등)을 LLM으로 에스컬레이션할지. "
+            "기본 False(결정론 파이프라인만). 실패 시 기존 판정을 유지한다."
+        ),
+    )
+    spam_agent_llm: str = Field(
+        default="auto",
+        description=(
+            "에스컬레이션 판정 LLM 선택. auto=현재 llm_provider 사용(로컬: 학습/로컬 모델). "
+            "gemini=Gemini로 판정(배포 권장, CPU에서 견고). exaone|llama_cpp도 지정 가능."
         ),
     )
 

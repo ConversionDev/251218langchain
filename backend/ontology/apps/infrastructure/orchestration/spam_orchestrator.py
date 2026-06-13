@@ -295,7 +295,11 @@ def escalation_node(state: SpamState) -> SpamState:
 
     routing_path = state.get("routing_path", "")
     try:
-        refined = run_spam_escalation(state.get("email_metadata", {}))
+        refined = run_spam_escalation(
+            state.get("email_metadata", {}),
+            llama_result=state.get("llama_result"),
+            exaone_result=state.get("exaone_result"),
+        )
     except Exception as e:
         logger.warning("Escalation 노드 오류, 기존 결정 유지: %s", e)
         refined = None

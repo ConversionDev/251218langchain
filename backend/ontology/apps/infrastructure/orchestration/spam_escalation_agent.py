@@ -1,99 +1,115 @@
-"""스팸 에스컬레이션 에이전트 (애매 케이스 전용).
+"""스팸 에스컬레이션 — 애매 케이스 LLM 판정(judge).
 
-결정론 파이프라인(gateway→rule/policy→final_decision)이 **낮은 확신/애매** 판정을 낸
-메일만 이 에이전트로 올린다. LLM이 도구(rule_check / llama_classify / deep_analyze)를
-스스로 골라 다단계로 조사한 뒤 최종 판정을 JSON으로 낸다.
+결정론 파이프라인이 '낮은 확신/애매' 판정을 낸 메일만 여기로 올린다.
+방식: tool-calling 루프 대신 **증거 수집 + LLM 판정**(CPU/GGUF tool-calling 신뢰성 회피).
+  1) 증거 수집: 규칙 점검(rule) + 학습된 LLaMA 분류 결과 + EXAONE 심층 분석
+  2) LLM이 그 증거를 보고 최종 판정(JSON) — 환경별 LLM 선택:
+       - 로컬: 학습/로컬 모델(EXAONE 등, settings.llm_provider)
+       - 배포: Gemini (raw google-generativeai SDK, 신규 의존성 없음)
 
-설계 원칙(안전 우선):
-- 기본 OFF: `settings.spam_agent_escalation` 플래그가 True일 때만 호출됨(스팸 그래프에서 게이트).
-- 애매 케이스 한정: 대량 트래픽은 기존 빠른 경로 그대로 → 비용/지연 영향 최소.
-- 실패 시 None 반환 → 호출자가 **기존 결정을 그대로 유지**(라이브 파이프라인 절대 안 깨짐).
-- tool-calling 미지원 제공자(예: 일부 CPU llama_cpp)면 None 반환 → 기존 결정 유지.
+LLM 선택: settings.spam_agent_llm
+  - "auto"(기본): 현재 llm_provider 사용
+  - "gemini": Gemini로 판정 (배포 권장 — CPU에서 tool-calling 불필요·견고)
+  - "exaone" | "llama_cpp": 해당 로컬 모델로 판정
 
-※ 검증된 langgraph.prebuilt.create_react_agent 사용(미검증 루프 코드 최소화).
+안전: 어떤 단계든 실패하면 None 반환 → 호출자가 기존 결정론 판정을 그대로 유지.
 """
 
-import contextvars
 import json
 import logging
 import re
 from typing import Any, Dict, Optional
 
-from langchain_core.tools import tool  # type: ignore
-
 logger = logging.getLogger(__name__)
 
-# 현재 조사 중인 이메일(도구가 인자 없이 참조). invoke 직전 set, 직후 reset.
-_current_email: contextvars.ContextVar[Dict[str, Any]] = contextvars.ContextVar(
-    "spam_escalation_email"
+_VALID_ACTIONS = {"deliver", "deliver_with_warning", "quarantine", "reject"}
+
+_SYSTEM_PROMPT = (
+    "당신은 한국어 이메일 스팸 판정관입니다. 아래 [수집된 증거]를 종합해 최종 판정을 내리세요.\n"
+    "증거: 규칙 점검 결과, 학습된 분류기의 스팸 확률, EXAONE 심층 분석.\n"
+    "반드시 아래 JSON 한 줄만 출력하세요(설명 금지):\n"
+    '{"action":"deliver|deliver_with_warning|quarantine|reject",'
+    '"is_spam":true|false,"confidence":"low|medium|high",'
+    '"reason_codes":["..."],"analysis":"간단한 근거"}'
 )
 
-_ESCALATION_SYSTEM_PROMPT = (
-    "당신은 한국어 이메일 스팸 판정 보조 에이전트입니다. "
-    "주어진 이메일이 애매하여 정밀 조사가 필요합니다. "
-    "rule_check(규칙 점검), llama_classify(학습된 분류기 확률), deep_analyze(EXAONE 심층 분석) "
-    "도구를 필요한 만큼 호출해 근거를 모은 뒤, 마지막에 반드시 아래 JSON 한 줄만 출력하세요.\n"
-    '{"action": "deliver|deliver_with_warning|quarantine|reject", '
-    '"is_spam": true|false, "confidence": "low|medium|high", '
-    '"reason_codes": ["..."], "analysis": "간단한 근거"}'
-)
 
-_agent: Any = None
-
-
-@tool
-def rule_check() -> str:
-    """현재 이메일에 규칙 기반 스팸 점검(발신자/키워드/링크 등)을 적용해 결과를 반환한다."""
-    from domain.spokes.spam.services.rule_service import RuleService  # type: ignore
-
-    return json.dumps(RuleService().process(_current_email.get()), ensure_ascii=False)
-
-
-@tool
-def llama_classify() -> str:
-    """학습된 LLaMA 스팸 분류기로 현재 이메일의 스팸 확률(spam_prob/label/confidence)을 산출한다."""
-    from infrastructure.mcp.http_client import spam_call  # type: ignore
-
-    raw = spam_call("classify_spam", {"email_metadata": _current_email.get()})
-    return json.dumps(raw or {}, ensure_ascii=False)
-
-
-@tool
-def deep_analyze() -> str:
-    """EXAONE 정책 기반 심층 분석으로 현재 이메일의 위험 코드/근거를 산출한다."""
-    from domain.spokes.spam.services.policy_service import PolicyService  # type: ignore
-
-    return json.dumps(
-        PolicyService().process(_current_email.get(), use_existing_policy=True),
-        ensure_ascii=False,
-    )
-
-
-_TOOLS = [rule_check, llama_classify, deep_analyze]
-
-
-def _format_email(email_metadata: Dict[str, Any]) -> str:
+def _format_email(email: Dict[str, Any]) -> str:
     return (
-        f"제목: {email_metadata.get('subject', '')}\n"
-        f"발신자: {email_metadata.get('sender', '')}\n"
-        f"본문: {str(email_metadata.get('body', ''))[:1500]}"
+        f"제목: {email.get('subject', '')}\n"
+        f"발신자: {email.get('sender', '')}\n"
+        f"본문: {str(email.get('body', ''))[:1500]}"
     )
 
 
-def _get_agent():
-    """create_react_agent 인스턴스 (lazy). tool-calling 지원 시에만 생성."""
-    global _agent
-    if _agent is None:
-        from langgraph.prebuilt import create_react_agent  # type: ignore
-        from infrastructure.llm import get_llm, get_provider_name  # type: ignore
+def _gather_evidence(
+    email: Dict[str, Any],
+    llama_result: Optional[Dict[str, Any]],
+    exaone_result: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """파이프라인 증거를 재활용하고 부족분만 추가 수집."""
+    evidence: Dict[str, Any] = {}
+    # 규칙 점검 (항상, 저렴)
+    try:
+        from domain.spokes.spam.services.rule_service import RuleService  # type: ignore
 
-        llm = get_llm(provider=get_provider_name(), max_tokens=1024, temperature=0.2)
-        _agent = create_react_agent(llm, _TOOLS, prompt=_ESCALATION_SYSTEM_PROMPT)
-    return _agent
+        evidence["rule"] = RuleService().process(email)
+    except Exception as e:
+        evidence["rule"] = {"error": str(e)}
+    # 학습된 LLaMA 분류 결과 (gateway가 이미 산출 → 재활용)
+    evidence["llama"] = llama_result or {}
+    # EXAONE 심층 분석 (policy 경로면 이미 있음, 아니면 추가 수행)
+    if exaone_result:
+        evidence["deep_analysis"] = exaone_result.get("analysis") or exaone_result
+    else:
+        try:
+            from domain.spokes.spam.services.policy_service import PolicyService  # type: ignore
+
+            evidence["deep_analysis"] = PolicyService().process(email, use_existing_policy=True)
+        except Exception as e:
+            evidence["deep_analysis"] = {"error": str(e)}
+    return evidence
 
 
-def _parse_verdict(text: str) -> Optional[Dict[str, Any]]:
-    """LLM 최종 출력에서 JSON 판정 추출. 실패 시 None."""
+def _resolve_llm_choice() -> str:
+    from core.config import get_settings  # type: ignore
+
+    choice = (getattr(get_settings(), "spam_agent_llm", "auto") or "auto").lower()
+    if choice == "auto":
+        from infrastructure.llm import get_provider_name  # type: ignore
+
+        return get_provider_name()
+    return choice
+
+
+def _judge_via_gemini(prompt: str) -> Optional[str]:
+    """Gemini raw SDK로 판정 텍스트 생성 (신규 의존성 없음)."""
+    from core.config import get_settings  # type: ignore
+
+    settings = get_settings()
+    api_key = settings.gemini_api_key
+    if not api_key:
+        logger.info("[SPAM-ESCALATION] GEMINI_API_KEY 없음 → 기존 결정 유지")
+        return None
+    import google.generativeai as genai  # type: ignore
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(settings.gemini_model)
+    resp = model.generate_content(f"{_SYSTEM_PROMPT}\n\n{prompt}")
+    return getattr(resp, "text", None)
+
+
+def _judge_via_local(prompt: str, provider: str) -> Optional[str]:
+    """로컬/학습 모델(EXAONE 등)로 판정 텍스트 생성."""
+    from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
+    from infrastructure.llm import get_llm  # type: ignore
+
+    llm = get_llm(provider=provider, max_tokens=512, temperature=0.2)
+    resp = llm.invoke([SystemMessage(content=_SYSTEM_PROMPT), HumanMessage(content=prompt)])
+    return str(getattr(resp, "content", "") or "")
+
+
+def _parse_verdict(text: Optional[str]) -> Optional[Dict[str, Any]]:
     if not text:
         return None
     m = re.search(r"\{.*\}", text, re.DOTALL)
@@ -103,49 +119,36 @@ def _parse_verdict(text: str) -> Optional[Dict[str, Any]]:
         data = json.loads(m.group(0))
     except Exception:
         return None
-    action = data.get("action")
-    if action not in {"deliver", "deliver_with_warning", "quarantine", "reject"}:
+    if data.get("action") not in _VALID_ACTIONS:
         return None
     return {
-        "action": action,
+        "action": data["action"],
         "is_spam": data.get("is_spam"),
         "confidence": data.get("confidence", "medium"),
-        "reason_codes": data.get("reason_codes", []) or [],
+        "reason_codes": data.get("reason_codes") or [],
         "analysis": data.get("analysis", ""),
     }
 
 
-def run_spam_escalation(email_metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """애매 메일을 에이전트로 정밀 조사 → 정제된 판정(dict) 반환. 실패/미지원 시 None.
-
-    None을 반환하면 호출자는 기존 결정론적 판정을 그대로 유지해야 한다.
-    """
+def run_spam_escalation(
+    email_metadata: Dict[str, Any],
+    llama_result: Optional[Dict[str, Any]] = None,
+    exaone_result: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """애매 메일을 증거 종합 + LLM 판정으로 재판정. 실패 시 None(기존 결정 유지)."""
     try:
-        from infrastructure.llm import get_provider_name, supports_tool_calling  # type: ignore
-
-        provider = get_provider_name()
-        if not supports_tool_calling(provider):
-            logger.info("[SPAM-ESCALATION] tool-calling 미지원(provider=%s) → 기존 결정 유지", provider)
-            return None
-    except Exception as e:
-        logger.warning("[SPAM-ESCALATION] provider 확인 실패 → 기존 결정 유지: %s", e)
-        return None
-
-    token = _current_email.set(email_metadata)
-    try:
-        agent = _get_agent()
-        result = agent.invoke(
-            {"messages": [("user", _format_email(email_metadata))]},
-            config={"recursion_limit": 8},
+        evidence = _gather_evidence(email_metadata, llama_result, exaone_result)
+        prompt = (
+            f"[이메일]\n{_format_email(email_metadata)}\n\n"
+            f"[수집된 증거]\n{json.dumps(evidence, ensure_ascii=False, default=str)}"
         )
-        messages = result.get("messages", []) if isinstance(result, dict) else []
-        final_text = str(getattr(messages[-1], "content", "")) if messages else ""
-        verdict = _parse_verdict(final_text)
+        choice = _resolve_llm_choice()
+        logger.info("[SPAM-ESCALATION] judge LLM=%s", choice)
+        text = _judge_via_gemini(prompt) if choice == "gemini" else _judge_via_local(prompt, choice)
+        verdict = _parse_verdict(text)
         if verdict is None:
             logger.info("[SPAM-ESCALATION] 판정 파싱 실패 → 기존 결정 유지")
         return verdict
     except Exception as e:
         logger.warning("[SPAM-ESCALATION] 실행 실패 → 기존 결정 유지: %s", e)
         return None
-    finally:
-        _current_email.reset(token)
