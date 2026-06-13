@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from core.database import get_db  # type: ignore
-from domain.hub.repositories.performance_record_repository import (  # type: ignore
+from infrastructure.persistence.repositories.performance_record_repository import (  # type: ignore
     create_submission as repo_create_submission,
     list_by_employee,
 )

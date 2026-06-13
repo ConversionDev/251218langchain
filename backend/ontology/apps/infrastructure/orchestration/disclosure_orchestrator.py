@@ -101,7 +101,7 @@ def _embed_and_store_node(state: DisclosureIngestState) -> DisclosureIngestState
 
     from core.database import SessionLocal  # type: ignore
     from core.faiss_store import build_and_save_index  # type: ignore
-    from domain.hub.repositories.disclosure_repository import (  # type: ignore
+    from infrastructure.persistence.repositories.disclosure_repository import (  # type: ignore
         _build_embedding_content,
         save_batch_text_only,
     )

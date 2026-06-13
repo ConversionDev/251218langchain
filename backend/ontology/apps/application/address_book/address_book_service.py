@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.hub.repositories.employee_repository import list_all as employee_list_all  # type: ignore
-from domain.hub.repositories.internal_address_repository import (  # type: ignore
+from infrastructure.persistence.repositories.employee_repository import list_all as employee_list_all  # type: ignore
+from infrastructure.persistence.repositories.internal_address_repository import (  # type: ignore
     create as internal_address_create,
     delete_by_id as internal_address_delete,
     list_all as internal_address_list_all,

@@ -27,7 +27,7 @@ if str(app_dir) not in sys.path:
 
 from core.database import SessionLocal  # type: ignore
 from core.paths import get_resume_samples_dir  # type: ignore
-from domain.hub.repositories.employee_repository import create as repo_create  # type: ignore
+from infrastructure.persistence.repositories.employee_repository import create as repo_create  # type: ignore
 
 _REQUIRED_KEYS = {"id", "name", "jobTitle", "department"}
 _OPTIONAL_BUT_EXPECTED = {"successDna", "resume", "employmentType", "applicationDate", "joinedAt", "gender", "age", "trainingHours", "status"}

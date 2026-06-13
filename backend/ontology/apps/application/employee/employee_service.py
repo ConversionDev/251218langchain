@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from api.services.resume_analyzer import _resume_dict_to_text, analyze_resume_text  # type: ignore
-from domain.hub.repositories.employee_repository import (  # type: ignore
+from infrastructure.persistence.repositories.employee_repository import (  # type: ignore
     backfill_missing_profile_fields,
     build_embedding_content,
     create as repo_create,
@@ -22,7 +22,7 @@ from domain.hub.repositories.employee_repository import (  # type: ignore
     update as repo_update,
     update_one_employee_embedding,
 )
-from domain.hub.repositories.performance_record_repository import (  # type: ignore
+from infrastructure.persistence.repositories.performance_record_repository import (  # type: ignore
     fill_embeddings_for_performance_records,
     list_by_employee as repo_list_performance_by_employee,
 )

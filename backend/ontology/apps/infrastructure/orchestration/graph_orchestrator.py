@@ -136,14 +136,14 @@ def get_hr_summary() -> str:
     입사 확정 = employment_type=regular 이고 입사일(joinedAt) 있음. '전체 직원 수', '공시 완성도', '적재 상태' 등 질문에 사용합니다."""
     try:
         from core.database import SessionLocal  # type: ignore
-        from domain.hub.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
-        from domain.hub.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
-        from domain.hub.repositories.employee_repository import (  # type: ignore
+        from infrastructure.persistence.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
+        from infrastructure.persistence.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
+        from infrastructure.persistence.repositories.employee_repository import (  # type: ignore
             is_new_hire_pipeline_employee_row,
             is_onboarded_regular_employee_row,
             list_all as repo_list_all,
         )
-        from domain.hub.repositories.performance_record_repository import get_performance_record_count  # type: ignore
+        from infrastructure.persistence.repositories.performance_record_repository import get_performance_record_count  # type: ignore
 
         db = SessionLocal()
         try:
@@ -225,7 +225,7 @@ def get_employee_info(name: str) -> str:
         return "이름을 입력해 주세요."
     try:
         from core.database import SessionLocal  # type: ignore
-        from domain.hub.repositories.employee_repository import find_by_name  # type: ignore
+        from infrastructure.persistence.repositories.employee_repository import find_by_name  # type: ignore
 
         db = SessionLocal()
         try:
@@ -274,7 +274,7 @@ def list_employees(
         return "performance_tier는 all, high 중 하나여야 합니다."
     try:
         from core.database import SessionLocal  # type: ignore
-        from domain.hub.repositories.employee_repository import (  # type: ignore
+        from infrastructure.persistence.repositories.employee_repository import (  # type: ignore
             count_for_chat,
             is_new_hire_pipeline_employee_row,
             list_for_chat,
@@ -373,8 +373,8 @@ def get_employee_performance(employee_name_or_id: str, limit: int = 30) -> str:
         return "직원 이름 또는 ID를 입력해 주세요."
     try:
         from core.database import SessionLocal  # type: ignore
-        from domain.hub.repositories.employee_repository import find_by_name, get_by_id  # type: ignore
-        from domain.hub.repositories.performance_record_repository import list_by_employee  # type: ignore
+        from infrastructure.persistence.repositories.employee_repository import find_by_name, get_by_id  # type: ignore
+        from infrastructure.persistence.repositories.performance_record_repository import list_by_employee  # type: ignore
 
         db = SessionLocal()
         try:
@@ -982,15 +982,15 @@ def _build_prefetch_context(
 
     if routes.get("employees") and _needs_hr_summary_prefetch(user_query):
         try:
-            from domain.hub.repositories.employee_repository import (  # type: ignore
+            from infrastructure.persistence.repositories.employee_repository import (  # type: ignore
                 count_all as repo_count_all,
                 is_new_hire_pipeline_employee_row,
                 is_onboarded_regular_employee_row,
                 list_all as repo_list_all,
             )
-            from domain.hub.repositories.performance_record_repository import get_performance_record_count  # type: ignore
-            from domain.hub.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
-            from domain.hub.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
+            from infrastructure.persistence.repositories.performance_record_repository import get_performance_record_count  # type: ignore
+            from infrastructure.persistence.repositories.disclosure_repository import get_disclosure_doc_count  # type: ignore
+            from infrastructure.persistence.repositories.competency_anchor_repository import get_anchor_doc_count  # type: ignore
 
             employee_count = repo_count_all(db)
             rows_all = repo_list_all(db) or []
@@ -1110,18 +1110,18 @@ def rag_node(state: ChatState) -> ChatState:
             disclosure_count_before_threshold = 0
             try:
                 from core.database import SessionLocal  # type: ignore
-                from domain.hub.repositories.disclosure_repository import (  # type: ignore
+                from infrastructure.persistence.repositories.disclosure_repository import (  # type: ignore
                     search_disclosures_with_filter,
                     search_disclosures_hybrid,
                 )
-                from domain.hub.repositories.competency_anchor_repository import (  # type: ignore
+                from infrastructure.persistence.repositories.competency_anchor_repository import (  # type: ignore
                     search_competency_anchors_with_filter,
                     search_competency_anchors_hybrid,
                 )
-                from domain.hub.repositories.employee_repository import (  # type: ignore
+                from infrastructure.persistence.repositories.employee_repository import (  # type: ignore
                     search_employees_with_filter,
                 )
-                from domain.hub.repositories.performance_record_repository import (  # type: ignore
+                from infrastructure.persistence.repositories.performance_record_repository import (  # type: ignore
                     search_performance_records_with_filter,
                     search_performance_records_hybrid,
                 )

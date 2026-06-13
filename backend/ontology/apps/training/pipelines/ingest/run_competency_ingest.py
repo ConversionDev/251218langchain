@@ -24,7 +24,7 @@ if str(app_dir) not in sys.path:
 
 from core.database import SessionLocal  # type: ignore
 from core.faiss_store import build_and_save_index  # type: ignore
-from domain.hub.repositories.competency_anchor_repository import (  # type: ignore
+from infrastructure.persistence.repositories.competency_anchor_repository import (  # type: ignore
     _build_embedding_content,
     save_batch_upsert,
 )

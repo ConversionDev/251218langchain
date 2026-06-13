@@ -239,7 +239,7 @@ domain/models/bases/performance_record.py → infrastructure/persistence/models/
 
 ---
 
-### Phase 2 — Repository 이동 (0.5주, 리스크: 낮음)
+### Phase 2 — Repository 이동 (✅ 완료, 2026-06-13)
 
 **목표**: `domain/hub/repositories/` → `infrastructure/persistence/repositories/`
 
@@ -258,8 +258,9 @@ from infrastructure.persistence.repositories.employee_repository import get_by_i
 ```
 
 **완료 기준**:
-- [ ] `domain/hub/repositories/` 폴더 삭제
-- [ ] 전체 라우터/서비스 import 경로 업데이트
+- [x] `domain/hub/repositories/` 폴더 삭제 → `infrastructure/persistence/repositories/`로 이동
+- [x] 전체 라우터/서비스 import 경로 업데이트 (16개 파일: 라우터2·application5·orchestration3·training5·worker1)
+- [x] import 스모크 테스트 통과 (repo 패키지·employee_service·audit_service 임포트 OK)
 
 ---
 

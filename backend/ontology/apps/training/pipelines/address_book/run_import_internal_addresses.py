@@ -16,7 +16,7 @@ if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 from core.database import SessionLocal  # type: ignore
-from domain.hub.repositories.internal_address_repository import upsert_from_dict  # type: ignore
+from infrastructure.persistence.repositories.internal_address_repository import upsert_from_dict  # type: ignore
 
 _REQUIRED_KEYS = {"id", "type", "display_name", "email"}
 

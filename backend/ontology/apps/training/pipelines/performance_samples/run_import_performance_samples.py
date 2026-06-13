@@ -21,7 +21,7 @@ if str(app_dir) not in sys.path:
 
 from core.database import SessionLocal  # type: ignore
 from core.paths import get_performance_samples_dir  # type: ignore
-from domain.hub.repositories.performance_record_repository import bulk_insert  # type: ignore
+from infrastructure.persistence.repositories.performance_record_repository import bulk_insert  # type: ignore
 
 _REQUIRED_KEYS = {"id", "employeeId", "period", "textType", "text"}
 

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.hub.repositories.performance_record_repository import create_submission  # type: ignore
+from infrastructure.persistence.repositories.performance_record_repository import create_submission  # type: ignore
 from domain.hub.shared.period_utils import get_current_period  # type: ignore
 
 

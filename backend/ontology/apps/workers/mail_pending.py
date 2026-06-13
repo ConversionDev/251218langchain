@@ -23,7 +23,7 @@ from typing import Tuple
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from core.database import SessionLocal  # type: ignore
-from domain.hub.repositories.mail_item_repository import (  # type: ignore
+from infrastructure.persistence.repositories.mail_item_repository import (  # type: ignore
     list_pending_for_worker,
     update as mail_item_update,
 )

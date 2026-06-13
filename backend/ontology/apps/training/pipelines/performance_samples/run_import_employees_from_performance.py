@@ -22,7 +22,7 @@ if str(app_dir) not in sys.path:
 
 from core.database import SessionLocal  # type: ignore
 from core.paths import get_performance_samples_dir  # type: ignore
-from domain.hub.repositories.employee_repository import create as repo_create  # type: ignore
+from infrastructure.persistence.repositories.employee_repository import create as repo_create  # type: ignore
 
 
 def load_and_extract_employees(path: Path) -> tuple[list[dict], list[str]]:

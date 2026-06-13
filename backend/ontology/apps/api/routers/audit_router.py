@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from core.database import get_db  # type: ignore
-from domain.hub.repositories.audit_log_repository import list_logs as repo_list_logs  # type: ignore
+from infrastructure.persistence.repositories.audit_log_repository import list_logs as repo_list_logs  # type: ignore
 
 router = APIRouter(prefix="/audit", tags=["Audit Logs"])
 

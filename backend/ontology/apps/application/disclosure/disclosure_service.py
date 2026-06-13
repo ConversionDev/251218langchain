@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.hub.repositories.disclosure_repository import (  # type: ignore
+from infrastructure.persistence.repositories.disclosure_repository import (  # type: ignore
     fill_embeddings_for_disclosures,
     get_disclosure_doc_count,
     get_disclosure_embedded_count,

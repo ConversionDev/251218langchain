@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from fastapi import Request
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.hub.repositories.audit_log_repository import create_log as repo_create_audit_log  # type: ignore
+from infrastructure.persistence.repositories.audit_log_repository import create_log as repo_create_audit_log  # type: ignore
 
 logger = logging.getLogger(__name__)
 
