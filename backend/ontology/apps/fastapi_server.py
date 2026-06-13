@@ -85,7 +85,7 @@ app = FastAPI(
 )
 
 # 게이트웨이: CORS (진입부)
-from gateway import add_cors_middleware  # type: ignore
+from bootstrap import add_cors_middleware  # type: ignore
 
 add_cors_middleware(app)
 
@@ -238,7 +238,7 @@ from api.routers import (  # type: ignore  # noqa: E402
     employee_router,
     resume_router,
 )
-from gateway import register_routes  # type: ignore  # noqa: E402
+from bootstrap import register_routes  # type: ignore  # noqa: E402
 
 register_routes(
     app,
