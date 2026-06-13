@@ -53,7 +53,7 @@ def _row_to_email_metadata(row: dict) -> dict:
 
 def _classify_spam_with_timeout(email_metadata: dict) -> dict:
     """classify_spam을 CLASSIFY_TIMEOUT_SEC 안에 실행. 초과 시 TimeoutError."""
-    from domain.hub.llm import classify_spam  # type: ignore
+    from infrastructure.llm import classify_spam  # type: ignore
 
     with ThreadPoolExecutor(max_workers=1) as ex:
         future = ex.submit(classify_spam, email_metadata)
@@ -66,7 +66,7 @@ def _warmup_llama() -> None:
     dummy = {"subject": "", "sender": "", "body": "", "recipient": ""}
     try:
         with ThreadPoolExecutor(max_workers=1) as ex:
-            from domain.hub.llm import classify_spam  # type: ignore
+            from infrastructure.llm import classify_spam  # type: ignore
 
             future = ex.submit(classify_spam, dummy)
             future.result(timeout=300)

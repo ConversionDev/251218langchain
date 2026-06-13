@@ -688,8 +688,8 @@ def analyze_resume_text(text: str, ats_only: bool = False) -> Dict[str, Any]:
         raise ValueError("이력서 텍스트가 너무 짧습니다.")
     from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
 
-    from domain.hub.llm import get_llm  # type: ignore
-    from domain.hub.llm.exaone_provider import get_provider_name  # type: ignore
+    from infrastructure.llm import get_llm  # type: ignore
+    from infrastructure.llm.exaone_provider import get_provider_name  # type: ignore
 
     _prov = get_provider_name()
 

@@ -71,7 +71,7 @@ async def _app_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logging.warning("백엔드 초기화 중 오류가 있었습니다: %s", init_error)
     print("\n[INFO] 서버 종료 중...")
     try:
-        from domain.hub.llm.gemini_adapter import _close_genai_client
+        from infrastructure.llm.gemini_adapter import _close_genai_client
         _close_genai_client()
     except Exception:
         pass

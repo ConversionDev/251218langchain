@@ -83,7 +83,7 @@ def _parse_qa_response(raw: str) -> tuple[str, str]:
 def _generate_qa_for_cluster(label: str, samples_text: str, variant: str) -> tuple[str, str]:
     """EXAONE으로 QA 1쌍 생성."""
     try:
-        from domain.hub.llm import generate_text  # type: ignore  # noqa: E402
+        from infrastructure.llm import generate_text  # type: ignore  # noqa: E402
 
         raw = generate_text(
             _qa_prompt(label, samples_text, variant),

@@ -53,7 +53,7 @@ def _parse_label_response(raw: str) -> str:
 def _label_for_cluster(samples_text: str) -> str:
     """로컬 EXAONE으로 주제명 한 줄 받기."""
     try:
-        from domain.hub.llm import generate_text  # type: ignore  # noqa: E402
+        from infrastructure.llm import generate_text  # type: ignore  # noqa: E402
 
         raw = generate_text(
             _label_prompt(samples_text),

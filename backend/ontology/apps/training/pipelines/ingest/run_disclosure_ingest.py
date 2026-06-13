@@ -18,7 +18,7 @@ app_dir = Path(__file__).resolve().parent.parent.parent.parent
 if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
-from domain.hub.orchestrators.disclosure_orchestrator import (
+from infrastructure.orchestration.disclosure_orchestrator import (
     build_documents_config_from_prepared_dir,
     run_disclosure_ingest_orchestrate,
 )

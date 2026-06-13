@@ -103,7 +103,7 @@ def run_email_classify_and_record(
             "raw_response": str,
         }
     """
-    from domain.hub.llm import generate_text  # type: ignore
+    from infrastructure.llm import generate_text  # type: ignore
 
     gen = generate_text_fn or generate_text
     period = period or get_current_period()

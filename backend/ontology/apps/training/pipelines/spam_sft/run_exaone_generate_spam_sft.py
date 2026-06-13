@@ -219,7 +219,7 @@ def run(
             _FEW_SHOT_CONTEXT = ""
     if generate_fn is None:
         try:
-            from domain.hub.llm import generate_text  # type: ignore
+            from infrastructure.llm import generate_text  # type: ignore
             generate_fn = generate_text
         except Exception as e:
             raise RuntimeError(f"ExaOne generate_text 로드 실패: {e}") from e

@@ -16,7 +16,7 @@ class _ExaoneWrapper:
 
     def _get_llm(self) -> Any:
         if self._llm is None:
-            from domain.hub.llm.exaone_provider import get_llm, get_provider_name  # type: ignore
+            from infrastructure.llm.exaone_provider import get_llm, get_provider_name  # type: ignore
 
             self._llm = get_llm(
                 provider=get_provider_name(),

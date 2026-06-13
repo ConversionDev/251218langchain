@@ -185,7 +185,7 @@ def run_agent(
 
     # 이미지만 첨부한 경우: 이미지에서 검색용 문장 추출 → RAG 쿼리로 사용
     if images and (not (user_text or "").strip() or (user_text or "").strip() == "[이미지 첨부]"):
-        from domain.hub.llm.gemini_adapter import get_image_caption_for_rag  # type: ignore
+        from infrastructure.llm.gemini_adapter import get_image_caption_for_rag  # type: ignore
 
         caption = get_image_caption_for_rag(images)
         if caption:
@@ -251,7 +251,7 @@ async def run_agent_stream(
 
     # 이미지만 첨부한 경우: 이미지에서 검색용 문장 추출 → RAG 쿼리로 사용
     if images and (not (user_text or "").strip() or (user_text or "").strip() == "[이미지 첨부]"):
-        from domain.hub.llm.gemini_adapter import get_image_caption_for_rag  # type: ignore
+        from infrastructure.llm.gemini_adapter import get_image_caption_for_rag  # type: ignore
 
         caption = get_image_caption_for_rag(images)
         if caption:
