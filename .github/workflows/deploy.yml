@@ -308,6 +308,7 @@ jobs:
               printf 'EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf\n'
               printf 'EXAONE_GGUF_N_CTX=4096\n'
               printf 'AUTO_MIGRATE=false\n'
+              printf 'SPAM_AGENT_ESCALATION=true\n'
               printf 'DATABASE_URL="%s"\n'            "\$DATABASE_URL_VALUE"
               printf 'OPENAI_API_KEY="%s"\n'          "\$OPENAI_API_KEY_VALUE"
               printf 'GEMINI_API_KEY="%s"\n'          "\$GEMINI_API_KEY_VALUE"
