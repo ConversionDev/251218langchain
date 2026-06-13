@@ -22,7 +22,7 @@ from infrastructure.persistence.repositories.mail_item_repository import (  # ty
     reset_failed_to_pending as mail_item_reset_failed_to_pending,
     update as mail_item_update,
 )
-from domain.hub.shared.mail_owner_resolver import resolve_owner_by_to_email  # type: ignore
+from infrastructure.persistence.repositories.mail_owner_resolver import resolve_owner_by_to_email  # type: ignore
 from domain.models.enums.mail_enums import AiStatus, MailReceiveStatus  # type: ignore
 
 logger = logging.getLogger(__name__)

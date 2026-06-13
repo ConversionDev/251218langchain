@@ -4,7 +4,6 @@ Hub 공통 유틸리티
 도메인·트레이닝 등 여러 모듈에서 사용하는 공통 유틸리티.
 """
 
-from .mail_owner_resolver import resolve_owner_by_to_email  # type: ignore
 from .utils import (
     extract_email_metadata,
     format_email_text,
@@ -19,5 +18,4 @@ __all__ = [
     "format_sft_prompt",
     "load_jsonl",
     "save_jsonl",
-    "resolve_owner_by_to_email",
 ]
