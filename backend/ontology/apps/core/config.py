@@ -197,6 +197,14 @@ class Settings(BaseSettings):
         default=True,
         description="스팸 LoRA 어댑터 로드 여부. True면 artifacts/fine_tuned/llama/spam_adapters 사용.",
     )
+    spam_agent_escalation: bool = Field(
+        default=False,
+        description=(
+            "애매한 스팸 판정(low confidence/UNCERTAIN 등)을 LLM 에이전트로 에스컬레이션할지. "
+            "기본 False(결정론 파이프라인만). True여도 tool-calling 지원 제공자에서만 동작하고, "
+            "실패 시 기존 판정을 유지한다."
+        ),
+    )
 
     # ===================
     # API 키

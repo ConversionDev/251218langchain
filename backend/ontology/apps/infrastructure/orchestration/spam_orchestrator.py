@@ -257,6 +257,67 @@ def final_decision_node(state: SpamState) -> SpamState:
 
 
 # =============================================================================
+# 5-b) Escalation 노드 — 애매 케이스 LLM 에이전트 (기본 OFF, 실패 시 기존 결정 유지)
+# =============================================================================
+
+_AMBIGUOUS_ACTIONS = {"deliver_with_warning", "ask_user_confirm"}
+
+
+def _needs_escalation(state: SpamState) -> bool:
+    """final_decision이 낮은 확신/애매하면 True."""
+    fd = state.get("final_decision") or {}
+    if fd.get("confidence") == "low":
+        return True
+    if fd.get("action") in _AMBIGUOUS_ACTIONS:
+        return True
+    if "LOW_CONFIDENCE" in (fd.get("reason_codes") or []):
+        return True
+    if (state.get("llama_result") or {}).get("label") == "UNCERTAIN":
+        return True
+    return False
+
+
+def _route_after_final(state: SpamState) -> str:
+    """플래그 ON + 애매한 경우에만 escalation으로, 아니면 종료."""
+    try:
+        from core.config import get_settings  # type: ignore
+
+        if get_settings().spam_agent_escalation and _needs_escalation(state):
+            return "escalate"
+    except Exception:
+        pass
+    return "__end__"
+
+
+def escalation_node(state: SpamState) -> SpamState:
+    """애매 케이스를 LLM 에이전트로 재조사. 정제 판정이 나오면 final_decision 갱신, 아니면 유지."""
+    from infrastructure.orchestration.spam_escalation_agent import run_spam_escalation  # type: ignore
+
+    routing_path = state.get("routing_path", "")
+    try:
+        refined = run_spam_escalation(state.get("email_metadata", {}))
+    except Exception as e:
+        logger.warning("Escalation 노드 오류, 기존 결정 유지: %s", e)
+        refined = None
+    if not refined:
+        return {"routing_path": routing_path + " -> Escalation(skip)"}
+    fd = dict(state.get("final_decision") or {})
+    fd.update(
+        {
+            "action": refined["action"],
+            "confidence": refined.get("confidence", fd.get("confidence")),
+            "reason_codes": refined.get("reason_codes") or fd.get("reason_codes", []),
+            "escalated": True,
+            "agent_analysis": refined.get("analysis", ""),
+        }
+    )
+    return {
+        "final_decision": fd,
+        "routing_path": routing_path + " -> Escalation(Agent)",
+    }
+
+
+# =============================================================================
 # 6) 라우팅 결정 — Gateway 이후 규칙 vs 정책 분기
 # =============================================================================
 
@@ -287,6 +348,7 @@ def build_spam_detection_graph():
     g.add_node("gateway", gateway_node)
     g.add_node("policy_service", policy_node)
     g.add_node("final_decision", final_decision_node)
+    g.add_node("escalation", escalation_node)
     g.set_entry_point("gateway")
     g.add_conditional_edges(
         "gateway",
@@ -294,7 +356,13 @@ def build_spam_detection_graph():
         {"final_decision": "final_decision", "policy_service": "policy_service"},
     )
     g.add_edge("policy_service", "final_decision")
-    g.add_edge("final_decision", END)
+    # final_decision 이후: 플래그 ON + 애매하면 escalation, 아니면 종료
+    g.add_conditional_edges(
+        "final_decision",
+        _route_after_final,
+        {"escalate": "escalation", "__end__": END},
+    )
+    g.add_edge("escalation", END)
     return g.compile(checkpointer=checkpointer)
 
 
