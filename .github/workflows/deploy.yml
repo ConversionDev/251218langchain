@@ -292,8 +292,9 @@ jobs:
             sed -e '/^torch==/d' -e '/^torchvision==/d' -e '/^torchaudio==/d' $APP_DIR/requirements-prod.txt > /tmp/requirements-no-torch.txt
             pip install -r /tmp/requirements-no-torch.txt --no-cache-dir
 
-            # 기존 프로세스 종료
+            # 기존 프로세스 종료 (systemd 우선 정지 → 레거시 nohup fallback)
             echo "🛑 Stopping existing application..."
+            sudo systemctl stop rag-api 2>/dev/null || true
             pkill -f "python.*main.py" || true
             pkill -f "$VENV_DIR/bin/python.*main.py" || true
             sleep 2
@@ -312,52 +313,51 @@ jobs:
               printf 'UPSTASH_REDIS_REST_URL="%s"\n'  "\$UPSTASH_REDIS_REST_URL_VALUE"
               printf 'UPSTASH_REDIS_REST_TOKEN="%s"\n' "\$UPSTASH_REDIS_REST_TOKEN_VALUE"
               printf 'CORS_ORIGINS="%s"\n'            "\$CORS_ORIGINS_VALUE"
+              printf 'MAILGUN_WEBHOOK_SIGNING_KEY="%s"\n' "\$MAILGUN_WEBHOOK_SIGNING_KEY_VALUE"
+              printf 'MAILGUN_SKIP_VERIFY="%s"\n'     "\$MAILGUN_SKIP_VERIFY_VALUE"
+              printf 'MAILGUN_DOMAIN="%s"\n'          "\$MAILGUN_DOMAIN_VALUE"
+              printf 'MAILGUN_API_KEY="%s"\n'         "\$MAILGUN_API_KEY_VALUE"
+              printf 'UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache\n'
               printf 'HOST=0.0.0.0\n'
               printf 'PORT=8000\n'
               printf 'MODE=api\n'
             } > $APP_DIR/.env
             chmod 600 $APP_DIR/.env
 
-            # 앱 시작
-            echo "🚀 Starting application..."
-            cd $APP_DIR
+            # systemd 서비스 등록 (crash·reboot 시 자동 재시작). 환경변수는 EnvironmentFile=.env로 주입.
+            echo "🧩 Installing/updating rag-api systemd unit..."
+            {
+              printf '[Unit]\n'
+              printf 'Description=RAG FastAPI (AI/LLM) service\n'
+              printf 'After=network-online.target\n'
+              printf 'Wants=network-online.target\n'
+              printf 'StartLimitIntervalSec=0\n'
+              printf '\n'
+              printf '[Service]\n'
+              printf 'Type=simple\n'
+              printf 'User=ubuntu\n'
+              printf 'WorkingDirectory=%s\n' "$APP_DIR"
+              printf 'EnvironmentFile=%s/.env\n' "$APP_DIR"
+              printf 'ExecStart=%s/bin/python main.py\n' "$VENV_DIR"
+              printf 'Restart=always\n'
+              printf 'RestartSec=10\n'
+              printf 'StandardOutput=append:%s\n' "$LOG_FILE"
+              printf 'StandardError=append:%s\n' "$LOG_FILE"
+              printf '\n'
+              printf '[Install]\n'
+              printf 'WantedBy=multi-user.target\n'
+            } | sudo tee /etc/systemd/system/rag-api.service > /dev/null
 
-            # Python 경로 설정 (app.model import를 위해)
-            export PYTHONPATH="$APP_DIR:\$PYTHONPATH"
-
-            # 환경 변수 설정 (GitHub Secrets → EC2 앱, EC2 ~/.env 수동 불필요)
-            export OPENAI_API_KEY="\$OPENAI_API_KEY_VALUE"
-            export DATABASE_URL="\$DATABASE_URL_VALUE"
-            export GEMINI_API_KEY="\$GEMINI_API_KEY_VALUE"
-            export UPSTASH_REDIS_REST_URL="\$UPSTASH_REDIS_REST_URL_VALUE"
-            export UPSTASH_REDIS_REST_TOKEN="\$UPSTASH_REDIS_REST_TOKEN_VALUE"
-            export MAILGUN_WEBHOOK_SIGNING_KEY="\$MAILGUN_WEBHOOK_SIGNING_KEY_VALUE"
-            export MAILGUN_SKIP_VERIFY="\$MAILGUN_SKIP_VERIFY_VALUE"
-            export MAILGUN_DOMAIN="\$MAILGUN_DOMAIN_VALUE"
-            export MAILGUN_API_KEY="\$MAILGUN_API_KEY_VALUE"
-            export CORS_ORIGINS="\$CORS_ORIGINS_VALUE"
-            export HOST=0.0.0.0
-            export PORT=8000
-            export MODE=api
-            export LLM_PROVIDER=llama_cpp
-            export EXAONE_GGUF_PATH=/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf
-            export EXAONE_GGUF_N_CTX=4096
-            # 배포 환경: Unsloth/LLaMA 캐시를 /tmp로 두어 앱 디스크 부족 방지
-            export UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
-
-            # 로그 파일 미리 생성
             touch $LOG_FILE
+            sudo systemctl daemon-reload
+            sudo systemctl enable rag-api
+            echo "🚀 Starting application (systemd)..."
+            sudo systemctl restart rag-api
 
-            # 애플리케이션 실행
-            nohup $VENV_DIR/bin/python main.py > $LOG_FILE 2>&1 &
-            APP_PID=\$!
-            echo \$APP_PID > $PID_FILE
-            echo "✅ Application started (PID: \$APP_PID)"
-
-            # 프로세스 시작 확인 (FastAPI 바인딩 대기)
-            sleep 6
-            if ps -p \$APP_PID > /dev/null 2>&1; then
-              echo "Process is running"
+            # 기동 확인 (FastAPI 바인딩 대기)
+            sleep 8
+            if systemctl is-active --quiet rag-api; then
+              echo "Process is running (systemd: rag-api)"
 
               # 포트 체크
               sleep 3
@@ -368,7 +368,8 @@ jobs:
                 tail -30 $LOG_FILE 2>/dev/null || echo "No log file found"
               fi
             else
-              echo "❌ Application failed to start. Checking logs..."
+              echo "❌ Application failed to start. Status & logs:"
+              sudo systemctl status rag-api --no-pager -l 2>/dev/null | tail -30 || true
               tail -50 $LOG_FILE 2>/dev/null || echo "No log file found"
               exit 1
             fi
@@ -417,10 +418,11 @@ jobs:
           fi
           echo "☕ Java: $(java -version 2>&1 | head -1)"
 
-          # 기존 Gateway 프로세스 종료
+          # 기존 Gateway 종료 (systemd 우선 정지 → 레거시 nohup fallback)
+          sudo systemctl stop rag-gateway 2>/dev/null || true
           OLD_PID=$(pgrep -f "gateway.jar" || true)
           if [ -n "$OLD_PID" ]; then
-            echo "🛑 Stopping old Gateway (PID: $OLD_PID)..."
+            echo "🛑 Stopping old nohup Gateway (PID: $OLD_PID)..."
             kill "$OLD_PID" || true
             sleep 3
           fi
@@ -431,15 +433,34 @@ jobs:
             exit 1
           fi
 
-          # Gateway 실행
-          echo "🚀 Starting Gateway..."
-          set -a
-          source /home/ubuntu/gateway.env
-          set +a
-          nohup java -jar /home/ubuntu/gateway.jar \
-            > /home/ubuntu/gateway.log 2>&1 &
-          echo $! > /home/ubuntu/gateway.pid
-          echo "Gateway PID: $(cat /home/ubuntu/gateway.pid)"
+          # systemd 서비스 등록 (crash·reboot 시 자동 재시작)
+          JAVA_BIN=$(command -v java)
+          echo "🧩 Installing/updating rag-gateway systemd unit (java: $JAVA_BIN)..."
+          {
+            printf '[Unit]\n'
+            printf 'Description=RAG Spring Gateway (auth/security) service\n'
+            printf 'After=network-online.target\n'
+            printf 'Wants=network-online.target\n'
+            printf 'StartLimitIntervalSec=0\n'
+            printf '\n'
+            printf '[Service]\n'
+            printf 'Type=simple\n'
+            printf 'User=ubuntu\n'
+            printf 'EnvironmentFile=/home/ubuntu/gateway.env\n'
+            printf 'ExecStart=%s -jar /home/ubuntu/gateway.jar\n' "$JAVA_BIN"
+            printf 'Restart=always\n'
+            printf 'RestartSec=10\n'
+            printf 'StandardOutput=append:/home/ubuntu/gateway.log\n'
+            printf 'StandardError=append:/home/ubuntu/gateway.log\n'
+            printf '\n'
+            printf '[Install]\n'
+            printf 'WantedBy=multi-user.target\n'
+          } | sudo tee /etc/systemd/system/rag-gateway.service > /dev/null
+
+          sudo systemctl daemon-reload
+          sudo systemctl enable rag-gateway
+          echo "🚀 Starting Gateway (systemd)..."
+          sudo systemctl restart rag-gateway
 
           # 기동 대기 (최대 60초)
           for i in $(seq 1 20); do
@@ -450,7 +471,8 @@ jobs:
             fi
             echo "⏳ Waiting for Gateway... ($i/20)"
           done
-          echo "❌ Gateway failed to start. Last logs:"
+          echo "❌ Gateway failed to start. Status & logs:"
+          sudo systemctl status rag-gateway --no-pager -l 2>/dev/null | tail -30 || true
           tail -50 /home/ubuntu/gateway.log
           exit 1
           GWSH
@@ -462,17 +484,17 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
             echo "⏳ Attempt $i/$MAX_RETRIES..."
 
-            # 프로세스 확인
-            if ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "ps -p \$(cat $PID_FILE 2>/dev/null) > /dev/null 2>&1"; then
+            # 서비스 활성 확인 (systemd)
+            if ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "systemctl is-active --quiet rag-api"; then
               # Health check
               if ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "curl -f http://localhost:8000/health > /dev/null 2>&1"; then
                 echo "✅ Health check passed!"
                 exit 0
               else
-                echo "⚠️ Health check failed, but process is running. Retrying..."
+                echo "⚠️ Health check failed, but service is active. Retrying..."
               fi
             else
-              echo "❌ Process not found. Checking logs..."
+              echo "❌ rag-api service not active. Checking logs..."
               ssh $SSH_OPTS $EC2_USERNAME@$EC2_HOST "tail -50 $LOG_FILE 2>/dev/null || echo 'No log file'"
             fi
 
@@ -484,6 +506,9 @@ jobs:
 
           echo "❌ Health check failed after $MAX_RETRIES attempts. Showing diagnostics..."
           ssh $EC2_USERNAME@$EC2_HOST << 'ENDSSH'
+            echo "--- rag-api service status ---"
+            sudo systemctl status rag-api --no-pager -l 2>/dev/null | tail -20 || echo "No systemd unit"
+            echo ""
             echo "--- Process Status ---"
             ps aux | grep -E "python.*main.py" | grep -v grep || echo "No process found"
             echo ""
@@ -492,9 +517,6 @@ jobs:
             echo ""
             echo "--- Port 8000 status ---"
             ss -tlnp 2>/dev/null | grep :8000 || netstat -tlnp 2>/dev/null | grep :8000 || echo "Port 8000 not listening"
-            echo ""
-            echo "--- PID file ---"
-            cat /home/ubuntu/app.pid 2>/dev/null || echo "No PID file found"
           ENDSSH
           exit 1
 
