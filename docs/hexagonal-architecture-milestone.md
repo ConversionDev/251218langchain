@@ -211,7 +211,7 @@ class Employee(BaseModel):
 
 ## 6. 마이그레이션 단계별 계획
 
-### Phase 1 — ORM 모델 이동 (1주, 리스크: 중)
+### Phase 1 — ORM 모델 이동 (✅ 완료, 2026-06-13)
 
 **목표**: `domain/models/bases/`의 7개 ORM 파일을 `infrastructure/persistence/models/`로 이동
 
@@ -233,9 +233,12 @@ domain/models/bases/performance_record.py → infrastructure/persistence/models/
 - `domain/models/__init__.py`: re-export 경로 업데이트
 
 **완료 기준**:
-- [ ] `domain/` 하위에 SQLAlchemy `Column`, `relationship` import 없음
-- [ ] `alembic revision --autogenerate` 결과 변경 없음 (스키마 동일)
-- [ ] 서버 기동 후 기존 API 동작 동일
+- [x] `domain/` 하위에 SQLAlchemy `Column`, `relationship` import 없음 (모델 정의 0건. 단 `domain/hub/shared/mail_owner_resolver.py`는 아직 `Session`/`func`로 쿼리 — 모델 정의는 아니므로 본 기준 충족, 추후 infrastructure로 이동 권장)
+- [x] `alembic` metadata 집합 변경 없음 — baseline 6개 테이블(`competency_anchors, disclosures, employees, internal_addresses, mail_items, performance_records`)과 동일 확인
+- [x] import 스모크(라우터·리졸버·repo·env 경로) 통과 / [ ] 실서버 API 동작은 이번 배포로 검증
+
+**실제 이동(7개, `_orm` 접미사)**:
+`employee→employee_orm, mail_item→mail_item_orm, disclosure→disclosure_orm, audit_log→audit_log_orm, competency_anchor→competency_anchor_orm, internal_address→internal_address_orm, performance_record→performance_record_orm`. importer 10개 파일 경로 갱신, `bases/__init__.py`에서 ORM(CompetencyAnchor) 재노출 제거. `infrastructure/persistence/models/__init__.py`는 의도적으로 모델 일괄 import 안 함(metadata 집합 보존).
 
 ---
 

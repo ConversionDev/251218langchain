@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from langchain_core.documents import Document
 from sqlalchemy import and_, or_, text as sql_text
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
-from domain.models.bases.employee import Employee  # type: ignore
+from infrastructure.persistence.models.employee_orm import Employee  # type: ignore
 
 _AGE_BAND_BY_AGE = (
     (30, "under30"),
@@ -396,7 +396,7 @@ def backfill_missing_profile_fields(
     ).all()
 
     # 성과 등급 맥락 맵: employee_id -> high/normal/unknown
-    from domain.models.bases.performance_record import PerformanceRecord  # type: ignore
+    from infrastructure.persistence.models.performance_record_orm import PerformanceRecord  # type: ignore
     perf_rows = db.query(PerformanceRecord.employee_id, PerformanceRecord.grade).all()
     perf_map: Dict[str, str] = {}
     for eid, grade in perf_rows:

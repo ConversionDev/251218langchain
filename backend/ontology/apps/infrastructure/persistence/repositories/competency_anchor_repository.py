@@ -14,7 +14,7 @@ from sqlalchemy import func, text as sql_text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 from sqlalchemy.dialects.postgresql import insert as pg_insert  # type: ignore[import-untyped]
 
-from domain.models.bases.competency_anchor import CompetencyAnchor  # type: ignore
+from infrastructure.persistence.models.competency_anchor_orm import CompetencyAnchor  # type: ignore
 
 # 배치: INSERT 100~500 권장 (전략 §2)
 DEFAULT_INSERT_BATCH = 200

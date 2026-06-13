@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.models.bases.mail_item import MailItem  # type: ignore
+from infrastructure.persistence.models.mail_item_orm import MailItem  # type: ignore
 from domain.models.enums.mail_enums import AiStatus, MailReceiveStatus  # type: ignore
 
 # REJECTED 저장 시 owner_employee_id/folder placeholder (컬럼 NOT NULL 대응)

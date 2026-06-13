@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.models.bases.internal_address import InternalAddress  # type: ignore
+from infrastructure.persistence.models.internal_address_orm import InternalAddress  # type: ignore
 
 
 def _row_to_dict(row: InternalAddress) -> Dict[str, Any]:

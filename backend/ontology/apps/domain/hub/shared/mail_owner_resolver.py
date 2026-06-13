@@ -9,8 +9,8 @@ from typing import Optional
 from sqlalchemy import func  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.models.bases.employee import Employee  # type: ignore
-from domain.models.bases.internal_address import InternalAddress  # type: ignore
+from infrastructure.persistence.models.employee_orm import Employee  # type: ignore
+from infrastructure.persistence.models.internal_address_orm import InternalAddress  # type: ignore
 
 
 def _normalize_email(email: Optional[str]) -> str:

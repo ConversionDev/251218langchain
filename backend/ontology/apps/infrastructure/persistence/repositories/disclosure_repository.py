@@ -12,7 +12,7 @@ from tqdm import tqdm
 from sqlalchemy import text as sql_text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.models.bases.disclosure import Disclosure  # type: ignore
+from infrastructure.persistence.models.disclosure_orm import Disclosure  # type: ignore
 
 # 임베딩 채울 때: inference 128, commit 1024건마다 (4060 Ti 16GB 최종 세팅)
 COMMIT_EVERY_EMBEDDING_ROWS = 1024

@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.models.bases.performance_record import PerformanceRecord  # type: ignore
+from infrastructure.persistence.models.performance_record_orm import PerformanceRecord  # type: ignore
 
 
 def _row_to_dict(row: PerformanceRecord) -> Dict[str, Any]:

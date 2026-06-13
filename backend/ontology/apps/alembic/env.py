@@ -26,12 +26,12 @@ if str(current_dir) not in sys.path:
 # 모델 import (autogenerate용 메타데이터)
 # *_embeddings 테이블은 통합 마이그레이션 001_initial_squashed에서 생성하므로 include_object로 autogenerate에서 제외.
 from core.database import Base  # type: ignore
-from domain.models.bases.competency_anchor import CompetencyAnchor  # noqa: F401
-from domain.models.bases.disclosure import Disclosure  # noqa: F401
-from domain.models.bases.employee import Employee  # noqa: F401
-from domain.models.bases.performance_record import PerformanceRecord  # noqa: F401
-from domain.models.bases.internal_address import InternalAddress  # noqa: F401
-from domain.models.bases.mail_item import MailItem  # noqa: F401
+from infrastructure.persistence.models.competency_anchor_orm import CompetencyAnchor  # noqa: F401
+from infrastructure.persistence.models.disclosure_orm import Disclosure  # noqa: F401
+from infrastructure.persistence.models.employee_orm import Employee  # noqa: F401
+from infrastructure.persistence.models.performance_record_orm import PerformanceRecord  # noqa: F401
+from infrastructure.persistence.models.internal_address_orm import InternalAddress  # noqa: F401
+from infrastructure.persistence.models.mail_item_orm import MailItem  # noqa: F401
 
 # 데이터베이스 설정
 from core.config import get_settings  # type: ignore

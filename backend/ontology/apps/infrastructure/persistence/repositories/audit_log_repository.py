@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from domain.models.bases.audit_log import AuditLog  # type: ignore
+from infrastructure.persistence.models.audit_log_orm import AuditLog  # type: ignore
 
 
 def _row_to_dict(row: AuditLog) -> Dict[str, Any]:

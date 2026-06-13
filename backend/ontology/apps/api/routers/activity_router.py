@@ -15,7 +15,7 @@ from infrastructure.persistence.repositories.performance_record_repository impor
     create_submission as repo_create_submission,
     list_by_employee,
 )
-from domain.models.bases.performance_record import PerformanceRecord  # type: ignore
+from infrastructure.persistence.models.performance_record_orm import PerformanceRecord  # type: ignore
 
 router = APIRouter(prefix="/activity-records", tags=["Activity Records (성과 활동)"])
 
