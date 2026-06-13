@@ -2,7 +2,7 @@
 Hub MCP - Llama·ExaOne HTTP 라우터.
 
 역할: Llama Discriminator·ExaOne Solver HTTP 엔드포인트.
-spokes가 HTTP로 호출. domain.hub.llm으로 실제 처리.
+spokes가 HTTP로 호출. infrastructure.llm으로 실제 처리.
 표준 흐름: /internal/chat/call, /internal/spam/call → Hub가 도메인 MCP에 call_tool 위임.
 """
 
@@ -35,7 +35,7 @@ class ClassifySpamResponse(BaseModel):
 async def llama_classify_spam_endpoint(request: ClassifySpamRequest) -> ClassifySpamResponse:
     """스팸 분류."""
     try:
-        from domain.hub.llm import classify_spam  # type: ignore
+        from infrastructure.llm import classify_spam  # type: ignore
 
         result = classify_spam(request.email_metadata)
         return ClassifySpamResponse(result=result)
@@ -84,7 +84,7 @@ class AnalyzeEmailResponse(BaseModel):
 async def exaone_generate_endpoint(request: GenerateRequest) -> GenerateResponse:
     """ExaOne 텍스트 생성."""
     try:
-        from domain.hub.llm import generate_text  # type: ignore
+        from infrastructure.llm import generate_text  # type: ignore
 
         result = generate_text(prompt=request.prompt.strip(), max_tokens=request.max_tokens)
         return GenerateResponse(result=result)
@@ -97,7 +97,7 @@ async def exaone_generate_endpoint(request: GenerateRequest) -> GenerateResponse
 async def exaone_analyze_email_endpoint(request: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
     """ExaOne 이메일 스팸/위험 분석."""
     try:
-        from domain.hub.llm import analyze_email  # type: ignore
+        from infrastructure.llm import analyze_email  # type: ignore
 
         result = analyze_email(
             subject=request.subject,
