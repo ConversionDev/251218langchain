@@ -12,38 +12,23 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from core.config import get_settings  # type: ignore
+from application.mail.mail_service import MailService  # type: ignore
 from core.database import SessionLocal, get_db  # type: ignore
-from domain.hub.mail import MailgunProvider, NormalizedInboundMail  # type: ignore
-from domain.hub.mail.send_mailgun import send_email as mailgun_send_email  # type: ignore
-from domain.hub.orchestrators import run_email_classify_and_record, run_spam_detection  # type: ignore
-from domain.hub.repositories.mail_item_repository import (  # type: ignore
-    REJECTED_FOLDER,
-    REJECTED_OWNER_PLACEHOLDER,
-    create as mail_item_create,
-    get_by_external_id as mail_item_get_by_external_id,
-    get_by_id as mail_item_get,
-    list_by_folder as mail_item_list,
-    move_to_trash as mail_item_trash,
-    reset_failed_to_pending as mail_item_reset_failed_to_pending,
-    update as mail_item_update,
-)
-from domain.hub.repositories.employee_repository import get_by_id as employee_get_by_id  # type: ignore
-from domain.hub.shared.mail_owner_resolver import resolve_owner_by_to_email  # type: ignore
+from domain.hub.mail import MailgunProvider  # type: ignore
+from domain.hub.orchestrators import run_spam_detection  # type: ignore
 from domain.models import EmailRequest, EmailResponse  # type: ignore
-from domain.models.enums.mail_enums import AiStatus, MailReceiveStatus  # type: ignore
+from domain.models import ExaoneResult, LLaMAResult  # type: ignore
 
 email_router = APIRouter(prefix="/mail", tags=["mail"])
 
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
-# 메일 분류 (성과 / 5대 역량) 요청·응답
+# 메일 분류 (성과 / 5대 역량)
 # ---------------------------------------------------------------------------
-
 
 class ClassifyEmailRequest(BaseModel):
-    """메일 1건 분류 요청. 학습된 모델이 성과·5대 역량 동시 판단."""
-
     subject: str = Field("", description="메일 제목")
     body: Optional[str] = Field(None, description="메일 본문")
     employeeId: str = Field(..., description="발신 직원 ID (성과 기록 시 사용)")
@@ -51,8 +36,6 @@ class ClassifyEmailRequest(BaseModel):
 
 
 class ClassifyEmailResponse(BaseModel):
-    """메일 분류 결과."""
-
     classification: Dict[str, Any] = Field(..., description="is_performance, competency_labels")
     performance_record_id: Optional[str] = Field(None, description="성과로 기록한 경우 레코드 ID")
     raw_response: str = Field("", description="모델 원시 응답 일부 (디버깅용)")
@@ -63,10 +46,9 @@ def classify_email(
     payload: ClassifyEmailRequest,
     db: Session = Depends(get_db),
 ) -> ClassifyEmailResponse:
-    """메일 1건을 분류: 학습된 모델(ExaOne)이 성과 관련·5대 역량 관련 동시 판단 후, 성과로 판단되면 performance_records에 자동 기록."""
+    """메일 1건을 분류: 성과 관련·5대 역량 동시 판단 후, 성과로 판단되면 performance_records에 자동 기록."""
     try:
-        result = run_email_classify_and_record(
-            db,
+        result = MailService(db).classify(
             subject=payload.subject,
             body=payload.body,
             employee_id=payload.employeeId,
@@ -82,18 +64,16 @@ def classify_email(
 
 
 # ---------------------------------------------------------------------------
-# 메일함 공통 (mail_items: 받은/보낸/임시보관/휴지통)
+# 메일함 공통
 # ---------------------------------------------------------------------------
 
 class MailRecipientBody(BaseModel):
-    """수신자 정보 (주소록 1건)."""
     id: str = Field(..., description="주소록 ID (직원 또는 internal_address)")
     displayName: str = Field("", description="표시명")
     email: Optional[str] = Field(None, description="이메일")
 
 
 class SendMailBody(BaseModel):
-    """메일 발송 요청. 저장 후 folder=sent."""
     senderEmployeeId: str = Field(..., description="발신 직원 ID")
     to: MailRecipientBody = Field(..., description="수신자 (주소록 1건)")
     subject: str = Field("", description="제목")
@@ -101,7 +81,6 @@ class SendMailBody(BaseModel):
 
 
 class DraftMailBody(BaseModel):
-    """임시보관 저장 요청."""
     ownerEmployeeId: str = Field(..., description="메일함 소유자(직원 ID)")
     id: Optional[str] = Field(None, description="기존 draft id (수정 시)")
     to: Optional[MailRecipientBody] = Field(None, description="수신자")
@@ -117,19 +96,17 @@ def list_mail(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
-    """폴더별 메일 목록. 받은/보낸/임시보관/휴지통/스팸 공통."""
+    """폴더별 메일 목록."""
     if folder not in ("inbox", "sent", "draft", "trash", "spam"):
         raise HTTPException(status_code=400, detail="folder must be inbox, sent, draft, trash, or spam")
-    return mail_item_list(db, folder=folder, owner_employee_id=ownerEmployeeId, limit=limit, offset=offset)
+    return MailService(db).list_folder(folder, ownerEmployeeId, limit=limit, offset=offset)
 
 
 # ---------------------------------------------------------------------------
-# 수신 (Webhook) — Store-then-Process. 스팸 판정/성과 분류는 워커에서.
+# 수신 (Webhook) — Store-then-Process
 # ---------------------------------------------------------------------------
 
 class ReceiveMailBody(BaseModel):
-    """수신 1건 (테스트용 JSON). 멱등: external_id 존재 시 200. Resolver 실패 시 REJECTED 저장 후 200."""
-
     to_email: str = Field(..., min_length=1, description="수신자 To 주소")
     from_display: str = Field("", description="발신자 표시명")
     from_email: Optional[str] = Field(None, description="발신자 이메일")
@@ -137,64 +114,6 @@ class ReceiveMailBody(BaseModel):
     body: Optional[str] = Field(None, description="본문")
     message_id: Optional[str] = Field(None, description="Message-ID (external_id). 중복 시 200 OK 멱등")
     received_at: Optional[str] = Field(None, description="수신 시각 ISO8601. 없으면 now()")
-
-
-def _save_inbound(
-    db: Session,
-    to_email: str,
-    from_display: str,
-    from_email: Optional[str],
-    subject: str,
-    body: Optional[str],
-    message_id: Optional[str],
-    received_at: datetime,
-) -> tuple[Dict[str, Any], str, int, bool]:
-    """
-    수신 1건 저장 (Store-then-Process). 스팸/성과 분류 없음.
-    Returns: (record_or_existing, folder, status_code, already_stored).
-    """
-    external_id = (message_id or "").strip() or None
-    # 멱등: 이미 있으면 200
-    if external_id:
-        existing = mail_item_get_by_external_id(db, external_id)
-        if existing:
-            return (existing, existing.get("folder") or "inbox", 200, True)
-    owner = resolve_owner_by_to_email(db, to_email.strip())
-    if not owner:
-        record = mail_item_create(
-            db,
-            folder=REJECTED_FOLDER,
-            owner_employee_id=REJECTED_OWNER_PLACEHOLDER,
-            from_display=from_display or "",
-            from_email=from_email,
-            to_email=to_email.strip(),
-            subject=subject or "",
-            body=body,
-            received_at=received_at,
-            external_id=external_id,
-            is_unread=True,
-            status=MailReceiveStatus.REJECTED.value,
-            ai_status=None,
-            spam_score=None,
-        )
-        return (record, REJECTED_FOLDER, 200, False)
-    record = mail_item_create(
-        db,
-        folder="inbox",
-        owner_employee_id=owner,
-        from_display=from_display or "",
-        from_email=from_email,
-        to_email=to_email.strip(),
-        subject=subject or "",
-        body=body,
-        received_at=received_at,
-        external_id=external_id,
-        is_unread=True,
-        status=MailReceiveStatus.RECEIVED.value,
-        ai_status=AiStatus.PENDING.value,
-        spam_score=None,
-    )
-    return (record, "inbox", 201, False)
 
 
 @email_router.post("/receive")
@@ -209,8 +128,7 @@ def receive_mail_api(
             received_at = datetime.fromisoformat(body.received_at.replace("Z", "+00:00"))
         except ValueError:
             pass
-    record, folder, status_code, already = _save_inbound(
-        db,
+    record, folder, status_code, already = MailService(db).receive_inbound(
         to_email=body.to_email.strip(),
         from_display=body.from_display or "",
         from_email=body.from_email,
@@ -237,8 +155,7 @@ def _save_mailgun_inbound_background(
     """백그라운드에서 메일건 수신 1건 저장. 전용 세션 사용."""
     db = SessionLocal()
     try:
-        _save_inbound(
-            db,
+        MailService(db).receive_inbound(
             to_email=to_email,
             from_display=from_display,
             from_email=from_email,
@@ -249,7 +166,7 @@ def _save_mailgun_inbound_background(
         )
         db.commit()
     except Exception as e:
-        logging.getLogger(__name__).exception("Mailgun webhook background save failed: %s", e)
+        logger.exception("Mailgun webhook background save failed: %s", e)
         db.rollback()
     finally:
         db.close()
@@ -260,7 +177,7 @@ async def receive_mailgun_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
-    """Mailgun Webhook. 검증 후 즉시 200, 저장은 백그라운드. 메일건 타임아웃 방지."""
+    """Mailgun Webhook. 검증 후 즉시 200, 저장은 백그라운드."""
     form = await request.form()
     payload = {}
     for k, v in form.items():
@@ -292,7 +209,7 @@ async def receive_mailgun_webhook(
 
 
 # ---------------------------------------------------------------------------
-# 메일 단건 조회·수정·재처리 (경로 파라미터 — 구체 경로를 먼저 선언)
+# 메일 단건 조회·수정·재처리
 # ---------------------------------------------------------------------------
 
 @email_router.post("/{mail_id}/retry", response_model=Dict[str, Any])
@@ -301,16 +218,12 @@ def retry_mail_processing(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """FAILED 메일을 PENDING으로 되돌려 워커가 재분류하도록 함. retry_count <= 3 인 경우만."""
-    item = mail_item_get(db, mail_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Mail not found")
-    updated = mail_item_reset_failed_to_pending(db, mail_id, max_retry_count=3)
-    if not updated:
-        raise HTTPException(
-            status_code=400,
-            detail="Mail is not FAILED or retry_count exceeds limit (3). Cannot retry.",
-        )
-    return {"status": "queued_for_retry", "mail": updated}
+    try:
+        return MailService(db).retry_failed(mail_id)
+    except ValueError as e:
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 400
+        raise HTTPException(status_code=status, detail=msg)
 
 
 @email_router.get("/{mail_id}", response_model=Dict[str, Any])
@@ -319,7 +232,7 @@ def get_mail(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """메일 단건 조회."""
-    item = mail_item_get(db, mail_id)
+    item = MailService(db).get(mail_id)
     if not item:
         raise HTTPException(status_code=404, detail="Mail not found")
     return item
@@ -331,71 +244,14 @@ def send_mail_api(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """메일 발송: 직원/사내 주소면 DB만(보낸함+받은함), 외부 주소면 메일건 API 발송 후 보낸함 저장."""
-    now = datetime.now(timezone.utc)
-    to_email = (body.to.email or "").strip()
-    sender = employee_get_by_id(db, body.senderEmployeeId) if body.senderEmployeeId else None
-    from_display = (sender.get("name") or "me") if sender else "me"
-    from_email = (sender.get("email") or "").strip() if sender else None
-
-    # 수신자가 사내(직원/주소록)인지 확인
-    recipient_owner_id = resolve_owner_by_to_email(db, to_email) if to_email else None
-
-    # 1) 보낸함 저장 (발신자 기준)
-    record = mail_item_create(
-        db,
-        folder="sent",
-        owner_employee_id=body.senderEmployeeId,
-        from_employee_id=body.senderEmployeeId,
-        from_display=from_display,
-        from_email=from_email,
-        to_address_id=body.to.id,
+    return MailService(db).send(
+        sender_employee_id=body.senderEmployeeId,
+        to_id=body.to.id,
+        to_email=(body.to.email or "").strip(),
         to_display=body.to.displayName or body.to.id,
-        to_email=to_email,
         subject=body.subject or "",
         body=body.body,
-        sent_at=now,
-        is_starred=False,
-        is_unread=False,
     )
-
-    # 2) 직원/사내 → 수신자 받은함에 바로 생성 (메일건 미경유)
-    if recipient_owner_id:
-        mail_item_create(
-            db,
-            folder="inbox",
-            owner_employee_id=recipient_owner_id,
-            from_employee_id=body.senderEmployeeId,
-            from_display=from_display,
-            from_email=from_email,
-            to_address_id=body.to.id,
-            to_display=body.to.displayName or body.to.id,
-            to_email=to_email,
-            subject=body.subject or "",
-            body=body.body,
-            received_at=now,
-            is_starred=False,
-            is_unread=True,
-            status=MailReceiveStatus.RECEIVED.value,
-            ai_status=AiStatus.SUCCESS.value,
-            spam_score=0.0,
-        )
-    # 3) 외부 수신자 → 메일건 API로 실제 발송 (설정 있으면)
-    elif to_email:
-        settings = get_settings()
-        api_key = getattr(settings, "mailgun_api_key", None)
-        domain = getattr(settings, "mailgun_domain", None)
-        if api_key and domain:
-            from_addr = from_email or f"noreply@{domain}"
-            mailgun_send_email(
-                api_key=api_key,
-                domain=domain,
-                from_addr=from_addr,
-                to_addr=to_email,
-                subject=body.subject or "",
-                text=body.body or "",
-            )
-
-    return {"status": "success", "mail": record}
 
 
 @email_router.post("/draft", response_model=Dict[str, Any])
@@ -404,33 +260,15 @@ def save_draft(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """임시보관 저장. id 있으면 수정, 없으면 신규."""
-    if body.id:
-        row = mail_item_get(db, body.id)
-        if row and row.get("folder") == "draft":
-            updated = mail_item_update(
-                db,
-                body.id,
-                subject=body.subject,
-                body=body.body,
-                to_display=body.to.displayName if body.to else None,
-                to_email=body.to.email if body.to else None,
-                to_address_id=body.to.id if body.to else None,
-            )
-            return {"status": "saved", "mail": updated}
-    record = mail_item_create(
-        db,
-        folder="draft",
+    return MailService(db).save_draft(
         owner_employee_id=body.ownerEmployeeId,
-        from_display="me",
-        to_address_id=body.to.id if body.to else None,
+        draft_id=body.id,
+        to_id=body.to.id if body.to else None,
         to_display=body.to.displayName if body.to else None,
         to_email=body.to.email if body.to else None,
         subject=body.subject or "",
         body=body.body,
-        sent_at=None,
-        is_unread=True,
     )
-    return {"status": "saved", "mail": record}
 
 
 @email_router.put("/{mail_id}", response_model=Dict[str, Any])
@@ -441,10 +279,11 @@ def update_mail(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """메일 수정 (중요/읽음 플래그 등)."""
-    item = mail_item_get(db, mail_id)
+    svc = MailService(db)
+    item = svc.get(mail_id)
     if not item:
         raise HTTPException(status_code=404, detail="Mail not found")
-    updated = mail_item_update(db, mail_id, is_starred=isStarred, is_unread=isUnread)
+    updated = svc.update_flags(mail_id, is_starred=isStarred, is_unread=isUnread)
     return updated or item
 
 
@@ -455,16 +294,10 @@ def delete_mail(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """메일 삭제. 기본은 휴지통으로 이동, permanent=true면 물리 삭제."""
-    from domain.hub.repositories.mail_item_repository import delete_permanently  # type: ignore
-
-    if permanent:
-        if not delete_permanently(db, mail_id):
-            raise HTTPException(status_code=404, detail="Mail not found")
-        return {"status": "deleted"}
-    item = mail_item_trash(db, mail_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Mail not found")
-    return {"status": "moved_to_trash", "mail": item}
+    try:
+        return MailService(db).delete(mail_id, permanent=permanent)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ---------------------------------------------------------------------------
@@ -474,12 +307,9 @@ def delete_mail(
 @email_router.post("/filter", response_model=EmailResponse)
 async def spam_mail_filter(email: EmailRequest):
     try:
-        email_metadata = email.email_metadata.model_dump()
-        result = run_spam_detection(email_metadata)
+        result = run_spam_detection(email.email_metadata.model_dump())
         routing_path = result.get("routing_path", "")
         routing_strategy = result.get("routing_strategy", "policy")
-        from domain.models import ExaoneResult  # type: ignore
-        from domain.models import LLaMAResult  # type: ignore
 
         llama_result_dict = result.get("llama_result", {})
         exaone_result_dict = result.get("exaone_result")

@@ -262,14 +262,20 @@ class Settings(BaseSettings):
 
     # ===================
     # Upstash Redis (임베딩 job 큐)
+    # 단일 URL(UPSTASH_REDIS_URL)에서 REST URL·TOKEN을 자동 추출.
+    # 하위호환을 위해 REST 전용 env도 그대로 지원.
     # ===================
+    upstash_redis_url: Optional[str] = Field(
+        default=None,
+        description="UPSTASH_REDIS_URL (rediss://default:TOKEN@HOST:6379) — 단일 연결 URL",
+    )
     upstash_redis_rest_url: Optional[str] = Field(
         default=None,
-        description="UPSTASH_REDIS_REST_URL (.env에서 로드)",
+        description="UPSTASH_REDIS_REST_URL (.env에서 로드, 없으면 URL에서 추출)",
     )
     upstash_redis_rest_token: Optional[str] = Field(
         default=None,
-        description="UPSTASH_REDIS_REST_TOKEN (.env에서 로드)",
+        description="UPSTASH_REDIS_REST_TOKEN (.env에서 로드, 없으면 URL에서 추출)",
     )
 
     # ===================

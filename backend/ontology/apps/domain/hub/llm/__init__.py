@@ -1,33 +1,11 @@
-"""
-Hub LLM Adapters - Llama/ExaOne 유일 진입점.
-
-목표 구조: 내부 서비스·MCP 도구는 이 어댑터를 통해서만 Llama/ExaOne에 접근합니다.
-- Llama Adapter: 스팸 분류(classify_spam)
-- ExaOne Adapter: 텍스트 생성(generate_text), LLM 인스턴스(get_llm), 이메일 분석(analyze_email)
-- Provider 메타: get_provider_name, list_providers, supports_tool_calling (exaone_provider)
-"""
-
-from .exaone_adapter import (
+"""Backward-compat stub — 실제 구현은 infrastructure.llm으로 이동됨."""
+from infrastructure.llm import *  # noqa: F401,F403
+from infrastructure.llm import (  # noqa: F401
     analyze_email,
+    classify_spam,
     generate_text,
     get_llm,
-)
-from .llama_adapter import classify_spam
-from .exaone_provider import (
     get_provider_name,
     list_providers,
     supports_tool_calling,
 )
-
-__all__ = [
-    # Llama
-    "classify_spam",
-    # ExaOne
-    "generate_text",
-    "get_llm",
-    "analyze_email",
-    # Provider 메타
-    "get_provider_name",
-    "list_providers",
-    "supports_tool_calling",
-]

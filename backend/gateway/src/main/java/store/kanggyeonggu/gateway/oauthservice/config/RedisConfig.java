@@ -4,74 +4,26 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-import java.time.Duration;
-
 /**
  * Redis 설정 (Spring Boot 3.x + Java 21 최적화)
  * Upstash Redis 연결을 위한 최신 설정
- * - SSL/TLS 연결 지원
- * - Connection Pool 최적화
- * - Java 8+ 날짜/시간 타입 지원
+ * - 연결(호스트/포트/비밀번호/SSL)은 spring.data.redis.url(UPSTASH_REDIS_URL) 하나로 통합.
+ *   rediss:// 스킴이면 Spring Boot가 SSL을 자동 활성화하므로 ConnectionFactory는 자동 구성에 위임.
+ * - 여기서는 직렬화(Java 8 날짜/시간, 타입 안전성)만 담당하는 RedisTemplate만 정의.
  */
 @Configuration
 @EnableCaching
-@ConditionalOnProperty(name = "spring.data.redis.host")
+@ConditionalOnProperty(name = "spring.data.redis.url")
 public class RedisConfig {
-
-    @Value("${spring.data.redis.host}")
-    private String host;
-
-    @Value("${spring.data.redis.port}")
-    private int port;
-
-    @Value("${spring.data.redis.password:}")
-    private String password;
-
-    @Value("${spring.data.redis.ssl.enabled:true}")
-    private boolean sslEnabled;
-
-    /**
-     * Redis Connection Factory (Lettuce 기반, Spring Boot 3.x 최적화)
-     * - SSL/TLS 지원
-     * - Connection Pool 설정
-     * - Timeout 설정
-     */
-    @Bean
-    public RedisConnectionFactory redisConnectionFactory() {
-        // Redis 서버 설정
-        RedisStandaloneConfiguration serverConfig = new RedisStandaloneConfiguration();
-        serverConfig.setHostName(host);
-        serverConfig.setPort(port);
-
-        if (password != null && !password.isEmpty()) {
-            serverConfig.setPassword(password);
-        }
-
-        // Lettuce Client 설정 (최신 방식)
-        LettuceClientConfiguration.LettuceClientConfigurationBuilder clientConfig = LettuceClientConfiguration.builder()
-                .commandTimeout(Duration.ofSeconds(10)) // 명령 타임아웃
-                .shutdownTimeout(Duration.ofMillis(100)); // 종료 타임아웃
-
-        // SSL 설정
-        if (sslEnabled) {
-            clientConfig.useSsl();
-        }
-
-        return new LettuceConnectionFactory(serverConfig, clientConfig.build());
-    }
 
     /**
      * Redis Template (Spring Boot 3.x + Java 21 최적화)

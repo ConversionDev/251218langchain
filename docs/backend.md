@@ -356,7 +356,7 @@ Hub는 무거운 모델을 직접 부르지 않고, 각 도메인 MCP가 자신�
 | 서버 | `HOST`, `PORT`, `CORS_ORIGINS` | 127.0.0.1, 8000, CORS |
 | API 키 | `OPENAI_API_KEY`, `GEMINI_API_KEY` | 선택 |
 | 업로드 | `UPLOAD_DIR`, `UPLOAD_MAX_FILES`, `UPLOAD_MAX_FILE_SIZE_MB` | 채팅 첨부 |
-| Redis | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | 임베딩 job 상태 등 (선택) |
+| Redis | `UPSTASH_REDIS_URL` (`rediss://default:TOKEN@HOST:6379`) | 임베딩 job 상태 등 (선택). REST URL·TOKEN 자동 추출 |
 | MCP | `HUB_SERVICE_URL`, `CHAT_MCP_URL`, `CHAT_SPOKE_MCP_URL`, `SPAM_MCP_URL`, `SPAM_SPOKE_MCP_URL` | Hub-Spoke URL |
 
 `.env` 파일은 `core.paths.get_project_root()` 기준 프로젝트 루트의 `.env`를 사용한다.

@@ -26,6 +26,15 @@
 @rem Set local scope for the variables with windows NT shell
 if "%OS%"=="Windows_NT" setlocal
 
+@rem JAVA_HOME가 ...\bin 을 가리키는 흔한 오설정 자동 보정
+if defined JAVA_HOME (
+  if not exist "%JAVA_HOME%\bin\java.exe" (
+    if exist "%JAVA_HOME%\java.exe" (
+      for %%i in ("%JAVA_HOME%\..") do set "JAVA_HOME=%%~fi"
+    )
+  )
+)
+
 set DIRNAME=%~dp0
 if "%DIRNAME%"=="" set DIRNAME=.
 @rem This is normally unused

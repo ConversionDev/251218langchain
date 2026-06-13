@@ -42,8 +42,8 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+      # Upstash Redis: 단일 URL로 통합 (Gateway·FastAPI 공통)
+      UPSTASH_REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL }}
       MAILGUN_WEBHOOK_SIGNING_KEY: ${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
       MAILGUN_SKIP_VERIFY: ${{ secrets.MAILGUN_SKIP_VERIFY }}
       MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
@@ -67,9 +67,6 @@ jobs:
       GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
       FRONTEND_CALLBACK_URL: ${{ secrets.FRONTEND_CALLBACK_URL }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      UPSTASH_REDIS_HOST: ${{ secrets.UPSTASH_REDIS_HOST }}
-      UPSTASH_REDIS_PORT: ${{ secrets.UPSTASH_REDIS_PORT }}
-      UPSTASH_REDIS_PASSWORD: ${{ secrets.UPSTASH_REDIS_PASSWORD }}
       APP_DIR: /home/ubuntu/app
       VENV_DIR: /home/ubuntu/venv
       LOG_FILE: /home/ubuntu/app.log
@@ -217,9 +214,7 @@ jobs:
             printf 'NEON_DEV_USER=%s\n'          "${NEON_DEV_USER}"
             printf 'NEON_DEV_PASSWORD=%s\n'      "${NEON_DEV_PASSWORD}"
             printf 'NEON_DEV_SSL_MODE=%s\n'      "${NEON_DEV_SSL_MODE:-require}"
-            printf 'UPSTASH_REDIS_HOST=%s\n'     "${UPSTASH_REDIS_HOST}"
-            printf 'UPSTASH_REDIS_PORT=%s\n'     "${UPSTASH_REDIS_PORT:-6379}"
-            printf 'UPSTASH_REDIS_PASSWORD=%s\n' "${UPSTASH_REDIS_PASSWORD}"
+            printf 'UPSTASH_REDIS_URL=%s\n'      "${UPSTASH_REDIS_URL}"
             printf 'JWT_SECRET=%s\n'             "${JWT_SECRET}"
             printf 'KAKAO_REST_API_KEY=%s\n'     "${KAKAO_REST_API_KEY}"
             printf 'KAKAO_CLIENT_SECRET=%s\n'    "${KAKAO_CLIENT_SECRET}"
@@ -252,8 +247,7 @@ jobs:
             OPENAI_API_KEY_VALUE="$OPENAI_API_KEY"
             DATABASE_URL_VALUE="$DATABASE_URL"
             GEMINI_API_KEY_VALUE="$GEMINI_API_KEY"
-            UPSTASH_REDIS_REST_URL_VALUE="$UPSTASH_REDIS_REST_URL"
-            UPSTASH_REDIS_REST_TOKEN_VALUE="$UPSTASH_REDIS_REST_TOKEN"
+            UPSTASH_REDIS_URL_VALUE="$UPSTASH_REDIS_URL"
             MAILGUN_WEBHOOK_SIGNING_KEY_VALUE="$MAILGUN_WEBHOOK_SIGNING_KEY"
             MAILGUN_SKIP_VERIFY_VALUE="$MAILGUN_SKIP_VERIFY"
             MAILGUN_DOMAIN_VALUE="$MAILGUN_DOMAIN"
@@ -310,8 +304,7 @@ jobs:
               printf 'DATABASE_URL="%s"\n'            "\$DATABASE_URL_VALUE"
               printf 'OPENAI_API_KEY="%s"\n'          "\$OPENAI_API_KEY_VALUE"
               printf 'GEMINI_API_KEY="%s"\n'          "\$GEMINI_API_KEY_VALUE"
-              printf 'UPSTASH_REDIS_REST_URL="%s"\n'  "\$UPSTASH_REDIS_REST_URL_VALUE"
-              printf 'UPSTASH_REDIS_REST_TOKEN="%s"\n' "\$UPSTASH_REDIS_REST_TOKEN_VALUE"
+              printf 'UPSTASH_REDIS_URL="%s"\n'       "\$UPSTASH_REDIS_URL_VALUE"
               printf 'CORS_ORIGINS="%s"\n'            "\$CORS_ORIGINS_VALUE"
               printf 'MAILGUN_WEBHOOK_SIGNING_KEY="%s"\n' "\$MAILGUN_WEBHOOK_SIGNING_KEY_VALUE"
               printf 'MAILGUN_SKIP_VERIFY="%s"\n'     "\$MAILGUN_SKIP_VERIFY_VALUE"

@@ -1,0 +1,44 @@
+"""
+Llama Adapter - Hub의 Llama 진입점.
+
+Llama 모델(스팸 분류) 접근은 이 어댑터를 통해서만 수행합니다.
+내부적으로 domain.hub.llm.llama_classifier(LLaMAGate)를 사용합니다.
+"""
+
+from typing import Any, Dict
+
+# ---------------------------------------------------------------------------
+# 스팸 분류 (이메일 메타데이터 → spam_prob, confidence, label)
+# ---------------------------------------------------------------------------
+
+_llama_gate: Any = None
+
+
+def _get_llama_gate():
+    """LLaMAGate 싱글톤 (lazy)."""
+    global _llama_gate
+    if _llama_gate is None:
+        from infrastructure.llm.llama_classifier import LLaMAGate  # type: ignore
+
+        _llama_gate = LLaMAGate()
+    return _llama_gate
+
+
+def classify_spam(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """이메일 메타데이터를 Llama로 스팸 분류합니다.
+
+    Args:
+        email_metadata: subject, sender, body 등.
+
+    Returns:
+        {"spam_prob": float, "confidence": str, "label": str}
+    """
+    try:
+        gate = _get_llama_gate()
+        return gate.classify_spam(email_metadata)
+    except Exception:
+        return {
+            "spam_prob": 0.5,
+            "confidence": "low",
+            "label": "UNCERTAIN",
+        }

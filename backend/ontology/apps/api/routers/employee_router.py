@@ -13,7 +13,6 @@ AI 분석      → employee_analysis_router  (POST /{id}/analyze)
 """
 
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -21,18 +20,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
-from api.routers._employee_shared import _write_audit_log  # type: ignore
+from application.shared.audit_service import write_audit_log  # type: ignore
+from application.employee.employee_service import EmployeeService  # type: ignore
 from core.database import get_db  # type: ignore
-from domain.hub.repositories.employee_repository import (  # type: ignore
-    create as repo_create,
-    delete as repo_delete,
-    find_by_resume_hash as repo_find_by_resume_hash,
-    get_by_id as repo_get_by_id,
-    get_next_id as repo_get_next_id,
-    list_all as repo_list_all,
-    list_paginated as repo_list_paginated,
-    update as repo_update,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -83,18 +73,19 @@ def list_employees(
     employmentType: Optional[str] = None,
 ) -> List[Dict[str, Any]] | PaginatedEmployeesResponse:
     """직원 목록. page/pageSize가 있으면 페이징 응답, 없으면 전체 목록."""
+    svc = EmployeeService(db)
     if page is not None or pageSize is not None:
+        items, total = svc.list_paginated(page or 1, pageSize or 20, employment_type=employmentType)
         p = max(1, page or 1)
         ps = max(1, min(100, pageSize or 20))
-        items, total = repo_list_paginated(db, page=p, page_size=ps, employment_type=employmentType)
         return PaginatedEmployeesResponse(items=items, total=total, page=p, pageSize=ps)
-    return repo_list_all(db)
+    return svc.list_all()
 
 
 @router.get("/next-id", response_model=Dict[str, Any])
 def get_next_employee_id(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """다음 직원 ID 제안 (직원 추가 폼용)."""
-    return {"nextId": repo_get_next_id(db)}
+    return {"nextId": EmployeeService(db).get_next_id()}
 
 
 @router.get("/check-resume-hash", response_model=Dict[str, Any])
@@ -103,10 +94,7 @@ def check_resume_hash(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """이력서 파일 해시로 이미 등록된 지원인지 확인. 중복 제출 방지용."""
-    h = (resume_hash or "").strip()
-    if not h:
-        return {"exists": False}
-    existing = repo_find_by_resume_hash(db, h)
+    existing = EmployeeService(db).find_by_resume_hash(resume_hash)
     if existing:
         return {"exists": True, "existing": existing}
     return {"exists": False}
@@ -115,7 +103,7 @@ def check_resume_hash(
 @router.get("/{employee_id}", response_model=Dict[str, Any])
 def get_employee(employee_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """직원 단건 조회."""
-    one = repo_get_by_id(db, employee_id)
+    one = EmployeeService(db).get(employee_id)
     if not one:
         raise HTTPException(status_code=404, detail="Employee not found")
     return one
@@ -127,28 +115,19 @@ def create_employee(
     request: Request,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any] | JSONResponse:
-    """직원 생성. 동일 이력서(resumeFileHash)가 이미 있으면 409.
-    - 신입(new_hire): 지원일을 서버 시각(UTC)으로, 입사일은 비워 둠.
-    """
+    """직원 생성. 동일 이력서(resumeFileHash)가 이미 있으면 409."""
     try:
-        data = payload.model_dump(exclude_unset=False)
-        if data.get("employmentType") == "new_hire":
-            data["applicationDate"] = datetime.now(timezone.utc)
-            data["joinedAt"] = None
-            data["status"] = "pending"
-            data["successDna"] = None
-            data["successDnaReason"] = None
-        created = repo_create(db, data)
-        _write_audit_log(
-            db, request=request, action="create",
+        svc = EmployeeService(db)
+        created = svc.create(payload.model_dump(exclude_unset=False))
+        write_audit_log(
+            db, request=request, entity_type="employee", action="create",
             entity_id=created.get("id") or payload.id,
             after_data=created, reason="create employee",
         )
         return created
     except ValueError as e:
         if str(e) == "ALREADY_EXISTS":
-            resume_hash = (payload.resumeFileHash or "").strip()
-            existing = repo_find_by_resume_hash(db, resume_hash) if resume_hash else None
+            existing = svc.find_by_resume_hash(payload.resumeFileHash or "")
             return JSONResponse(
                 status_code=409,
                 content={"detail": "동일한 이력서가 이미 등록되어 있습니다", "existing": existing or {}},
@@ -170,14 +149,15 @@ def update_employee(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """직원 수정. id는 path 기준."""
+    svc = EmployeeService(db)
     data = payload.model_dump(exclude_unset=True)
     data["id"] = employee_id
-    before = repo_get_by_id(db, employee_id)
-    result = repo_update(db, employee_id, data)
+    before = svc.get(employee_id)
+    result = svc.update(employee_id, data)
     if result is None:
         raise HTTPException(status_code=404, detail="Employee not found")
-    _write_audit_log(
-        db, request=request, action="update", entity_id=employee_id,
+    write_audit_log(
+        db, request=request, entity_type="employee", action="update", entity_id=employee_id,
         before_data=before, after_data=result, reason="update employee",
     )
     return result
@@ -190,11 +170,12 @@ def delete_employee(
     db: Session = Depends(get_db),
 ) -> None:
     """직원 삭제."""
-    before = repo_get_by_id(db, employee_id)
-    if not repo_delete(db, employee_id):
+    svc = EmployeeService(db)
+    before = svc.get(employee_id)
+    if not svc.delete(employee_id):
         raise HTTPException(status_code=404, detail="Employee not found")
-    _write_audit_log(
-        db, request=request, action="delete", entity_id=employee_id,
+    write_audit_log(
+        db, request=request, entity_type="employee", action="delete", entity_id=employee_id,
         before_data=before, after_data=None, reason="delete employee",
     )
 

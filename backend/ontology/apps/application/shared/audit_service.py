@@ -1,4 +1,4 @@
-"""직원 라우터 공유 헬퍼 (감사로그, 요청자 추출)."""
+"""감사 로그 유스케이스 — entity_type 파라미터화로 Employee/Mail/Disclosure 공용."""
 
 import logging
 from typing import Any, Dict, Optional
@@ -16,12 +16,13 @@ def _resolve_actor(request: Request) -> str:
     return actor if actor else "system"
 
 
-def _write_audit_log(
+def write_audit_log(
     db: Session,
     *,
     request: Request,
-    action: str,
+    entity_type: str,
     entity_id: str,
+    action: str,
     before_data: Optional[Dict[str, Any]] = None,
     after_data: Optional[Dict[str, Any]] = None,
     reason: Optional[str] = None,
@@ -29,7 +30,7 @@ def _write_audit_log(
     try:
         repo_create_audit_log(
             db,
-            entity_type="employee",
+            entity_type=entity_type,
             entity_id=entity_id,
             action=action,
             actor=_resolve_actor(request),
@@ -38,4 +39,4 @@ def _write_audit_log(
             after_data=after_data,
         )
     except Exception as e:
-        logger.warning("감사로그 저장 실패 action=%s entity_id=%s err=%s", action, entity_id, e)
+        logger.warning("감사로그 저장 실패 entity_type=%s action=%s entity_id=%s err=%s", entity_type, action, entity_id, e)

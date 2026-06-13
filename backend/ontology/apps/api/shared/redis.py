@@ -1,13 +1,15 @@
 """
 Upstash Redis + JWT access token + BullMQ 연동 (단일 파일).
 
-- UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN: Redis 클라이언트 및 BullMQ(Node)와 동일 인스턴스 공유.
+- UPSTASH_REDIS_URL: 단일 연결 URL(rediss://default:TOKEN@HOST:6379)로 통합.
+  여기서 REST URL(https://HOST) + TOKEN을 자동 추출한다.
+- (하위호환) UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN 가 있으면 우선 사용.
 """
 
 import os
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Upstash Redis
@@ -19,21 +21,57 @@ EMBEDDING_STATUS_KEY_PREFIX = "embedding:status:"
 EMBEDDING_STATUS_TTL = 86400
 
 
+def _parse_redis_url(raw: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """rediss://default:TOKEN@HOST:6379 → (https://HOST, TOKEN). 실패 시 (None, None)."""
+    if not raw:
+        return None, None
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(raw)
+        host = parsed.hostname
+        token = parsed.password
+        if not host or not token:
+            return None, None
+        return f"https://{host}", token
+    except Exception:
+        return None, None
+
+
+def _resolve_rest_credentials() -> Tuple[Optional[str], Optional[str]]:
+    """REST URL·TOKEN을 결정. 우선순위: REST 전용 env → UPSTASH_REDIS_URL → settings."""
+    url = os.getenv("UPSTASH_REDIS_REST_URL")
+    token = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    if url and token:
+        return url, token
+
+    # 단일 URL에서 추출
+    parsed_url, parsed_token = _parse_redis_url(os.getenv("UPSTASH_REDIS_URL"))
+    url = url or parsed_url
+    token = token or parsed_token
+    if url and token:
+        return url, token
+
+    # settings(.env 로드) 폴백
+    try:
+        from core.config import get_settings  # type: ignore
+        s = get_settings()
+        url = url or getattr(s, "upstash_redis_rest_url", None)
+        token = token or getattr(s, "upstash_redis_rest_token", None)
+        if (not url or not token) and getattr(s, "upstash_redis_url", None):
+            su, st = _parse_redis_url(getattr(s, "upstash_redis_url", None))
+            url = url or su
+            token = token or st
+    except Exception:
+        pass
+    return url, token
+
+
 def get_redis():
     """Upstash Redis 클라이언트. 설정(.env) 또는 env 없으면 None."""
     global _redis
     if _redis is not None:
         return _redis
-    url = os.getenv("UPSTASH_REDIS_REST_URL")
-    token = os.getenv("UPSTASH_REDIS_REST_TOKEN")
-    if not url or not token:
-        try:
-            from core.config import get_settings  # type: ignore
-            s = get_settings()
-            url = url or getattr(s, "upstash_redis_rest_url", None)
-            token = token or getattr(s, "upstash_redis_rest_token", None)
-        except Exception:
-            pass
+    url, token = _resolve_rest_credentials()
     if not url or not token:
         return None
     try:
@@ -120,9 +158,10 @@ def get_embedding_job_status(job_id: str) -> Optional[Dict[str, Any]]:
 
 def get_bullmq_connection_config() -> dict:
     """BullMQ 워커가 같은 Upstash Redis를 쓰기 위한 설정 (Node에서 동일 env 사용)."""
+    url, token = _resolve_rest_credentials()
     return {
-        "url": os.getenv("UPSTASH_REDIS_REST_URL", ""),
-        "token": os.getenv("UPSTASH_REDIS_REST_TOKEN", ""),
+        "url": url or "",
+        "token": token or "",
     }
 
 

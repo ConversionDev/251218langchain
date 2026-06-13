@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>강경구 — AI 풀스택 개발자</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset ── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ── Base ── */
+  :root {
+    --ink: #0f172a;          /* 본문 — 거의 검정 */
+    --ink-2: #334155;        /* 본문 보조 */
+    --ink-3: #64748b;        /* 메타 정보 */
+    --rule: #e2e8f0;         /* 구분선 */
+    --accent: #1e40af;       /* 단일 강조 — 딥 네이비 */
+    --bg: #ffffff;
+  }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: 'Inter', 'Pretendard', 'Malgun Gothic', sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: var(--ink);
+    background: #eef2f6;
+    font-feature-settings: "ss01", "cv11";
+  }
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    background: var(--bg);
+    margin: 24px auto;
+    padding: 26mm 22mm;
+    box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  /* ── Header ── */
+  .header {
+    margin-bottom: 36px;
+  }
+  .header .name {
+    font-size: 32pt;
+    font-weight: 700;
+    letter-spacing: -1.2px;
+    line-height: 1.1;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .header .role {
+    font-size: 12pt;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 22px;
+    letter-spacing: -0.2px;
+  }
+  .header .contact {
+    font-size: 9.5pt;
+    color: var(--ink-3);
+    line-height: 1.7;
+  }
+  .header .contact span { white-space: nowrap; }
+  .header .contact .sep { margin: 0 10px; color: #cbd5e1; }
+  .header .contact a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid #cbd5e1; padding-bottom: 1px; }
+  .header .contact a:hover { color: var(--accent); }
+
+  /* ── Section ── */
+  .section { margin-bottom: 30px; }
+  .section:last-child { margin-bottom: 0; }
+  .section-title {
+    font-size: 9pt;
+    font-weight: 700;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* ── Summary ── */
+  .summary {
+    font-size: 10.5pt;
+    color: var(--ink-2);
+    line-height: 1.8;
+    max-width: 95%;
+  }
+  .summary b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* ── Skills ── */
+  .skills { display: grid; grid-template-columns: 110px 1fr; gap: 14px 18px; }
+  .skills .cat {
+    font-size: 9pt;
+    color: var(--ink-3);
+    font-weight: 600;
+    padding-top: 3px;
+    letter-spacing: 0.2px;
+  }
+  .skills .list {
+    font-size: 10pt;
+    color: var(--ink-2);
+    line-height: 1.85;
+  }
+  .skills .list b { color: var(--ink); font-weight: 600; }
+
+  /* ── Item (project / experience) ── */
+  .item { margin-bottom: 22px; }
+  .item:last-child { margin-bottom: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 2px;
+  }
+  .item-title {
+    font-size: 11.5pt;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.2px;
+  }
+  .item-period {
+    font-size: 9.5pt;
+    color: var(--ink-3);
+    white-space: nowrap;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .item-meta {
+    font-size: 9.5pt;
+    color: var(--ink-3);
+    margin-bottom: 10px;
+  }
+  .item-meta a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .item-desc {
+    font-size: 10pt;
+    color: var(--ink-2);
+    margin-bottom: 12px;
+    line-height: 1.7;
+  }
+
+  .item ul { list-style: none; padding: 0; }
+  .item ul li {
+    font-size: 10pt;
+    color: var(--ink-2);
+    padding-left: 16px;
+    position: relative;
+    margin-bottom: 8px;
+    line-height: 1.65;
+  }
+  .item ul li:last-child { margin-bottom: 0; }
+  .item ul li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 11px;
+    width: 4px;
+    height: 1.5px;
+    background: var(--ink-3);
+  }
+  .item ul li b { color: var(--ink); font-weight: 600; }
+  .item ul li .num {
+    color: var(--accent);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Compact list (education / cert) ── */
+  .compact { display: flex; flex-direction: column; gap: 10px; }
+  .compact-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: baseline;
+  }
+  .compact-row .title {
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .compact-row .period {
+    font-size: 9.5pt;
+    color: var(--ink-3);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .compact-row .detail {
+    grid-column: 1 / -1;
+    font-size: 9.5pt;
+    color: var(--ink-3);
+    margin-top: -4px;
+    line-height: 1.6;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { background: white; }
+    .page {
+      margin: 0;
+      box-shadow: none;
+      padding: 16mm 18mm;
+      width: 100%;
+      min-height: auto;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="name">강경구</div>
+    <div class="role">AI 풀스택 개발자 · LLM 파인튜닝부터 운영까지 직접 구축</div>
+    <div class="contact">
+      <span>010-4739-2339</span>
+      <span class="sep">·</span>
+      <span>rkdrudrn1031@gmail.com</span>
+      <span class="sep">·</span>
+      <a href="https://github.com/conversiondev">github.com/conversiondev</a>
+      <span class="sep">·</span>
+      <a href="https://www.kanggyeonggu.store">kanggyeonggu.store</a>
+      <span class="sep">·</span>
+      <a href="https://kku1031.tistory.com">blog</a>
+    </div>
+  </header>
+
+  <!-- ── Summary ── -->
+  <section class="section">
+    <div class="section-title">Summary</div>
+    <p class="summary">
+      EXAONE 7.8B LoRA 파인튜닝부터 GGUF 양자화, EC2 CPU 배포까지 <b>LLM 서비스의 전체 라이프사이클을 직접 구축</b>한 경험을 보유하고 있습니다.
+      제한된 인프라 환경에서 <b>LangGraph 조건부 라우팅으로 토큰 비용을 92% 절감</b>하는 등,
+      모델 최적화와 아키텍처 개선을 통해 실질적 성능·비용 개선을 만드는 데 강점이 있습니다.
+    </p>
+  </section>
+
+  <!-- ── Skills ── -->
+  <section class="section">
+    <div class="section-title">Skills</div>
+    <div class="skills">
+      <div class="cat">AI / ML</div>
+      <div class="list">
+        <b>EXAONE</b>, <b>LangGraph</b>, <b>LangChain</b>, RAG, QLoRA(PEFT), Unsloth, BGE-M3, LLaMA, Gemini API
+      </div>
+
+      <div class="cat">Backend</div>
+      <div class="list">
+        <b>FastAPI</b>, <b>Spring Boot</b>, Python, Java, SQLAlchemy, Alembic, OAuth2 / JWT
+      </div>
+
+      <div class="cat">Frontend</div>
+      <div class="list">
+        Next.js (App Router), React, TypeScript, Tailwind CSS, Zustand
+      </div>
+
+      <div class="cat">Data / Infra</div>
+      <div class="list">
+        <b>PostgreSQL + pgvector</b> (HNSW), FAISS, Redis, AWS EC2, Nginx, Docker, GitHub Actions
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Projects ── -->
+  <section class="section">
+    <div class="section-title">Projects</div>
+
+    <article class="item">
+      <div class="item-head">
+        <div class="item-title">Insight HR Agent (Success DNA)</div>
+        <div class="item-period">2025.02 — 현재</div>
+      </div>
+      <div class="item-meta">
+        개인 프로젝트
+        <span class="sep" style="color:#cbd5e1;">·</span>
+        <a href="https://www.kanggyeonggu.store/hr">kanggyeonggu.store/hr</a>
+      </div>
+      <p class="item-desc">
+        비정형 업무 데이터(이력서·메일·회의록)를 통합 분석해 ISO 30414 기반으로 인재 역량을 정량화하고
+        성장 추이를 추적하는 HCM 플랫폼.
+      </p>
+      <ul>
+        <li><b>EXAONE 7.8B HR 도메인 SFT 파이프라인 직접 구축</b> — QA 생성 → LoRA 파인튜닝(PEFT 4bit) → GGUF Q4_K_M 양자화 → EC2 CPU(llama.cpp) 배포</li>
+        <li><b>LangGraph 조건부 툴 라우팅 Agent</b> — 단일 직원 질의 시 RAG·list 노드 스킵, <span class="num">토큰 비용 92% 절감</span> 달성</li>
+        <li><b>공시 문서 자동화 파이프라인</b> — PDF 파싱 → 청킹 → BGE-M3 임베딩 → K-Means 클러스터링 → pgvector HNSW 인덱스 저장</li>
+        <li><b>이메일 분류 파이프라인</b> — Mailgun 웹훅 → LLaMA LoRA 스팸 분류 → 역량 추적 데이터 통합</li>
+        <li><b>아키텍처 설계</b> — Spring Boot(인증) + FastAPI(AI) Hybrid Stack, Hexagonal · Hub-and-Spoke(MCP) 구조</li>
+        <li><b>운영 인프라</b> — GitHub Actions CI/CD, Nginx HTTPS, LLM 런타임 이중화(GPU 개발 / CPU 배포)</li>
+      </ul>
+    </article>
+
+    <article class="item">
+      <div class="item-head">
+        <div class="item-title">KeyWord (Keep Your Word)</div>
+        <div class="item-period">2023.09 — 2023.10</div>
+      </div>
+      <div class="item-meta">
+        팀 프로젝트
+        <span class="sep" style="color:#cbd5e1;">·</span>
+        <a href="https://github.com/ZB-Keyword">github.com/ZB-Keyword</a>
+      </div>
+      <ul>
+        <li>OAuth 기반 소셜 로그인 체계 구축 및 Elasticsearch 기반 고성능 회원 검색 구현</li>
+        <li>API 명세서 및 코드 컨벤션 문서화로 프론트·백엔드 협업 효율 개선</li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- ── Highlights ── -->
+  <section class="section">
+    <div class="section-title">Highlights</div>
+    <div class="item">
+      <ul>
+        <li><b>LLM 학습 속도 최적화</b> — Transformers + PEFT 4bit 양자화 적용 시 EXAONE 학습 속도 <span class="num">약 2배</span>, Unsloth 적용 시 <span class="num">2.5–3배</span> 향상</li>
+        <li><b>Agent 토큰 비용 절감</b> — 단일 직원 질의 조건부 분기 구현으로 토큰 사용량 <span class="num">92% 절감</span> 및 응답 지연 단축</li>
+        <li><b>대규모 임베딩 처리</b> — Neon DB 스토리지 한계 발생 시 FAISS 로컬 인덱싱으로 전환, <span class="num">11만 건</span> 데이터를 <span class="num">12분 내</span> 처리</li>
+        <li><b>EXAONE–Unsloth 호환성 검증</b> — 직접 검증을 통해 최적 학습 아키텍처 의사결정</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── Experience ── -->
+  <section class="section">
+    <div class="section-title">Experience</div>
+    <article class="item">
+      <div class="item-head">
+        <div class="item-title">(주)화산시스템 — 인터페이스 팀</div>
+        <div class="item-period">2022.09 — 2022.12</div>
+      </div>
+      <div class="item-meta">대학 병원 진단검사의학과(LIS) 프로그램 개발·관리 (Visual Basic 기반)</div>
+      <ul>
+        <li>의료 장비 ↔ LIS 시스템 간 데이터 연동 점검 및 장애 대응</li>
+        <li>로그 분석, 네트워크 점검, 사용자 문의 대응 등 운영 지원</li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- ── Education ── -->
+  <section class="section">
+    <div class="section-title">Education</div>
+    <div class="compact">
+      <div class="compact-row">
+        <div class="title">[삼정KPMG] 심화_생성형 AI 활용 인재양성과정</div>
+        <div class="period">2026.05 — 2026.07 (수강 중)</div>
+      </div>
+      <div class="compact-row">
+        <div class="title">[삼정KPMG] ESG 데이터 활용 AX Academy with AI Agent (3기)</div>
+        <div class="period">2025.09 — 2026.04 (수료)</div>
+      </div>
+      <div class="compact-row">
+        <div class="title">[제로베이스] 백엔드 스쿨 15기</div>
+        <div class="period">2023.04 — 2023.10</div>
+      </div>
+      <div class="compact-row">
+        <div class="title">[대구중앙직업전문학교] 응용 SW 엔지니어링 (Java)</div>
+        <div class="period">2022.03 — 2022.09</div>
+      </div>
+      <div class="compact-row">
+        <div class="title">영남대학교 중어중문학과 졸업</div>
+        <div class="period">2017</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Certifications ── -->
+  <section class="section">
+    <div class="section-title">Certifications</div>
+    <div class="compact">
+      <div class="compact-row">
+        <div class="title">정보처리기사 — 필기 합격 (실기 응시 예정)</div>
+        <div class="period">2026년 정기 2회</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Other ── -->
+  <section class="section">
+    <div class="section-title">Other</div>
+    <div class="compact">
+      <div class="compact-row">
+        <div class="title">한국 YMCA 전국연맹 국제개발협력팀 / 대구 YMCA 청소년 쉼터</div>
+        <div class="period">2018 — 2020</div>
+        <div class="detail">다양한 대상자와의 소통을 통해 커뮤니케이션·조율 능력 체득; 현장 중심 문제 해결로 팀 협업 기여</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

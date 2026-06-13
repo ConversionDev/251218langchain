@@ -191,6 +191,90 @@
 
 ---
 
+## 12. EC2 CPU 환경 EXAONE GGUF 배포
+
+### 문제
+
+로컬 GPU에서만 동작하던 EXAONE 7.8B 파인튜닝 모델을 **GPU 없는 EC2 m7i-flex.large (2 vCPU, 8GB RAM)**에 배포하면서 다음 문제가 연쇄적으로 발생.
+
+1. **bitsandbytes NF4 양자화 모델 → GGUF 변환 실패**
+   - `llama.cpp/convert_hf_to_gguf.py`가 bitsandbytes 메타 텐서(`absmax`, `quant_map` 등)를 처리하지 못함.
+   - `torch.dtype` 객체가 `config.json` 직렬화 시 JSON 호환 안 됨.
+2. **Q4_K_M 양자화 후 토크나이저 로드 실패**
+   - `llama-quantize.exe` 출력물에서 `tokenizer.ggml.merges` 손상 → `cannot find tokenizer merges in model file`.
+3. **EC2 리소스 부족**
+   - EBS 6.8GB로는 GGUF(4.5GB) + 의존성 설치 불가.
+   - 8GB RAM에서 `n_ctx=8192`로 로드 시 OOM (`AttributeError: 'LlamaModel' object has no attribute 'sampler'`).
+4. **CI/CD 환경변수 누락/오염**
+   - `nohup`으로 띄운 FastAPI가 `LLM_PROVIDER`, `DATABASE_URL`를 읽지 못함.
+   - `DATABASE_URL` 값의 `&` 문자가 Bash `source` 에서 백그라운드 실행으로 해석되어 파싱 깨짐.
+5. **Nginx `upstream timed out` (SSE 스트리밍)**
+   - CPU 추론이 60초 넘어가자 기본 `proxy_read_timeout` 초과.
+6. **프롬프트 토큰 폭주**
+   - "강경구의 직급 알려줘" 같은 단일 직원 질의에도 `list_employees` 툴이 전 직원 리스트를 주입 → 3839 토큰 → 컨텍스트 윈도우 초과 + 영어 응답 섞임.
+
+### 해결 방안
+
+**(1) GGUF 변환 파이프라인 구축**
+- `scripts/export_exaone_merged_hf_for_gguf.py`: bitsandbytes `Linear4bit` 레이어를 fp16으로 직접 역양자화, `torch.dtype` → 문자열 변환, `config.json`의 `quantization_config`/`auto_map`/`rope_scaling` 제거.
+- 2단계 변환: `convert_hf_to_gguf.py --outtype f16` → `llama-quantize.exe ... Q4_K_M` (직접 `q4_k_m` 옵션은 미지원).
+- **메타데이터 패치**: `scripts/patch_gguf_from_f16.py` 자작 — f16 GGUF의 KV 메타데이터(토크나이저 포함)와 Q4_K_M GGUF의 텐서를 결합해 최종 배포본 생성.
+
+**(2) EC2 리소스 확보**
+- EBS 6.8GB → **30GB** 확장 (AWS 콘솔).
+- `fallocate`로 **4GB swap** 파일 추가.
+- `n_ctx`를 8192 → 4096 → **2048**로 단계적 축소 (메모리 vs 입력 길이 트레이드오프).
+
+**(3) CI/CD `.env` 고정 (`.github/workflows/deploy.yml`)**
+- `ssh heredoc` 내에서 `printf`로 `.env`를 직접 생성해 `nohup` 재시작에도 환경변수 유지.
+- `DATABASE_URL` 값은 반드시 **따옴표로 감싸서** 기록 (`printf 'DATABASE_URL="%s"\n' "$DATABASE_URL_VALUE"`).
+- `AUTO_MIGRATE=false`, `EXAONE_GGUF_PATH`, `EXAONE_GGUF_N_CTX=2048`, `LLM_PROVIDER=llama_cpp` 명시.
+
+**(4) Nginx SSE 프록시 설정**
+- `/api/agent/chat/stream` 전용 `location` 블록 추가:
+  ```
+  proxy_buffering off;
+  proxy_http_version 1.1;
+  proxy_set_header Connection '';
+  proxy_read_timeout 600s;
+  ```
+- 일반 `/api/**`는 `proxy_read_timeout 120s`로 상향.
+
+**(5) Agent 프롬프트 경량화 (커밋 `393a9bb`)**
+- `graph_orchestrator._build_forced_tool_calls`에 **단일 직원 속성 질의 가드** 추가 — `list_employees`·`get_hr_summary` 강제 호출 스킵.
+- `rag_node`에서 단일 직원 질의 감지 시 **RAG 문서 주입 생략** (`get_employee_info` 결과만 사용).
+- `chat_orchestrator._DEFAULT_SYSTEM`에 **한국어 강제 + 간결성 지시** 추가.
+- 결과: **3839 → ~300 토큰 (-92%)**, 한국어 정답률 상승.
+
+### 현재 상태 (2025-04)
+
+| 항목 | 상태 |
+|---|---|
+| 배포 | ✅ `api.kanggyeonggu.store` HTTPS |
+| 정확도 | ✅ 한국어, 도메인 정답 |
+| 속도 | ⚠️ 30초~1분+ (CPU 2 vCPU `token/sec` 한계) |
+| 월 비용 | ~$70 |
+
+### 남은 과제 / 트레이드오프
+
+- **속도는 하드웨어 한계**. 토큰 최적화로 개선 가능한 부분은 포화.
+- 이메일 스팸 분류기(LLaMA 3)는 **CPU 추론 비현실적**이라 배포 제외, 로컬 영상 데모로 대체.
+- 프로덕션 전환 시 옵션:
+  1. g4dn.xlarge GPU 인스턴스 (월 ~$380)
+  2. OpenAI/Gemini **텍스트 채팅** 어댑터 추가 구현 (현재 Gemini 어댑터는 이미지 전용)
+  3. 2~4B 소형 모델 교체
+
+### 관련 파일
+
+- `backend/ontology/apps/scripts/export_exaone_merged_hf_for_gguf.py`
+- `backend/ontology/apps/scripts/patch_gguf_from_f16.py`
+- `.github/workflows/deploy.yml`
+- `nginx_default.conf`
+- `backend/ontology/apps/domain/hub/orchestrators/graph_orchestrator.py`
+- `backend/ontology/apps/domain/hub/orchestrators/chat_orchestrator.py`
+
+---
+
 ## 문서·코드 정리 원칙
 
 - **과거 이슈**: 이 문서(issues-and-resolutions.md)에 문제·해결을 기록하고, 필요 시 "레거시 이슈"로 참조.

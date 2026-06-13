@@ -5,6 +5,10 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
+  # 로컬: backend/gateway 에서 bootRun 시 프로젝트 루트 .env 자동 로드 (없으면 무시)
+  config:
+    import: optional:file:../../.env[.properties]
+
   # Database 설정 (PostgreSQL - Neon DB)
   datasource:
     url: jdbc:postgresql://${NEON_DEV_HOST}:${NEON_DEV_PORT:5432}/${NEON_DEV_DATABASE}?sslmode=${NEON_DEV_SSL_MODE:require}
@@ -29,14 +33,11 @@ spring:
         format_sql: true
     open-in-view: false
 
-  # Redis 설정 (Upstash)
+  # Redis 설정 (Upstash) — 단일 URL로 통합 (rediss://default:TOKEN@HOST:6379)
+  # rediss:// 스킴이면 SSL 자동 활성화.
   data:
     redis:
-      host: ${UPSTASH_REDIS_HOST}
-      port: ${UPSTASH_REDIS_PORT}
-      password: ${UPSTASH_REDIS_PASSWORD}
-      ssl:
-        enabled: true
+      url: ${UPSTASH_REDIS_URL}
 
 server:
   port: 8080
@@ -45,7 +46,7 @@ server:
 # JWT 설정
 # ============================================================================
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:local-dev-jwt-secret-do-not-use-in-production}
   expiration: ${JWT_EXPIRATION:900000}
   refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 

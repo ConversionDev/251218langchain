@@ -8,14 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
+from application.address_book.address_book_service import AddressBookService  # type: ignore
 from core.database import get_db  # type: ignore
-from domain.hub.repositories.employee_repository import list_all as employee_list_all  # type: ignore
-from domain.hub.repositories.internal_address_repository import (  # type: ignore
-    create as internal_address_create,
-    delete_by_id as internal_address_delete,
-    list_all as internal_address_list_all,
-    update as internal_address_update,
-)
 
 router = APIRouter(prefix="/address-book", tags=["Address Book (사내 주소록)"])
 
@@ -51,45 +45,7 @@ def get_address_book(
     db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """직원 + 공용함·그룹을 한 목록으로 반환. 메일 받는 사람 선택용. 모두 DB(employees / internal_addresses) 기준."""
-    search = _normalize_q(q)
-
-    items: List[Dict[str, Any]] = []
-
-    if type is None or type == "person":
-        employees = employee_list_all(db)  # employees 테이블
-        for e in employees:
-            items.append({
-                "id": e.get("id"),
-                "type": "person",
-                "displayName": e.get("name") or "",
-                "email": e.get("email") or "",
-                "department": e.get("department") or "",
-                "source": "employees",
-            })
-
-    if type is None or type in ("shared", "group"):
-        addr_type_filter = type if type in ("shared", "group") else None
-        addrs = internal_address_list_all(db, type_filter=addr_type_filter)  # internal_addresses 테이블
-        for a in addrs:
-            items.append({
-                "id": a.get("id"),
-                "type": a.get("type") or "shared",
-                "displayName": a.get("displayName") or "",
-                "email": a.get("email") or "",
-                "department": a.get("department") or "",
-                "source": "internal_addresses",
-            })
-
-    if search:
-        items = [
-            i for i in items
-            if search in (i.get("displayName") or "").lower()
-            or search in (i.get("email") or "").lower()
-            or search in (i.get("department") or "").lower()
-            or search in (i.get("id") or "").lower()
-        ]
-
-    return items[:500]
+    return AddressBookService(db).list_all(type_filter=type, search=_normalize_q(q) or None)
 
 
 @router.post("", response_model=Dict[str, Any], status_code=201)
@@ -101,8 +57,7 @@ def create_address(
     if body.type not in ("shared", "group"):
         raise HTTPException(status_code=400, detail="type must be shared or group")
     try:
-        return internal_address_create(
-            db,
+        return AddressBookService(db).create(
             type=body.type,
             display_name=body.displayName,
             email=body.email,
@@ -122,9 +77,8 @@ def update_address(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """공용·그룹 1건 수정. internal_addresses에 있는 id만 가능."""
-    result = internal_address_update(
-        db,
-        id=address_id,
+    result = AddressBookService(db).update(
+        address_id,
         display_name=body.displayName,
         email=body.email,
         department=body.department,
@@ -142,5 +96,5 @@ def delete_address(
     db: Session = Depends(get_db),
 ) -> None:
     """공용·그룹 1건 삭제. internal_addresses에 있는 id만 가능."""
-    if not internal_address_delete(db, address_id):
+    if not AddressBookService(db).delete(address_id):
         raise HTTPException(status_code=404, detail="Address not found or not deletable")

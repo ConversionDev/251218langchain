@@ -6,16 +6,15 @@ LangGraph 기반 에이전트 API 엔드포인트를 제공합니다.
 """
 
 import base64
-import importlib
 import json
 import logging
-import sys
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from application.chat.chat_service import ChatService, MessageItem  # type: ignore
 from core.config import get_settings  # type: ignore
 from api.shared.upload_store import (  # type: ignore
     delete_upload_file,
@@ -27,11 +26,6 @@ from api.shared.upload_store import (  # type: ignore
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agent", tags=["LangGraph Agent"])
-
-
-class MessageItem(BaseModel):
-    role: str = Field(..., description="메시지 역할 (user, assistant, system)")
-    content: str = Field(..., description="메시지 내용")
 
 
 class AgentRequest(BaseModel):
@@ -76,16 +70,8 @@ async def _parse_chat_payload(request: Request) -> Dict[str, Any]:
 _IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
-def _get_chat_orchestrator() -> Any:
-    """chat_orchestrator 모듈 반환. 이미 로드된 경우 sys.modules 재사용."""
-    key = "domain.hub.orchestrators.chat_orchestrator"
-    if key in sys.modules:
-        return sys.modules[key]
-    return importlib.import_module(key)
-
-
 def _resolve_file_ids_to_payload(payload: Dict[str, Any]) -> None:
-    """file_ids(+ file_names)를 로드해 이미지는 base64로, 문서(PDF/TXT/Word/Excel)는 텍스트 추출 후 메시지에 주입."""
+    """file_ids(+ file_names)를 로드해 이미지는 base64로, 문서는 텍스트 추출 후 메시지에 주입."""
     file_ids = payload.get("file_ids")
     if not file_ids or payload.get("images") is not None:
         return
@@ -98,7 +84,6 @@ def _resolve_file_ids_to_payload(payload: Dict[str, Any]) -> None:
     if len(file_names) != len(ids):
         file_names = [""] * len(ids)
 
-    # 파일명이 없으면 기존 동작: 전부 이미지로 처리 (하위 호환)
     if not any(file_names):
         payload["images"] = load_upload_files_as_base64(ids, delete_after=True)
         payload.pop("file_ids", None)
@@ -134,7 +119,6 @@ def _resolve_file_ids_to_payload(payload: Dict[str, Any]) -> None:
                 if rows:
                     lines = ["\t".join(str(v) for v in row.values()) for row in rows[:500]]
                     document_texts.append(f"[첨부 문서: {name or '엑셀'}]\n" + "\n".join(lines))
-            # else: 알 수 없는 확장자는 무시
         except Exception as e:
             logger.warning("첨부 파일 처리 실패 %s: %s", name or fid, e)
         finally:
@@ -151,7 +135,7 @@ def _resolve_file_ids_to_payload(payload: Dict[str, Any]) -> None:
 
 @router.post("/upload")
 async def agent_upload(files: List[UploadFile] = File(default=[], description="업로드할 파일들")):
-    """채팅 첨부용 파일 업로드. 용량·개수 제한 적용 후 임시 저장, file_ids 반환. (BP)"""
+    """채팅 첨부용 파일 업로드. 용량·개수 제한 적용 후 임시 저장, file_ids 반환."""
     files = files or []
     settings = get_settings()
     max_count = settings.upload_max_files
@@ -181,49 +165,31 @@ async def agent_upload(files: List[UploadFile] = File(default=[], description="�
 async def agent_chat_stream(request: Request):
     payload = await _parse_chat_payload(request)
     _resolve_file_ids_to_payload(payload)
-    message = payload.get("message", "")
+
+    svc = ChatService()
+
+    async def generate():
+        try:
+            async for chunk in svc.stream(
+                user_text=payload.get("message", ""),
+                provider=payload.get("provider"),
+                system_prompt=payload.get("system_prompt"),
+                chat_history=payload.get("chat_history"),
+                thread_id=payload.get("thread_id"),
+                images=payload.get("images"),
+            ):
+                if isinstance(chunk, dict):
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                elif chunk:
+                    yield f"data: {json.dumps({'content': chunk})}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            error_msg = f"스트리밍 오류: {str(e)}"
+            logger.error("%s", error_msg, exc_info=True)
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            yield "data: [DONE]\n\n"
+
     try:
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
-        from domain.hub.llm import get_provider_name  # type: ignore
-
-        provider = payload.get("provider") or get_provider_name()
-
-        graph_module = _get_chat_orchestrator()
-        run_agent_stream = graph_module.run_agent_stream
-
-        chat_history = None
-        if payload.get("chat_history"):
-            chat_history = []
-            for msg in payload["chat_history"]:
-                if msg.role == "user":
-                    chat_history.append(HumanMessage(content=msg.content))
-                elif msg.role == "assistant":
-                    chat_history.append(AIMessage(content=msg.content))
-                elif msg.role == "system":
-                    chat_history.append(SystemMessage(content=msg.content))
-
-        async def generate():
-            try:
-                async for chunk in run_agent_stream(
-                    user_text=message,
-                    provider=provider,
-                    system_prompt=payload.get("system_prompt"),
-                    chat_history=chat_history,
-                    thread_id=payload.get("thread_id"),
-                    images=payload.get("images"),
-                ):
-                    if isinstance(chunk, dict):
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                    elif chunk:
-                        yield f"data: {json.dumps({'content': chunk})}\n\n"
-                yield "data: [DONE]\n\n"
-            except Exception as e:
-                error_msg = f"스트리밍 오류: {str(e)}"
-                logger.error("%s", error_msg, exc_info=True)
-                yield f"data: {json.dumps({'error': error_msg})}\n\n"
-                yield "data: [DONE]\n\n"
-
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
@@ -235,40 +201,17 @@ async def agent_chat_stream(request: Request):
 
 @router.get("/providers", response_model=List[ProviderInfo])
 async def list_providers():
-    from domain.hub.llm import get_provider_name, list_providers as _list_providers, supports_tool_calling  # type: ignore
-    current_provider = get_provider_name()
-    return [
-        ProviderInfo(name=name, supports_tool_calling=supports_tool_calling(name), is_current=(name == current_provider))
-        for name in _list_providers()
-    ]
+    return [ProviderInfo(**p) for p in ChatService().list_providers()]
 
 
 @router.get("/tools")
 async def list_tools():
-    import importlib
-    import sys
-    if "domain.hub.orchestrators" in sys.modules:
-        graph_module = sys.modules["domain.hub.orchestrators"]
-    else:
-        graph_module = importlib.import_module("domain.hub.orchestrators")
-    TOOLS = graph_module.TOOLS
-    return {"tools": [{"name": t.name, "description": t.description} for t in TOOLS]}
+    return {"tools": ChatService().list_tools()}
 
 
 @router.get("/health")
 async def agent_health():
-    from domain.hub.llm import get_provider_name, list_providers, supports_tool_calling  # type: ignore
-    try:
-        provider = get_provider_name()
-        return {
-            "status": "healthy",
-            "current_provider": provider,
-            "supports_tool_calling": supports_tool_calling(provider),
-            "available_providers": list_providers(),
-            "checkpointer_enabled": True,
-        }
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
+    return ChatService().get_health()
 
 
 from api.routers.chat_thread_router import router as _thread_router  # noqa: E402
