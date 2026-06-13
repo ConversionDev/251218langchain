@@ -10,8 +10,8 @@ from datetime import datetime
 
 from fastmcp import FastMCP
 
-from domain.hub.mcp.http_client import exaone_generate  # type: ignore
-from domain.hub.mcp.utils import get_chat_spoke_mcp_url, result_to_str  # type: ignore
+from infrastructure.mcp.http_client import exaone_generate  # type: ignore
+from infrastructure.mcp.mcp_utils import get_chat_spoke_mcp_url, result_to_str  # type: ignore
 
 
 # ---------------------------------------------------------------------------

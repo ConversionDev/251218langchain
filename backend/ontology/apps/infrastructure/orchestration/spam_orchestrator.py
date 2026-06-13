@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 
 from langgraph.graph import END, StateGraph
 
-from domain.hub.mcp.http_client import spam_call  # type: ignore
+from infrastructure.mcp.http_client import spam_call  # type: ignore
 from infrastructure.orchestration.graph_orchestrator import get_checkpointer  # type: ignore
 from infrastructure.orchestration.states.langgraph_state import SpamState  # type: ignore
 from domain.spokes.spam.services.rule_service import RuleService  # type: ignore

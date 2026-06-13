@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 from fastmcp import FastMCP
 
-from domain.hub.mcp.utils import (  # type: ignore
+from infrastructure.mcp.mcp_utils import (  # type: ignore
     get_chat_mcp_url,
     get_spam_mcp_url,
     result_to_str,

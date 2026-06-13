@@ -76,7 +76,7 @@ def analyze_with_exaone(
     _policy_context: Optional[str] = None,
 ) -> str:
     """EXAONE으로 이메일 분석. HTTP → Hub → Spam MCP → Spoke."""
-    from domain.hub.mcp.http_client import spam_call  # type: ignore
+    from infrastructure.mcp.http_client import spam_call  # type: ignore
 
     args: Dict[str, Any] = {
         "subject": subject,
@@ -97,7 +97,7 @@ def analyze_with_exaone(
 @tool
 def search_documents(query: str) -> str:
     """문서에서 관련 정보를 검색합니다. HTTP → Hub → Chat MCP → Spoke."""
-    from domain.hub.mcp.http_client import chat_call  # type: ignore
+    from infrastructure.mcp.http_client import chat_call  # type: ignore
 
     result = chat_call("search_documents", {"query": query})
     return _hub_result_to_str(result)
@@ -106,7 +106,7 @@ def search_documents(query: str) -> str:
 @tool
 def get_current_time() -> str:
     """현재 시간을 반환합니다. HTTP → Hub → Chat MCP → Spoke."""
-    from domain.hub.mcp.http_client import chat_call  # type: ignore
+    from infrastructure.mcp.http_client import chat_call  # type: ignore
 
     result = chat_call("get_current_time", {})
     return _hub_result_to_str(result)
@@ -115,7 +115,7 @@ def get_current_time() -> str:
 @tool
 def calculate(expression: str) -> str:
     """수학 표현식을 계산합니다. HTTP → Hub → Chat MCP → Spoke."""
-    from domain.hub.mcp.http_client import chat_call  # type: ignore
+    from infrastructure.mcp.http_client import chat_call  # type: ignore
 
     result = chat_call("calculate", {"expression": expression})
     return _hub_result_to_str(result)
@@ -124,7 +124,7 @@ def calculate(expression: str) -> str:
 @tool
 def define(term: str) -> str:
     """용어(term)의 정의나 설명을 문서에서 검색해 반환합니다. 예: IFRS, OECD 등."""
-    from domain.hub.mcp.http_client import chat_call  # type: ignore
+    from infrastructure.mcp.http_client import chat_call  # type: ignore
 
     result = chat_call("search_documents", {"query": term})
     return _hub_result_to_str(result)

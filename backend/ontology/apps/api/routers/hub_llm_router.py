@@ -124,7 +124,7 @@ async def exaone_health():
 # Chat / Spam call (오케스트레이터 → HTTP → Hub → call_tool → 도메인 MCP → Spoke)
 # ---------------------------------------------------------------------------
 
-from domain.hub.mcp.mcp_utils import get_spam_mcp_url, result_to_str  # type: ignore
+from infrastructure.mcp.mcp_utils import get_spam_mcp_url, result_to_str  # type: ignore
 
 
 class CallRequest(BaseModel):

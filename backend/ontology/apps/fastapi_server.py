@@ -24,7 +24,7 @@ from fastapi import FastAPI
 settings = get_settings()
 
 # Llama + ExaOne Fast MCP 통일 (health + MCP 프로토콜 한 앱)
-from domain.hub.mcp.central_control_server import get_http_app  # type: ignore  # noqa: E402
+from api.mcp.central_control_server import get_http_app  # type: ignore  # noqa: E402
 
 mcp_app = get_http_app()
 

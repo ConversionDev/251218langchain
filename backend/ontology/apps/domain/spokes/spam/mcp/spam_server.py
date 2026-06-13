@@ -10,12 +10,12 @@ from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 
-from domain.hub.mcp.http_client import (  # type: ignore
+from infrastructure.mcp.http_client import (  # type: ignore
     exaone_analyze_email,
     llama_classify,
     llama_classify_spam,
 )
-from domain.hub.mcp.utils import get_spam_spoke_mcp_url, result_to_str  # type: ignore
+from infrastructure.mcp.mcp_utils import get_spam_spoke_mcp_url, result_to_str  # type: ignore
 
 
 # ---------------------------------------------------------------------------

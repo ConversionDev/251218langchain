@@ -91,7 +91,7 @@ class PolicyService:
     ) -> Dict[str, Any]:
         """HTTP → Hub → Spam MCP → Spoke call_tool로 EXAONE 이메일 분석."""
         try:
-            from domain.hub.mcp.http_client import spam_call  # type: ignore
+            from infrastructure.mcp.http_client import spam_call  # type: ignore
 
             policy_text = None
             if policies:
