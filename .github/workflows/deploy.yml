@@ -279,12 +279,19 @@ jobs:
             sudo journalctl --vacuum-size=30M 2>/dev/null || true
             df -h /
 
-            # 패키지 설치 (이미 있으면 유지, 없을 때만 설치 → 디스크/시간 절약)
-            echo "📥 Installing packages (skip if already satisfied)..."
-            pip install --upgrade pip --no-cache-dir
-            pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
-            sed -e '/^torch==/d' -e '/^torchvision==/d' -e '/^torchaudio==/d' $APP_DIR/requirements-prod.txt > /tmp/requirements-no-torch.txt
-            pip install -r /tmp/requirements-no-torch.txt --no-cache-dir
+            # 패키지 설치 — requirements-prod.txt 해시가 바뀐 경우(또는 최초)에만 실행.
+            # 미변경 + venv에 torch·fastapi 정상 존재 시 전체 skip → 코드만 바뀐 배포는 pip 단계를 통째로 건너뜀.
+            NEW_HASH=\$(md5sum "$APP_DIR/requirements-prod.txt" | awk '{print \$1}')
+            if [ "\$(cat "$VENV_DIR/.deps_hash" 2>/dev/null)" = "\$NEW_HASH" ] && "$VENV_DIR/bin/python" -c "import torch, fastapi" 2>/dev/null; then
+              echo "✅ 의존성 변경 없음 — pip install 건너뜀 (hash: \$NEW_HASH)"
+            else
+              echo "📥 의존성 설치 (변경 감지 또는 최초)..."
+              pip install --upgrade pip --no-cache-dir
+              pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
+              sed -e '/^torch==/d' -e '/^torchvision==/d' -e '/^torchaudio==/d' $APP_DIR/requirements-prod.txt > /tmp/requirements-no-torch.txt
+              pip install -r /tmp/requirements-no-torch.txt --no-cache-dir
+              echo "\$NEW_HASH" > "$VENV_DIR/.deps_hash"
+            fi
 
             # 기존 프로세스 종료 (systemd 우선 정지 → 레거시 nohup fallback)
             echo "🛑 Stopping existing application..."
@@ -373,6 +380,7 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: 'gradle'
 
       - name: Build Spring Gateway jar
         run: |
