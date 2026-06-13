@@ -10,11 +10,17 @@
 
 ## 1. 프로젝트 개요
 
-- **목적**: 사내 HR 데이터(직원/역량/성과/공시)를 LLM Agent + RAG로 질의응답
+- **목적**: 사내 HR 데이터(직원/역량/성과/공시)를 LLM Agent + RAG로 질의응답하고, 이력서·메일·스팸까지 이어지는 **인사·성과·공시 AI 플랫폼** 구축
+- **핵심 도메인**: 역량(Success DNA)·공시(disclosures)·LLM(EXAONE)·플랫폼(채팅, 이력서 분석, 성과 대시보드, 직원/신입 관리, 메일·스팸)
 - **차별점**
   - 단일 EXAONE 모델을 **두 가지 런타임**으로 서빙 (로컬 GPU `transformers` / 배포 CPU `llama.cpp GGUF`)
   - LangGraph 기반 **조건부 툴 라우팅** (질문 유형에 따라 RAG/툴 선택적 호출)
-  - 도메인 데이터를 **`domain/hub/repositories` + `domain/hub/rag`** 두 축으로 분리 (정형 SQL + 벡터)
+  - **헥사고날 라이트**(api·application·domain·infrastructure) + **MCP 중앙 허브·스타 토폴로지**(chat·spam 스포크)
+  - 도메인 데이터를 **정형 SQL(repositories) + 벡터(pgvector)** 두 축으로 분리
+
+### Success DNA (5대 역량)
+
+이력서 원문을 LLM으로 분석해 **리더십·기술력·창의성·협업·적응력** 5개 역량을 각 0–100점으로 산출하고, 직원 등록·성과 대시보드·방사형 차트·직무 전환 분석에 활용한다.
 
 ---
 
@@ -119,7 +125,7 @@ exaone_q4_k_m.gguf (tensor만 OK, metadata 손상)
 exaone_competency_q4_k_m.gguf  (4.5GB, 배포 최종본)
 ```
 
-### 트러블슈팅 요약 (상세는 [docs/issues-and-resolutions.md §12](docs/issues-and-resolutions.md))
+### 트러블슈팅 요약 (상세는 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md))
 
 - **bitsandbytes 호환성**: `Linear4bit` 레이어를 fp16으로 직접 역양자화
 - **GGUF 메타데이터 손상**: Q4 변환 시 토크나이저 merges 누락 → f16 GGUF의 KV를 Q4 tensor와 재결합하는 패치 스크립트 작성
@@ -148,13 +154,17 @@ exaone_competency_q4_k_m.gguf  (4.5GB, 배포 최종본)
 
 ## 7. 프로젝트 문서
 
-모든 세부 문서는 [`docs/`](docs/) 참조:
+세부 문서는 [`docs/`](docs/)에 **6개 문서**로 정리되어 있습니다 (이 README가 개요·진입점).
 
-- [전체-프로젝트-구현현황.md](docs/전체-프로젝트-구현현황.md)
-- [backend.md](docs/backend.md) / [frontend.md](docs/frontend.md) / [mail.md](docs/mail.md)
-- [strategy.md](docs/strategy.md) — 도메인 전략
-- [issues-and-resolutions.md](docs/issues-and-resolutions.md) — **트러블슈팅 히스토리**
-- [implementation-status.md](docs/implementation-status.md)
+| 문서 | 내용 |
+|------|------|
+| [FEATURES.md](docs/FEATURES.md) | **전체 기능 목록** — 에이전트 핵심 vs 플랫폼·세부 기능 분류 |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 3서비스 토폴로지·헥사고날 계층·MCP 스타 토폴로지·채팅/스팸/메일 파이프라인·배포(systemd·nginx·CI/CD) |
+| [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | 도메인별 구현 현황(API·프론트 연동)·데이터·RAG·학습 파이프라인(스팸 SFT·역량 LoRA) |
+| [FRONTEND.md](docs/FRONTEND.md) | 프론트 라우트·플로우·상태·API 매핑·GSAP 붓글씨 인트로 연출 |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | **이력서용** 핵심 난제·해결(문제→원인→해결→배운 점) |
+
+> 헥사고날 마이그레이션 상세 이력은 [docs/archive/hexagonal-architecture-milestone.md](docs/archive/hexagonal-architecture-milestone.md)에 보존되어 있습니다.
 
 ---
 
