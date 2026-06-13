@@ -1,7 +1,7 @@
 """
 EXAONE 관리자
 
-EXAONE 베이스 모델의 싱글톤 관리. domain.hub.llm(ExaOne Provider)을 사용합니다.
+EXAONE 베이스 모델의 싱글톤 관리. infrastructure.llm(ExaOne Provider)을 사용합니다.
 """
 
 import threading

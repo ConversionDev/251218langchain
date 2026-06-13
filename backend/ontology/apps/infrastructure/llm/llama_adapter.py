@@ -2,7 +2,7 @@
 Llama Adapter - Hub의 Llama 진입점.
 
 Llama 모델(스팸 분류) 접근은 이 어댑터를 통해서만 수행합니다.
-내부적으로 domain.hub.llm.llama_classifier(LLaMAGate)를 사용합니다.
+내부적으로 infrastructure.llm.llama_classifier(LLaMAGate)를 사용합니다.
 """
 
 from typing import Any, Dict

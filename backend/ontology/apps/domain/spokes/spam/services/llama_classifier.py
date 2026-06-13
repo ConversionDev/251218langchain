@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 import torch
-from domain.hub.shared.utils import format_email_text  # type: ignore
+from domain.shared.utils import format_email_text  # type: ignore
 
 logger = logging.getLogger(__name__)
 

@@ -47,7 +47,7 @@ if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 from core.paths import get_spam_sft_dir  # type: ignore
-from domain.hub.shared.utils import save_jsonl  # type: ignore
+from domain.shared.utils import save_jsonl  # type: ignore
 
 
 # 한국어 스팸 메일 유형 15종 (다양성 극대화, 검증 정확도 82~88%+ 목표)

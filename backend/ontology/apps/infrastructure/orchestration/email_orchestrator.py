@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from infrastructure.persistence.repositories.performance_record_repository import create_submission  # type: ignore
-from domain.hub.shared.period_utils import get_current_period  # type: ignore
+from domain.shared.period_utils import get_current_period  # type: ignore
 
 
 # 5대 역량 라벨 (competency_anchors·Success DNA와 일치)
@@ -94,7 +94,7 @@ def run_email_classify_and_record(
         body: 메일 본문 (선택)
         employee_id: 발신 직원 ID
         period: 분기 (예: 2025-Q1). None이면 현재 분기
-        generate_text_fn: ExaOne 텍스트 생성 함수. None이면 domain.hub.llm.generate_text 사용
+        generate_text_fn: ExaOne 텍스트 생성 함수. None이면 infrastructure.llm.generate_text 사용
 
     Returns:
         {

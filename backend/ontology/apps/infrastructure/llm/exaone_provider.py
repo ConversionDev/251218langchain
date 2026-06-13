@@ -124,7 +124,7 @@ class LLMProvider:
                 return cls._direct_loaded_llm
             from infrastructure.llm.exaone_hf_model import load_exaone_model  # type: ignore
 
-            exaone_llm = load_exaone_model(register=False)
+            exaone_llm = load_exaone_model()
             cls._direct_loaded_llm = exaone_llm.get_langchain_model()
             return cls._direct_loaded_llm
 

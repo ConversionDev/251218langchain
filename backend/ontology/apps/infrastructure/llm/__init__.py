@@ -1,7 +1,7 @@
 """
 Infrastructure LLM Adapters — ExaOne / LLaMA / Gemini.
 
-domain.hub.llm의 역할을 이어받은 인프라 어댑터 패키지.
+infrastructure.llm의 역할을 이어받은 인프라 어댑터 패키지.
 """
 
 from .exaone_adapter import analyze_email, generate_text, get_llm

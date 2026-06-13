@@ -81,7 +81,7 @@ from core.paths import (  # type: ignore
     get_project_root,
     get_spam_sft_dir,
 )
-from domain.hub.shared.utils import (  # type: ignore
+from domain.shared.utils import (  # type: ignore
     extract_email_metadata,
     format_email_text,
     load_jsonl,

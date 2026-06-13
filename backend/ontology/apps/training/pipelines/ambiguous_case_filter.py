@@ -19,7 +19,7 @@ if str(app_dir) not in sys.path:
 
 from core.llm.providers.llama import LLaMAGate  # type: ignore
 from core.paths import get_data_dir  # type: ignore
-from domain.hub.shared.utils import (  # type: ignore
+from domain.shared.utils import (  # type: ignore
     load_jsonl,
     save_jsonl,
     extract_email_metadata,

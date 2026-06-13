@@ -765,16 +765,12 @@ class ExaoneLangChainWrapper(BaseChatModel):
 def load_exaone_model(
     model_path: Optional[str] = None,
     model_id: str = "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct",
-    register: bool = True,
-    is_default: bool = False,
 ) -> ExaoneLLM:
-    """EXAONE 모델 로드 및 등록.
+    """EXAONE 모델 로드.
 
     Args:
         model_path: 로컬 모델 경로 (None이면 현재 디렉토리 또는 model_id 사용)
         model_id: HuggingFace 모델 ID
-        register: LLMFactory에 등록할지 여부
-        is_default: 기본 모델로 설정할지 여부
 
     Returns:
         ExaoneLLM: 로드된 EXAONE 모델 인스턴스
@@ -798,14 +794,5 @@ def load_exaone_model(
         dtype="auto",
         trust_remote_code=True,
     )
-
-    # 등록
-    if register:
-        from core.llm.factory import LLMFactory  # type: ignore
-
-        LLMFactory.register("exaone", model, is_default=is_default)
-        print(
-            f"[OK] EXAONE 모델이 LLMFactory에 등록되었습니다. (기본 모델: {is_default})"
-        )
 
     return model
