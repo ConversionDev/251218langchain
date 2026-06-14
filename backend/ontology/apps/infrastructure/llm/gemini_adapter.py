@@ -89,6 +89,33 @@ def _confidence_from_prob(spam_prob: float) -> str:
     return "high"
 
 
+def gemini_complete(system_prompt: str, user_text: str, model: Optional[str] = None) -> Optional[str]:
+    """Gemini로 1회 텍스트 생성 (분류·구조화 추출 공용). 키 없거나 실패 시 None.
+
+    기본 모델은 settings.gemini_classify_model(flash-lite) — 가벼운 작업에 빠름.
+    """
+    from core.config import get_settings
+
+    settings = get_settings()
+    api_key = getattr(settings, "gemini_api_key", None)
+    if not api_key:
+        logger.warning("[GEMINI] API 키 없음 → None")
+        return None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            import google.generativeai as genai  # type: ignore
+
+        genai.configure(api_key=api_key)
+        model_id = model or getattr(settings, "gemini_classify_model", None) or "gemini-2.5-flash-lite"
+        m = genai.GenerativeModel(model_id)
+        resp = m.generate_content(f"{system_prompt}\n\n{user_text}")
+        return getattr(resp, "text", None)
+    except Exception as e:
+        logger.warning("[GEMINI] 생성 실패 → None: %s", e)
+        return None
+
+
 def gemini_classify_spam(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Gemini로 이메일 스팸 확률을 산출. 실패 시 UNCERTAIN (예외 던지지 않음)."""
     from core.config import get_settings

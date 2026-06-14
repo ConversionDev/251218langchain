@@ -235,6 +235,17 @@ class Settings(BaseSettings):
         default="gemini-2.5-flash",
         description="Gemini 모델 ID (예: gemini-2.5-flash, gemini-2.0-flash). 404 시 공식 문서 모델명 확인.",
     )
+    gemini_classify_model: str = Field(
+        default="gemini-2.5-flash-lite",
+        description="분류·추출 등 가벼운 작업용 빠른 Gemini 모델 (thinking 미사용, 실측 ~1s). 이력서 폼 추출 등에 사용.",
+    )
+    resume_form_llm: str = Field(
+        default="exaone",
+        description=(
+            "이력서 업로드 폼-채우기(기본정보·학력·경력 추출) LLM. exaone=학습 EXAONE(로컬/GPU), "
+            "gemini=Gemini flash-lite(배포 권장 — CPU에서 즉시 응답). Success DNA 점수(ATS)는 별개로 항상 EXAONE."
+        ),
+    )
 
     # ===================
     # Mailgun (수신 Webhook + 발송)

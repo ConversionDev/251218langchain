@@ -727,21 +727,30 @@ def analyze_resume_text(text: str, ats_only: bool = False) -> Dict[str, Any]:
             _text_resume_cache.popitem(last=False)
         return result
 
-    # apply 폼 채우기 전용 경량 경로 — successDna 제외, 입력·출력 토큰 축소
+    # apply 폼 채우기 전용 경량 경로 — successDna 제외, 입력·출력 토큰 축소.
+    # 업로드 즉시 응답을 위해 배포(RESUME_FORM_LLM=gemini)에선 Gemini flash-lite 사용(무거운 EXAONE 미로드).
     user_message = f"[이력서 원문]\n{text[:_RESUME_FORM_TEXT_LIMIT]}"
-    llm = get_llm(
-        provider=_prov,
-        temperature=_RESUME_TEMPERATURE,
-        max_tokens=_RESUME_FORM_MAX_TOKENS,
-    )
-    messages = [
-        SystemMessage(content=_RESUME_FORM_SYSTEM_PROMPT),
-        HumanMessage(content=user_message),
-    ]
-    out = llm.invoke(messages)
-    response_str = getattr(out, "content", None) or getattr(out, "text", None)
-    if not isinstance(response_str, str):
-        response_str = str(out) if out is not None else ""
+    from core.config import get_settings  # type: ignore
+
+    response_str: Optional[str] = None
+    if (getattr(get_settings(), "resume_form_llm", "exaone") or "exaone").lower() == "gemini":
+        from infrastructure.llm.gemini_adapter import gemini_complete  # type: ignore
+
+        response_str = gemini_complete(_RESUME_FORM_SYSTEM_PROMPT, user_message)
+        if response_str:
+            logger.debug("이력서 폼 추출: Gemini")
+        else:
+            logger.info("이력서 폼 Gemini 실패 → EXAONE 폴백")
+
+    if not response_str:  # 로컬(exaone) 또는 Gemini 실패 시 폴백
+        llm = get_llm(provider=_prov, temperature=_RESUME_TEMPERATURE, max_tokens=_RESUME_FORM_MAX_TOKENS)
+        out = llm.invoke(
+            [SystemMessage(content=_RESUME_FORM_SYSTEM_PROMPT), HumanMessage(content=user_message)]
+        )
+        response_str = getattr(out, "content", None) or getattr(out, "text", None)
+        if not isinstance(response_str, str):
+            response_str = str(out) if out is not None else ""
+
     parsed = _extract_json_from_response(response_str)
     if not parsed:
         raise ValueError(f"LLM 응답에서 JSON을 파싱하지 못했습니다. raw: {response_str[:500]}")
