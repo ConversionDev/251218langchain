@@ -33,6 +33,8 @@ export default function CoreEmployeesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [searchName, setSearchName] = useState("");
+  const [searchDept, setSearchDept] = useState("");
   const [nextId, setNextId] = useState("E001");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -69,9 +71,11 @@ export default function CoreEmployeesPage() {
     setAllEmployees(collected);
   }, []);
 
-  const loadPage = useCallback((p: number) => {
+  const loadPage = useCallback((p: number, search?: string) => {
+    const term = (search ?? "").trim();
     setLoading(true);
-    fetchEmployeesPaginated({ page: p, pageSize: PAGE_SIZE, employmentType: "regular" })
+    // 검색 시 전체 기존직원 대상(현재 페이지 한정 아님)
+    fetchEmployeesPaginated({ page: p, pageSize: term ? 100 : PAGE_SIZE, employmentType: "regular", search: term || undefined })
       .then(({ items, total: t }) => {
         const pageItems = Array.isArray(items) ? items : [];
         setEmployeesPage(pageItems);
@@ -85,10 +89,17 @@ export default function CoreEmployeesPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    loadPage(1);
     loadRegularSummary().catch(() => setSummaryEmployees([]));
     loadAllEmployees().catch(() => setAllEmployees([]));
-  }, [hydrated, loadPage, loadRegularSummary, loadAllEmployees]);
+  }, [hydrated, loadRegularSummary, loadAllEmployees]);
+
+  // 초기 로드 + 서버 검색(디바운스): 이름/부서로 전체 기존직원을 검색 (현재 페이지 한정 아님)
+  useEffect(() => {
+    if (!hydrated) return;
+    const term = searchName.trim() || searchDept.trim();
+    const t = setTimeout(() => loadPage(1, term), term ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [searchName, searchDept, hydrated, loadPage]);
 
   useEffect(() => {
     if (!hydrated || !selectedEmployee) return;
@@ -248,20 +259,18 @@ export default function CoreEmployeesPage() {
             </div>
           </div>
         </div>
-        <div className="mt-4">
-          {loading ? (
-            <div className="flex h-32 items-center justify-center rounded border border-border bg-muted/20 text-sm text-muted-foreground">
-              {CORE_EMPLOYEES_MESSAGES.section.loading}
-            </div>
-          ) : (
-            <EmployeeListTable
-              employees={employees}
-              onAnalyze={handleAnalyze}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onOpenProfile={handleOpenProfile}
-            />
-          )}
+        <div className={`mt-4 transition-opacity ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
+          <EmployeeListTable
+            employees={employees}
+            onAnalyze={handleAnalyze}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onOpenProfile={handleOpenProfile}
+            filterName={searchName}
+            onFilterNameChange={setSearchName}
+            filterDept={searchDept}
+            onFilterDeptChange={setSearchDept}
+          />
         </div>
       </section>
 

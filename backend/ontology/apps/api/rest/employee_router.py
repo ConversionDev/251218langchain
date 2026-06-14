@@ -71,11 +71,12 @@ def list_employees(
     page: Optional[int] = None,
     pageSize: Optional[int] = None,
     employmentType: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> List[Dict[str, Any]] | PaginatedEmployeesResponse:
-    """직원 목록. page/pageSize가 있으면 페이징 응답, 없으면 전체 목록."""
+    """직원 목록. page/pageSize가 있으면 페이징 응답, 없으면 전체 목록. search: 이름·부서·ID 검색."""
     svc = EmployeeService(db)
     if page is not None or pageSize is not None:
-        items, total = svc.list_paginated(page or 1, pageSize or 20, employment_type=employmentType)
+        items, total = svc.list_paginated(page or 1, pageSize or 20, employment_type=employmentType, search=search)
         p = max(1, page or 1)
         ps = max(1, min(100, pageSize or 20))
         return PaginatedEmployeesResponse(items=items, total=total, page=p, pageSize=ps)

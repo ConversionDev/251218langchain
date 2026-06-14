@@ -28,12 +28,14 @@ export async function fetchEmployeesPaginated(params: {
   page?: number;
   pageSize?: number;
   employmentType?: "regular" | "new_hire";
+  search?: string;
 }): Promise<EmployeesPaginatedResult> {
-  const { page = 1, pageSize = 20, employmentType } = params;
+  const { page = 1, pageSize = 20, employmentType, search } = params;
   const url = new URL(`${API_BASE}/api/employees`);
   url.searchParams.set("page", String(page));
   url.searchParams.set("pageSize", String(pageSize));
   if (employmentType) url.searchParams.set("employmentType", employmentType);
+  if (search && search.trim()) url.searchParams.set("search", search.trim());
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`Employees fetch failed: ${res.status}`);
   return res.json();

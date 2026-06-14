@@ -77,9 +77,11 @@ export default function CoreNewHiresPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [justRegistered, setJustRegistered] = useState<string | null>(null);
 
-  const loadPage = useCallback((p: number) => {
+  const loadPage = useCallback((p: number, search?: string) => {
+    const term = (search ?? "").trim();
     setLoading(true);
-    fetchEmployeesPaginated({ page: p, pageSize: PAGE_SIZE, employmentType: "new_hire" })
+    // 검색 시에는 전체 신입 대상으로 조회(현재 페이지 한정 아님). 매칭 결과를 넉넉히 가져옴.
+    fetchEmployeesPaginated({ page: p, pageSize: term ? 100 : PAGE_SIZE, employmentType: "new_hire", search: term || undefined })
       .then(({ items, total: t }) => {
         setNewHires(Array.isArray(items) ? items : []);
         setTotal(typeof t === "number" ? t : 0);
@@ -89,16 +91,19 @@ export default function CoreNewHiresPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    loadPage(1);
-  }, [hydrated, loadPage]);
-
   const list = newHires ?? [];
 
   const [compareCandidate, setCompareCandidate] = useState<Employee | null>(null);
   const [filterName, setFilterName] = useState("");
   const [filterDept, setFilterDept] = useState("");
+
+  // 초기 로드 + 서버 검색(디바운스): 이름/부서로 전체 신입을 검색 (현재 페이지 한정 아님)
+  useEffect(() => {
+    if (!hydrated) return;
+    const term = filterName.trim() || filterDept.trim();
+    const t = setTimeout(() => loadPage(1, term), term ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [filterName, filterDept, hydrated, loadPage]);
 
   const refreshList = () => loadPage(page);
 

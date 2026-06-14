@@ -43,12 +43,14 @@ class EmployeeService:
         return repo_list_all(self.db)
 
     def list_paginated(
-        self, page: int, page_size: int, employment_type: Optional[str] = None
+        self, page: int, page_size: int, employment_type: Optional[str] = None, search: Optional[str] = None
     ):
-        """Returns (items, total) tuple."""
+        """Returns (items, total) tuple. search: 이름·부서·ID 부분일치(전체 대상)."""
         p = max(1, page)
         ps = max(1, min(100, page_size))
-        return repo_list_paginated(self.db, page=p, page_size=ps, employment_type=employment_type)
+        return repo_list_paginated(
+            self.db, page=p, page_size=ps, employment_type=employment_type, search=search
+        )
 
     def get(self, employee_id: str) -> Optional[Dict[str, Any]]:
         return repo_get_by_id(self.db, employee_id)

@@ -284,9 +284,11 @@ def list_paginated(
     page: int = 1,
     page_size: int = 20,
     employment_type: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """직원 목록 페이징. employment_type: None(전체), 'regular'(기존직원), 'new_hire'(신입).
     신입: employment_type='new_hire' 이거나 status가 ATS 상태(pending/screening/hired/rejected)인 경우(과거 적재 데이터 호환).
+    search: 이름·부서·ID 부분일치(전체 대상 서버 검색).
     반환: (해당 페이지 항목 리스트, 전체 개수)."""
     q = db.query(Employee)
     if employment_type == "new_hire":
@@ -306,6 +308,13 @@ def list_paginated(
             (Employee.status.is_(None))
             | (Employee.status == "")
             | (~Employee.status.in_(["pending", "screening", "rejected"]))
+        )
+    if search and search.strip():
+        kw = f"%{search.strip()}%"
+        q = q.filter(
+            Employee.name.ilike(kw)
+            | Employee.department.ilike(kw)
+            | Employee.id.ilike(kw)
         )
     total = q.count()
     rows = (

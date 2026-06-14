@@ -42,13 +42,32 @@ interface EmployeeListTableProps {
   onDelete?: (id: string) => void;
   onOpenProfile?: (emp: Employee) => void;
   onAnalyze?: (emp: Employee) => void;
+  /** 제어형 필터: 지정 시 부모가 검색을 관리(서버 검색용). 미지정 시 내부 상태(클라이언트 필터). */
+  filterName?: string;
+  onFilterNameChange?: (v: string) => void;
+  filterDept?: string;
+  onFilterDeptChange?: (v: string) => void;
 }
 
-export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, onAnalyze }: EmployeeListTableProps) {
+export function EmployeeListTable({
+  employees,
+  onEdit,
+  onDelete,
+  onOpenProfile,
+  onAnalyze,
+  filterName: filterNameProp,
+  onFilterNameChange,
+  filterDept: filterDeptProp,
+  onFilterDeptChange,
+}: EmployeeListTableProps) {
   const setSelectedEmployee = useStore((s) => s.setSelectedEmployee);
   const analyzingEmployeeId = useStore((s) => s.analyzingEmployeeId);
-  const [filterDept, setFilterDept] = useState("");
-  const [filterName, setFilterName] = useState("");
+  const [filterDeptInner, setFilterDeptInner] = useState("");
+  const [filterNameInner, setFilterNameInner] = useState("");
+  const filterName = filterNameProp ?? filterNameInner;
+  const filterDept = filterDeptProp ?? filterDeptInner;
+  const setFilterName = onFilterNameChange ?? setFilterNameInner;
+  const setFilterDept = onFilterDeptChange ?? setFilterDeptInner;
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
