@@ -88,6 +88,14 @@ class Settings(BaseSettings):
         default="exaone",
         description="텍스트 채팅 LLM: exaone(GPU) | llama_cpp(CPU GGUF). 이미지는 gemini_adapter 별도.",
     )
+    chat_llm: str = Field(
+        default="exaone",
+        description=(
+            "채팅 에이전트 최종 답변 LLM. exaone=학습 EXAONE(로컬/GPU). "
+            "gemini=Gemini로 답변 생성(배포 권장 — CPU EXAONE 지연 회피). 도구·RAG는 동일. "
+            "Gemini 실패 시 EXAONE로 폴백."
+        ),
+    )
 
     # ===================
     # DB·마이그레이션 설정

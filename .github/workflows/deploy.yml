@@ -310,6 +310,7 @@ jobs:
               printf 'AUTO_MIGRATE=false\n'
               printf 'SPAM_CLASSIFIER=gemini\n'
               printf 'RESUME_FORM_LLM=gemini\n'
+              printf 'CHAT_LLM=gemini\n'
               printf 'SPAM_AGENT_ESCALATION=true\n'
               printf 'SPAM_AGENT_LLM=gemini\n'
               printf 'DATABASE_URL="%s"\n'            "\$DATABASE_URL_VALUE"

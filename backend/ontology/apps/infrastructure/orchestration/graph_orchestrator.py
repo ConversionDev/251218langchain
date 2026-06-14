@@ -581,6 +581,56 @@ def _build_forced_tool_calls(user_query: str) -> List[Dict[str, Any]]:
     return forced_calls
 
 
+def _chat_use_gemini() -> bool:
+    """배포(CHAT_LLM=gemini)에서 채팅 최종 답변을 Gemini로 생성(EXAONE CPU 지연 회피). 로컬 기본 exaone."""
+    try:
+        from core.config import get_settings  # type: ignore
+
+        return (get_settings().chat_llm or "exaone").lower() == "gemini"
+    except Exception:
+        return False
+
+
+def _with_rag_context(messages: List[BaseMessage], context: Optional[str]) -> List[BaseMessage]:
+    """RAG 컨텍스트를 시스템 메시지에 주입 (EXAONE 경로와 동일 처리)."""
+    if not (context and messages):
+        return messages
+    addition = (
+        f"\n\n참고 컨텍스트 (아래 문서를 우선 참고하여 답변하고, 인용 시 [출처: ...]를 밝혀 주세요):\n{context}"
+        "\n\n답변은 일반 텍스트로만 작성하고, ```json 또는 빈 코드 블록을 사용하지 마세요."
+    )
+    msgs = list(messages)
+    for i, m in enumerate(msgs):
+        if isinstance(m, SystemMessage):
+            msgs[i] = SystemMessage(content=str(m.content) + addition)
+            return msgs
+    return [SystemMessage(content=f"당신은 도움이 되는 AI 어시스턴트입니다.{addition}")] + msgs
+
+
+def _gemini_chat_answer(messages: List[BaseMessage]) -> str:
+    """LangChain 메시지(시스템·RAG컨텍스트·도구결과 포함)를 평문 프롬프트로 변환해 Gemini로 답변 생성. 실패 시 ''."""
+    from core.config import get_settings  # type: ignore
+    from infrastructure.llm.gemini_adapter import gemini_complete  # type: ignore
+
+    system_parts: List[str] = []
+    convo: List[str] = []
+    for m in messages:
+        content = getattr(m, "content", "")
+        text = content if isinstance(content, str) else str(content)
+        if isinstance(m, SystemMessage):
+            system_parts.append(text)
+        elif isinstance(m, HumanMessage):
+            convo.append(f"사용자: {text}")
+        elif isinstance(m, ToolMessage):
+            convo.append(f"[도구 결과]\n{text}")
+        elif isinstance(m, AIMessage) and text.strip():
+            convo.append(f"AI: {text}")
+    system = "\n".join(system_parts) or "당신은 도움이 되는 한국어 HR 어시스턴트입니다. 제공된 컨텍스트·도구 결과를 근거로 정확히 답하세요."
+    user = "\n".join(convo) + "\n\nAI:"
+    model = getattr(get_settings(), "gemini_model", None) or "gemini-2.5-flash"
+    return gemini_complete(system, user, model=model) or ""
+
+
 def model_node(state: ChatState) -> ChatState:
     """모델 노드. LLM 호출·Tool Calling, 스트리밍 지원. 이미지 있으면 Gemini 멀티모달 사용."""
     images: Optional[List[str]] = state.get("images") or []
@@ -597,6 +647,24 @@ def model_node(state: ChatState) -> ChatState:
 
         full_response = generate_multimodal(user_text=user_text, images=images, context=context or None)
         return {"messages": [AIMessage(content=full_response)], "model_provider": "gemini"}
+
+    # 채팅 답변 Gemini 분기(배포 CHAT_LLM=gemini): 도구 선택은 키워드 기반 그대로,
+    # 최종 답변 텍스트만 Gemini로 생성해 배포 CPU EXAONE 지연을 회피. 실패 시 아래 EXAONE 경로로 폴백.
+    if _chat_use_gemini():
+        g_messages = _with_rag_context(list(state.get("messages", [])), state.get("context"))
+        if _has_tool_message(g_messages):
+            ans = _gemini_chat_answer(g_messages)
+            if ans:
+                return {"messages": [AIMessage(content=ans)], "model_provider": "gemini"}
+        else:
+            forced_calls = _build_forced_tool_calls(_find_last_user_query(g_messages) or "")
+            if forced_calls:
+                logger.info("[MODEL] Gemini 채팅: 강제 도구 적용 %s", [c["name"] for c in forced_calls])
+                return {"messages": [AIMessage(content="", tool_calls=forced_calls)], "model_provider": "gemini"}
+            ans = _gemini_chat_answer(g_messages)
+            if ans:
+                return {"messages": [AIMessage(content=ans)], "model_provider": "gemini"}
+        logger.info("[MODEL] Gemini 답변 생성 실패 → EXAONE 폴백")
 
     LLMProvider = _get_llm_provider()
     provider = state.get("model_provider") or LLMProvider.get_provider_name()
