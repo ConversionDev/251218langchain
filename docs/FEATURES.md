@@ -63,14 +63,16 @@
 |------|------|------|--------|
 | **메인** | 이력서 원문 → LLM 분석 → **5대 역량 0–100점** 산출 | 구현됨 | 연동 (`/apply`, `/core/new-hires`) |
 
-**세부 기능**
+**세부 기능** — 속도/쇼케이스 균형을 위해 **2단계 분리**
 
-- 문서 추출 — PDF / TXT / Word / HWP
-- 역량 점수 — 리더십 · 기술력 · 창의성 · 협업 · 적응력 (Success DNA)
-- 프로필 필드 — name, jobTitle, department, email 등
-- API — `POST /api/resume/analyze`, `POST /api/employees/{id}/analyze`
-- 세션 캐시 — 동일 파일 재업로드 시 즉시 반환 (프론트)
-- EXAONE 역량 LoRA 어댑터(competency_adapters) 연동
+- **① 업로드 폼-채우기**(이름·학력·경력·연락처 등 단순 추출) — `POST /api/resume/analyze`.
+  속도 우선: 배포는 **Gemini flash-lite로 즉시 응답**(`RESUME_FORM_LLM=gemini`, 웜 ~0.85s), 로컬은 EXAONE. Gemini 실패 시 EXAONE 폴백
+- **② Success DNA 5대 역량 점수**(리더십·기술력·창의성·협업·적응력 0–100) — `POST /api/employees/{id}/analyze`.
+  쇼케이스: **학습 EXAONE competency LoRA 어댑터**가 산출(환경 무관). 신규등록은 successDna=None 생성 후 ATS 분석으로 채움
+- 문서 추출 — PDF / TXT / Word / HWP (`document_extract`)
+- 견고한 파싱 — 코드블록·trailing comma·잘린 JSON 허용 + 전화·이메일·생년월일 regex 후보정, 부서 7종 정규화
+- 캐시 — 파일 해시·텍스트 해시 캐시(재업로드 즉시 반환)
+- 원칙: **빠른 판단(단순 추출)=Gemini, 학습된 핵심 결과(역량 점수)=EXAONE** ([MODEL_COMPARISON.md](MODEL_COMPARISON.md))
 
 ---
 
@@ -277,10 +279,11 @@
 |------|------|--------|
 | GSAP 붓글씨 인트로 (opentype + clipPath) | 구현됨 | 연동 |
 | Framer Motion 랜딩·섹션 연출 | 구현됨 | 연동 |
+| `/hr` 랜딩 — 히어로 캐러셀 + **5대 핵심 역량(Success DNA) 섹션** + 기능 카드 | 구현됨 | 연동 |
 | 데모 역할 스위처·PWA | 구현됨 | 연동 |
 | 채용 FAQ·공지·문의 | 구현됨 | 연동 |
 
-**화면**: `/`, `/demo`, `/contact`, `/careers/*`
+**화면**: `/hr`(메인 랜딩), `/`, `/demo`, `/contact`, `/careers/*`
 
 ---
 
