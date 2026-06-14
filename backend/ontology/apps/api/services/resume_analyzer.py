@@ -15,7 +15,11 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
 from api.shared.upload_store import load_upload_file  # type: ignore
-from domain.shared.document_extract import extract_text_from_document  # type: ignore
+from domain.shared.document_extract import (  # type: ignore
+    SUPPORTED_IMAGE_EXTENSIONS,
+    extract_text_from_document,
+    render_pdf_to_images,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -194,8 +198,48 @@ successDnaReason은 위 5개 역량 각각에 대해, 이력서의 어떤 근거
 
 
 def _extract_text_from_resume_file(data: bytes, filename: str) -> str:
-    """이력서 파일에서 텍스트 추출. domain/shared/document_extract 공통 모듈 사용."""
-    return extract_text_from_document(data=data, filename=filename)
+    """이력서 파일에서 텍스트 추출. 텍스트 레이어가 없으면(스캔/이미지) Gemini 비전 OCR로 폴백.
+
+    - 이미지(.png/.jpg 등): 곧장 Gemini OCR.
+    - PDF: 일반 추출 시도 → 텍스트가 거의 없으면(스캔본) 페이지 이미지 렌더 → Gemini OCR.
+    - 그 외(docx/txt): 일반 추출.
+    """
+    from pathlib import Path as _Path
+
+    ext = (_Path(filename).suffix or "").lower()
+
+    # 1) 이미지 파일 → Gemini OCR 직행
+    if ext in SUPPORTED_IMAGE_EXTENSIONS:
+        from infrastructure.llm.gemini_adapter import gemini_ocr  # type: ignore
+
+        mime = "image/jpeg" if ext in (".jpg", ".jpeg") else ("image/webp" if ext == ".webp" else "image/png")
+        text = gemini_ocr([data], mime_type=mime)
+        if len(text.strip()) >= 10:
+            return text
+        raise ValueError("이미지에서 텍스트를 추출하지 못했습니다. (OCR 실패)")
+
+    # 2) 일반 문서 추출
+    text = ""
+    try:
+        text = extract_text_from_document(data=data, filename=filename)
+    except Exception as e:
+        logger.info("기본 텍스트 추출 실패(%s) — PDF면 OCR 폴백 시도", e)
+
+    # 3) PDF인데 텍스트 레이어가 거의 없으면(스캔본) → 페이지 이미지 렌더 + Gemini OCR
+    def _too_short(t: str) -> bool:
+        s = (t or "").strip()
+        return len(s) < 30 or "추출하지 못했습니다" in s
+
+    if ext == ".pdf" and _too_short(text):
+        from infrastructure.llm.gemini_adapter import gemini_ocr  # type: ignore
+
+        images = render_pdf_to_images(data, max_pages=3)
+        if images:
+            ocr_text = gemini_ocr(images, mime_type="image/png")
+            if len(ocr_text.strip()) >= len((text or "").strip()):
+                logger.info("PDF 스캔본 감지 → Gemini OCR 사용 (%d자)", len(ocr_text.strip()))
+                return ocr_text
+    return text
 
 
 def _fix_json_candidates(raw: str) -> List[str]:

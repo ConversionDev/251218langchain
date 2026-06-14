@@ -124,7 +124,7 @@ export const EMPLOYEE_FORM_MESSAGES = {
   upload: {
     uploadLegend: "이력서 업로드",
     resumeLegend: "이력서",
-    acceptedHint: "PDF, TXT, Word(.docx) · 업로드 시 빈칸에 정보가 채워집니다. 등록은 등록 버튼을 눌러 주세요.",
+    acceptedHint: "PDF, TXT, Word(.docx), 이미지(스캔본 OCR) · 업로드 시 빈칸에 정보가 채워집니다. 등록은 등록 버튼을 눌러 주세요.",
     editReplaceHint: "새 이력서로 갱신 (빈칸 채움 후 저장 버튼)",
     editUploadHint: "이력서 업로드 (빈칸 채움 후 저장 버튼)",
     existingResumeSummary: (eduCount: number, expCount: number) =>

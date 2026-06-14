@@ -13,7 +13,13 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from api.services.resume_analyzer import analyze_resume_file  # type: ignore
 from core.config import settings  # type: ignore
-from domain.shared.document_extract import SUPPORTED_TEXT_EXTENSIONS  # type: ignore
+from domain.shared.document_extract import (  # type: ignore
+    SUPPORTED_IMAGE_EXTENSIONS,
+    SUPPORTED_TEXT_EXTENSIONS,
+)
+
+# 이력서 업로드 허용 = 텍스트 문서 + 이미지(스캔본, Gemini OCR 처리)
+RESUME_UPLOAD_EXTENSIONS = (*SUPPORTED_TEXT_EXTENSIONS, *SUPPORTED_IMAGE_EXTENSIONS)
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +27,7 @@ router = APIRouter(prefix="/resume", tags=["Resume"])
 
 
 @router.post("/analyze")
-async def resume_analyze(file: UploadFile = File(..., description="이력서 파일 (PDF, TXT, Word .docx)")):
+async def resume_analyze(file: UploadFile = File(..., description="이력서 파일 (PDF, TXT, Word .docx, 이미지 png/jpg — 스캔본은 OCR)")):
     """이력서 파일을 분석하여 기본 정보와 Success DNA를 반환합니다.
 
     Returns:
@@ -31,10 +37,10 @@ async def resume_analyze(file: UploadFile = File(..., description="이력서 파
         raise HTTPException(status_code=400, detail="파일명이 없습니다.")
 
     ext = (file.filename or "").lower()
-    if not any(ext.endswith(e) for e in SUPPORTED_TEXT_EXTENSIONS):
+    if not any(ext.endswith(e) for e in RESUME_UPLOAD_EXTENSIONS):
         raise HTTPException(
             status_code=400,
-            detail=f"지원 형식: {', '.join(SUPPORTED_TEXT_EXTENSIONS)}",
+            detail=f"지원 형식: {', '.join(RESUME_UPLOAD_EXTENSIONS)}",
         )
 
     try:

@@ -22,7 +22,29 @@ logger = logging.getLogger(__name__)
 # 지원 확장자 (단일 소스 — 백엔드 검증·API·프론트 accept 동기화용)
 SUPPORTED_TEXT_EXTENSIONS = (".pdf", ".txt", ".docx")
 SUPPORTED_EXCEL_EXTENSIONS = (".xlsx",)
+# 이미지(스캔본) — 텍스트 레이어가 없어 OCR(Gemini 비전)로만 처리. extract_text_from_document 대상 아님.
+SUPPORTED_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 SUPPORTED_EXTENSIONS = (*SUPPORTED_TEXT_EXTENSIONS, *SUPPORTED_EXCEL_EXTENSIONS)
+
+
+def render_pdf_to_images(data: bytes, max_pages: int = 3, zoom: float = 2.0) -> List[bytes]:
+    """PDF bytes → 페이지별 PNG bytes(앞 max_pages장). 텍스트 레이어 없는 스캔본 OCR용.
+
+    pymupdf(fitz)로 렌더 — 별도 의존성 없음. 실패 시 빈 리스트.
+    """
+    out: List[bytes] = []
+    try:
+        import fitz  # type: ignore[import-untyped]  # pymupdf
+
+        with fitz.open(stream=data, filetype="pdf") as doc:
+            for i, page in enumerate(doc):
+                if i >= max_pages:
+                    break
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+                out.append(pix.tobytes("png"))
+    except Exception as e:
+        logger.warning("PDF 이미지 렌더 실패(OCR 폴백 불가): %s", e)
+    return out
 
 
 def _extract_txt_from_bytes(data: bytes) -> str:

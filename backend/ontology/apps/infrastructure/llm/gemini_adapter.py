@@ -116,6 +116,40 @@ def gemini_complete(system_prompt: str, user_text: str, model: Optional[str] = N
         return None
 
 
+def gemini_ocr(images: List[bytes], mime_type: str = "image/png") -> str:
+    """이미지(스캔 문서·사진)에서 텍스트 추출 = OCR. Gemini 비전 사용. 키 없거나 실패 시 ''.
+
+    텍스트 레이어가 없는 PDF(렌더한 페이지 이미지)·이미지 이력서에 사용한다.
+    """
+    from core.config import get_settings
+
+    settings = get_settings()
+    api_key = getattr(settings, "gemini_api_key", None)
+    if not api_key or not images:
+        if not api_key:
+            logger.warning("[GEMINI-OCR] API 키 없음 → ''")
+        return ""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            import google.generativeai as genai  # type: ignore
+
+        genai.configure(api_key=api_key)
+        # OCR은 비전 정확도가 중요 → flash-lite 대신 기본 멀티모달 모델 사용
+        model = genai.GenerativeModel(getattr(settings, "gemini_model", None) or "gemini-2.5-flash")
+        parts: list = [
+            "다음 이미지(들)는 이력서·문서 스캔본입니다. 보이는 모든 텍스트를 원문 그대로 "
+            "추출하세요. 표·줄 구조를 최대한 유지하고, 설명·요약·코드블록 없이 텍스트만 출력하세요."
+        ]
+        for img in images[:5]:
+            parts.append({"mime_type": mime_type, "data": img})
+        resp = model.generate_content(parts)
+        return (getattr(resp, "text", None) or "").strip()
+    except Exception as e:
+        logger.warning("[GEMINI-OCR] 실패 → '': %s", e)
+        return ""
+
+
 def gemini_classify_spam(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Gemini로 이메일 스팸 확률을 산출. 실패 시 UNCERTAIN (예외 던지지 않음)."""
     from core.config import get_settings

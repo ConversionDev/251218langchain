@@ -492,7 +492,7 @@ export default function ApplyPage() {
                       : APPLY_MESSAGES.upload.idle}
                 </p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  PDF, Word(.docx), TXT
+                  PDF, Word(.docx), TXT, 이미지(스캔본 OCR)
                 </p>
               </label>
             </div>
