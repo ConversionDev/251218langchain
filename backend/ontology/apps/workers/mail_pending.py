@@ -51,17 +51,33 @@ def _row_to_email_metadata(row: dict) -> dict:
     }
 
 
+def _is_gemini_classifier() -> bool:
+    """SPAM_CLASSIFIER=gemini면 True (배포 — LLaMA 미사용)."""
+    try:
+        from core.config import get_settings  # type: ignore
+
+        return (get_settings().spam_classifier or "llama").lower() == "gemini"
+    except Exception:
+        return False
+
+
 def _classify_spam_with_timeout(email_metadata: dict) -> dict:
-    """classify_spam을 CLASSIFY_TIMEOUT_SEC 안에 실행. 초과 시 TimeoutError."""
-    from infrastructure.llm import classify_spam  # type: ignore
+    """SPAM_CLASSIFIER에 따라(LLaMA/Gemini) CLASSIFY_TIMEOUT_SEC 안에 분류. 초과 시 TimeoutError."""
+    from infrastructure.llm import classify_spam_by_env  # type: ignore
 
     with ThreadPoolExecutor(max_workers=1) as ex:
-        future = ex.submit(classify_spam, email_metadata)
+        future = ex.submit(classify_spam_by_env, email_metadata)
         return future.result(timeout=CLASSIFY_TIMEOUT_SEC)
 
 
 def _warmup_llama() -> None:
-    """시작 시 LLaMA 한 번 호출해 모델 로딩. 첫 메일 처리 시 타임아웃 방지."""
+    """시작 시 LLaMA 한 번 호출해 모델 로딩. 첫 메일 처리 시 타임아웃 방지.
+
+    SPAM_CLASSIFIER=gemini면 LLaMA를 쓰지 않으므로 워밍업을 건너뛴다(배포 CPU 보호).
+    """
+    if _is_gemini_classifier():
+        logger.info("SPAM_CLASSIFIER=gemini → LLaMA 워밍업 생략")
+        return
     logger.info("LLaMA 워밍업 중 (최대 300초)...")
     dummy = {"subject": "", "sender": "", "body": "", "recipient": ""}
     try:

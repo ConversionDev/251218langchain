@@ -197,6 +197,14 @@ class Settings(BaseSettings):
         default=True,
         description="스팸 LoRA 어댑터 로드 여부. True면 artifacts/fine_tuned/llama/spam_adapters 사용.",
     )
+    spam_classifier: str = Field(
+        default="llama",
+        description=(
+            "스팸 1차 분류기 선택. llama=학습된 LLaMA 어댑터(transformers, 로컬/GPU 권장). "
+            "gemini=Gemini API로 분류(배포 권장 — CPU에서 무거운 LLaMA 미로드). "
+            "gemini 실패 시 UNCERTAIN으로 안전 처리(LLaMA 폴백 안 함)."
+        ),
+    )
     spam_agent_escalation: bool = Field(
         default=False,
         description=(

@@ -8,8 +8,9 @@ API 키는 core.config의 gemini_api_key(GEMINI_API_KEY)에서 읽습니다.
 import atexit
 import base64
 import logging
+import re
 import warnings
-from typing import Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,75 @@ def _decode_image(b64: str) -> tuple[bytes, str]:
     else:
         mime = "image/jpeg"
     return base64.b64decode(raw), mime
+
+
+# ---------------------------------------------------------------------------
+# 스팸 1차 분류 (배포 환경용 — 무거운 LLaMA 대신 Gemini로 spam_prob 산출)
+# 반환 스키마는 LLaMAClassifier.predict 와 동일: {spam_prob, label, confidence, model}
+# ---------------------------------------------------------------------------
+
+_SPAM_CLASSIFY_PROMPT = (
+    "당신은 한국어 이메일 스팸 분류 전문가입니다. 아래 이메일이 스팸일 확률을 "
+    "0.0(정상)~1.0(확실한 스팸) 사이 숫자 하나로만 답하세요. 다른 설명 없이 "
+    "'스팸 확률: 0.xx' 형식으로만 출력하세요."
+)
+_SPAM_PROB_PATTERN = re.compile(r"([01](?:\.\d+)?)")
+
+
+def _uncertain_result() -> Dict[str, Any]:
+    """분류 실패 시 안전 기본값 (LLaMA 폴백 없이 결정론 경로가 처리)."""
+    return {"spam_prob": 0.5, "confidence": "low", "label": "UNCERTAIN", "model": "gemini"}
+
+
+def _confidence_from_prob(spam_prob: float) -> str:
+    """0.5에서 떨어진 거리로 confidence 산출 (LLaMAClassifier와 동일 규칙)."""
+    d = abs(spam_prob - 0.5)
+    if d < 0.15:
+        return "low"
+    if d < 0.3:
+        return "medium"
+    return "high"
+
+
+def gemini_classify_spam(email_metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Gemini로 이메일 스팸 확률을 산출. 실패 시 UNCERTAIN (예외 던지지 않음)."""
+    from core.config import get_settings
+
+    settings = get_settings()
+    api_key = getattr(settings, "gemini_api_key", None)
+    if not api_key:
+        logger.warning("[SPAM-CLASSIFY] Gemini API 키 없음 → UNCERTAIN")
+        return _uncertain_result()
+
+    email_text = (
+        f"제목: {email_metadata.get('subject', '')}\n"
+        f"발신자: {email_metadata.get('sender', '') or email_metadata.get('from_email', '')}\n"
+        f"본문: {str(email_metadata.get('body', ''))[:1500]}"
+    )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            import google.generativeai as genai
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(getattr(settings, "gemini_model", None) or "gemini-2.5-flash")
+        resp = model.generate_content(f"{_SPAM_CLASSIFY_PROMPT}\n\n{email_text}")
+        text = getattr(resp, "text", None)
+    except Exception as e:
+        logger.warning("[SPAM-CLASSIFY] Gemini 호출 실패 → UNCERTAIN: %s", e)
+        return _uncertain_result()
+
+    m = _SPAM_PROB_PATTERN.search(text or "")
+    if not m:
+        logger.warning("[SPAM-CLASSIFY] 확률 파싱 실패(raw=%r) → UNCERTAIN", (text or "")[:120])
+        return _uncertain_result()
+    spam_prob = max(0.0, min(1.0, float(m.group(1))))
+    return {
+        "spam_prob": spam_prob,
+        "label": "spam" if spam_prob > 0.5 else "ham",
+        "confidence": _confidence_from_prob(spam_prob),
+        "model": "gemini",
+    }
 
 
 def stream_multimodal(

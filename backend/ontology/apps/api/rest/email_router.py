@@ -152,10 +152,15 @@ def _save_mailgun_inbound_background(
     message_id: Optional[str],
     received_at: datetime,
 ) -> None:
-    """백그라운드에서 메일건 수신 1건 저장. 전용 세션 사용."""
+    """백그라운드에서 메일건 수신 1건 저장 + 즉시 스팸 분류. 전용 세션 사용.
+
+    흐름: 저장(receive_inbound) → 등록된 수신자(code=201)면 그 자리에서 분류·폴더 배치.
+    미등록 수신자는 rejected 폴더로 저장(사용자 메일함엔 안 보임) — 분류 스킵.
+    """
     db = SessionLocal()
     try:
-        MailService(db).receive_inbound(
+        svc = MailService(db)
+        record, folder, code, already = svc.receive_inbound(
             to_email=to_email,
             from_display=from_display,
             from_email=from_email,
@@ -165,6 +170,14 @@ def _save_mailgun_inbound_background(
             received_at=received_at,
         )
         db.commit()
+        # code 201 = 등록된 수신자에게 새로 저장된 PENDING 건만 분류 (REJECTED/중복은 스킵)
+        if code == 201:
+            placed = svc.classify_and_place(
+                record["id"],
+                {"subject": subject or "", "sender": from_email or from_display or "", "body": body or ""},
+            )
+            db.commit()
+            logger.info("수신 메일 분류 완료: id=%s folder=%s", record["id"], placed)
     except Exception as e:
         logger.exception("Mailgun webhook background save failed: %s", e)
         db.rollback()

@@ -57,7 +57,16 @@ class SpamGatewayService:
         }
 
     def _classify_spam(self, email_metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """HTTP → Hub → Spam MCP → Spoke call_tool로 스팸 분류."""
+        """스팸 1차 분류. 배포(SPAM_CLASSIFIER=gemini)면 Gemini, 아니면 HTTP→Hub LLaMA."""
+        try:
+            from core.config import get_settings  # type: ignore
+
+            if (get_settings().spam_classifier or "llama").lower() == "gemini":
+                from infrastructure.llm.gemini_adapter import gemini_classify_spam  # type: ignore
+
+                return gemini_classify_spam(email_metadata)
+        except Exception as e:
+            logger.warning("Gemini 분류 분기 실패, LLaMA 경로로 진행: %s", e)
         try:
             raw = spam_call("classify_spam", {"email_metadata": email_metadata})
             if isinstance(raw, dict):
@@ -305,12 +314,18 @@ def escalation_node(state: SpamState) -> SpamState:
         refined = None
     if not refined:
         return {"routing_path": routing_path + " -> Escalation(skip)"}
+    from domain.spokes.spam.agents.spam_agents import build_user_message  # type: ignore
+
     fd = dict(state.get("final_decision") or {})
+    new_action = refined["action"]
+    new_reason_codes = refined.get("reason_codes") or fd.get("reason_codes", [])
     fd.update(
         {
-            "action": refined["action"],
+            "action": new_action,
             "confidence": refined.get("confidence", fd.get("confidence")),
-            "reason_codes": refined.get("reason_codes") or fd.get("reason_codes", []),
+            "reason_codes": new_reason_codes,
+            # action이 바뀌면 안내 문구도 일관되게 재생성 (기존 user_message 모순 방지)
+            "user_message": build_user_message(new_action, new_reason_codes),
             "escalated": True,
             "agent_analysis": refined.get("analysis", ""),
         }

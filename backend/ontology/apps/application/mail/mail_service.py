@@ -103,6 +103,33 @@ class MailService:
         )
         return (record, "inbox", 201, False)
 
+    def classify_and_place(self, mail_id: str, email_metadata: Dict[str, Any]) -> str:
+        """수신된 PENDING 메일을 스팸 분류해 folder(spam/inbox)·spam_score를 갱신.
+
+        분류기는 SPAM_CLASSIFIER 설정에 따름(로컬=LLaMA / 배포=Gemini).
+        분류 실패 시 UNCERTAIN→inbox로 안전 처리(메일 유실 없음). 처리 후 ai_status=SUCCESS.
+        """
+        from infrastructure.llm import classify_spam_by_env  # type: ignore
+
+        try:
+            result = classify_spam_by_env(email_metadata)
+        except Exception:
+            logger.warning("스팸 분류 실패 → inbox 유지", exc_info=True)
+            result = {"spam_prob": 0.5, "label": "UNCERTAIN"}
+        spam_prob = float(result.get("spam_prob", 0.5))
+        label = (result.get("label") or "").strip().upper()
+        is_spam = label == "SPAM" or spam_prob >= 0.5
+        folder = "spam" if is_spam else "inbox"
+        mail_item_update(
+            self.db,
+            mail_id,
+            folder=folder,
+            spam_score=spam_prob,
+            ai_status=AiStatus.SUCCESS.value,
+            processed_at=datetime.now(timezone.utc),
+        )
+        return folder
+
     def send(
         self,
         sender_employee_id: str,

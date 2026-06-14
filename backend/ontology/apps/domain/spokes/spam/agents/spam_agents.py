@@ -30,6 +30,19 @@ REASON_DESCRIPTIONS = {
 }
 
 
+def build_user_message(action: str, reason_codes: list) -> str:
+    """action + reason_codes → 사용자 안내 메시지. (escalation에서 action이 바뀌면 재생성용)"""
+    base_message = ACTION_MESSAGES.get(action, "확인이 필요한 메일입니다.")
+    reasons = (
+        "\n".join([f"- {REASON_DESCRIPTIONS.get(c, c)}" for c in reason_codes])
+        if reason_codes
+        else ""
+    )
+    if reasons:
+        return f"{base_message}\n\n{reasons}\n\n발신자를 확인하세요."
+    return f"{base_message}\n\n발신자를 확인하세요."
+
+
 def decide_final_action(
     routing_strategy: Optional[str],
     llama_result: Optional[Dict[str, Any]],
@@ -140,17 +153,7 @@ def _build_result(
     routing_path: str,
 ) -> Dict[str, Any]:
     """final_decision 및 user_message 조립."""
-    base_message = ACTION_MESSAGES.get(action, "확인이 필요한 메일입니다.")
-    reasons = (
-        "\n".join([f"- {REASON_DESCRIPTIONS.get(c, c)}" for c in reason_codes])
-        if reason_codes
-        else ""
-    )
-    user_message = (
-        f"{base_message}\n\n{reasons}\n\n발신자를 확인하세요."
-        if reasons
-        else f"{base_message}\n\n발신자를 확인하세요."
-    )
+    user_message = build_user_message(action, reason_codes)
 
     return {
         "final_decision": {
