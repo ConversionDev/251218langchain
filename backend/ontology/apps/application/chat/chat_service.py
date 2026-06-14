@@ -91,8 +91,10 @@ class ChatService:
         ]
 
     def list_tools(self) -> List[Dict[str, str]]:
-        tools = self._get_orchestrators_pkg().TOOLS
-        return [{"name": t.name, "description": t.description} for t in tools]
+        # TOOLS는 graph_orchestrator에 정의됨(패키지 __init__ 미노출) — 직접 import
+        from infrastructure.orchestration.graph_orchestrator import TOOLS  # type: ignore
+
+        return [{"name": t.name, "description": t.description} for t in TOOLS]
 
     def get_health(self) -> Dict[str, Any]:
         from infrastructure.llm import get_provider_name, list_providers, supports_tool_calling  # type: ignore
