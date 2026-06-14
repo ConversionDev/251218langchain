@@ -156,6 +156,22 @@ class EmployeeService:
         if is_new_hire:
             update_payload["status"] = "screening"
 
+        # 초기 역량(baseline) = 이력서만으로 산출. 1회만 저장 → '초기 대비 현재' 2지점 성장.
+        # (시계열 스키마 대신 resume JSON에 저장해 마이그레이션 없이 구현)
+        resume_obj = resume if isinstance(resume, dict) else {}
+        if not resume_obj.get("baselineSuccessDna"):
+            if perf_text and len(perf_text.strip()) >= 10 and resume_text and len(resume_text.strip()) >= 10:
+                # 성과가 있으면 이력서만 따로 분석해 초기 점수 산출
+                base = await asyncio.to_thread(
+                    analyze_resume_text, "## 이력/프로필\n" + resume_text.strip(), True
+                )
+                baseline_dna = base.get("successDna")
+            else:
+                # 성과 데이터가 없으면 현재 점수가 곧 초기 점수
+                baseline_dna = result.get("successDna")
+            if baseline_dna:
+                update_payload["resume"] = {**resume_obj, "baselineSuccessDna": baseline_dna}
+
         updated = repo_update(self.db, employee_id, update_payload)
         out = dict(updated or one)
         out["analysisSkipped"] = False

@@ -34,8 +34,8 @@ export function DNAGrowthChart({ data }: DNAGrowthChartProps) {
 
   const chartData = data.map((d) => ({
     name: d.label,
-    상반기: d.pastYear,
-    하반기: d.current,
+    초기: d.pastYear,
+    현재: d.current,
     성장률: d.growthPct,
   }));
 
@@ -82,12 +82,12 @@ export function DNAGrowthChart({ data }: DNAGrowthChartProps) {
             }}
             labelFormatter={(label) => `역량: ${label}`}
           />
-          <Bar dataKey="상반기" fill={PAST_COLOR} radius={[0, 2, 2, 0]} barSize={12} />
-          <Bar dataKey="하반기" fill={BRAND_CHART_COLORS.secondary} radius={[0, 2, 2, 0]} barSize={12} />
+          <Bar dataKey="초기" fill={PAST_COLOR} radius={[0, 2, 2, 0]} barSize={12} />
+          <Bar dataKey="현재" fill={BRAND_CHART_COLORS.secondary} radius={[0, 2, 2, 0]} barSize={12} />
         </BarChart>
       </ResponsiveContainer>
       <p className="mt-2 text-xs text-muted-foreground">
-        상반기 대비 하반기 역량 (반기 단위 성장). 교육·경험을 통한 성장 서사를 반영합니다.
+        초기(이력서) 대비 현재(이력서+성과) 역량. 성과 데이터 누적에 따른 성장을 반영합니다.
       </p>
     </motion.div>
   );

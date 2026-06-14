@@ -86,6 +86,8 @@ export interface Resume {
   skills: SkillEntry[];
   /** 자격증 */
   certifications: CertificationEntry[];
+  /** 초기 역량(이력서만으로 산출) — '초기 대비 현재' 성장 비교용. 첫 AI 분석 시 저장. */
+  baselineSuccessDna?: SuccessDNA;
 }
 
 /** 학력 한 건 */

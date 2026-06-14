@@ -91,16 +91,48 @@ export function getCapabilitySummary(dna: SuccessDNA | undefined): {
   };
 }
 
-/** DNA 성장 이력: 현재 스키마에는 이력 데이터가 없어 빈 배열 반환 */
+/** 5대 역량 (라벨 — 기술력=technical) */
+const DNA_DIMENSIONS: { dimension: keyof SuccessDNA; label: string }[] = [
+  { dimension: "leadership", label: "리더십" },
+  { dimension: "technical", label: "기술력" },
+  { dimension: "creativity", label: "창의성" },
+  { dimension: "collaboration", label: "협업" },
+  { dimension: "adaptability", label: "적응력" },
+];
+
+/** DNA 성장 이력(초기 vs 현재): 초기=이력서만 산출(resume.baselineSuccessDna), 현재=이력서+성과. 둘 다 있을 때만. */
 export function getDNAGrowthHistory(employee: Employee): DNAGrowthPoint[] {
-  void employee;
-  return [];
+  const current = employee.successDna;
+  const baseline = employee.resume?.baselineSuccessDna;
+  if (!current || !baseline) return [];
+  return DNA_DIMENSIONS.map((d) => {
+    const past = baseline[d.dimension] ?? 0;
+    const cur = current[d.dimension] ?? 0;
+    return {
+      dimension: d.dimension,
+      label: d.label,
+      pastYear: past,
+      current: cur,
+      growthPct: past > 0 ? Math.round(((cur - past) / past) * 100) : 0,
+    };
+  });
 }
 
-/** DNA 성장 궤적: 현재 스키마에는 시계열 점수가 없어 빈 배열 반환 */
+/** DNA 성장 궤적(2지점): 초기 → 현재. 시계열 대신 초기 이력서 vs 현재(이력서+성과) 2점. */
 export function getDNAGrowthTrajectory(employee: Employee): DNATrajectoryPoint[] {
-  void employee;
-  return [];
+  const current = employee.successDna;
+  const baseline = employee.resume?.baselineSuccessDna;
+  if (!current || !baseline) return [];
+  const point = (label: string, dna: SuccessDNA): DNATrajectoryPoint => ({
+    month: label,
+    monthLabel: label,
+    leadership: dna.leadership ?? 0,
+    technical: dna.technical ?? 0,
+    creativity: dna.creativity ?? 0,
+    collaboration: dna.collaboration ?? 0,
+    adaptability: dna.adaptability ?? 0,
+  });
+  return [point("초기", baseline), point("현재", current)];
 }
 
 /** 하위호환: 기존 호출부 유지용. 더 이상 합성 데이터를 만들지 않음. */
