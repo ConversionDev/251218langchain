@@ -41,6 +41,45 @@ LangGraph 기반 RAG 에이전트, 직원·성과·공시·역량 단일·복합
 
 ---
 
+## 2.5 AI 적용 지점 & Agentic RAG
+
+### A. 직접 파인튜닝한 모델 (차별점)
+1. **EXAONE 7.8B + competency 어댑터(QLoRA)** — 이력서 5대 역량 점수(Success DNA)
+2. **Llama 3.2 + spam 어댑터(Unsloth)** — 스팸 분류(로컬)
+3. **EXAONE 클러스터 라벨링** — 역량 군집 주제명 부여(오프라인)
+
+### B. LLM 추론 지점 (12)
+| # | 기능 | 모델 |
+|---|---|---|
+| 1 | 이력서 → 5대 역량 점수 | EXAONE(로컬·배포, 쇼케이스) |
+| 2 | 이력서 기본정보·학력·경력 추출 | 배포 Gemini / 로컬 EXAONE |
+| 3 | 스캔·이미지 이력서 OCR | Gemini 비전 |
+| 4 | 메일 → 성과·역량 분류·기록 | EXAONE(비동기) |
+| 5 | 초기 대비 현재 성장(2지점) | EXAONE 차등 분석 |
+| 6 | 스팸 1차 분류 | 로컬 LLaMA / 배포 Gemini |
+| 7 | 스팸 애매케이스 judge | EXAONE / Gemini |
+| 8 | 채팅 RAG 에이전트 답변 | 로컬 EXAONE / 배포 Gemini |
+| 9 | 채팅 이미지 멀티모달 | Gemini |
+| 10 | 이미지 → RAG 검색 캡션 | Gemini |
+| 11 | 공시 기여도 예측 | RAG + LLM |
+| 12 | 직원 RAG 페르소나 생성 | EXAONE |
+
+### C. RAG·벡터 인프라
+BGE-M3 임베딩 + pgvector(HNSW) + FAISS + K-Means/UMAP 클러스터링 → competency_anchors 지식베이스.
+
+### Agentic RAG 판정 — defensible
+- **그래프**: LangGraph StateGraph `rag → model → tools → (조건부 루프) → 답변`
+- **Tool Calling**: 9개 도구 `bind_tools`(get_hr_summary·list_employees·search_documents 등)
+- **멀티스텝**: `should_use_tools` 조건부 분기로 도구 실행 후 재호출
+- **RAG**: pgvector 검색을 도구·컨텍스트로 결합
+
+→ 단순 RAG(1패스)가 아닌 **도구·멀티스텝 에이전트 그래프 = Agentic RAG**.
+**정직 포인트(면접 방어)**: 도구 선택은 **키워드 라우팅(1턴 최적화) + LLM tool-calling 폴백 하이브리드** — 순수 reasoning agent가 아니라 *속도를 위해 키워드 라우터를 앞에 둔 하이브리드*. (불필요한 LLM 왕복 제거 = 엔지니어링 판단으로 어필)
+
+> 이력서 표현: "LangGraph 기반 Agentic RAG — pgvector 검색 + 9개 Tool Calling 멀티스텝 오케스트레이션, 키워드 라우팅+LLM tool-calling 하이브리드로 1턴 최적화"
+
+---
+
 ## 3. 기술 스택 (계층별)
 
 | 계층 | 기술 |
