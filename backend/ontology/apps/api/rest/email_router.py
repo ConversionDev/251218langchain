@@ -128,7 +128,8 @@ def receive_mail_api(
             received_at = datetime.fromisoformat(body.received_at.replace("Z", "+00:00"))
         except ValueError:
             pass
-    record, folder, status_code, already = MailService(db).receive_inbound(
+    svc = MailService(db)
+    record, folder, status_code, already = svc.receive_inbound(
         to_email=body.to_email.strip(),
         from_display=body.from_display or "",
         from_email=body.from_email,
@@ -137,6 +138,12 @@ def receive_mail_api(
         message_id=body.message_id,
         received_at=received_at,
     )
+    # 등록 수신자(code 201)면 즉시 분류해 최종 folder 반환 (Mailgun 웹훅과 동일 동작)
+    if status_code == 201:
+        folder = svc.classify_and_place(
+            record["id"],
+            {"subject": body.subject or "", "sender": body.from_email or body.from_display or "", "body": body.body or ""},
+        )
     return JSONResponse(
         status_code=status_code,
         content={"status": "received", "mail": record, "folder": folder, "already_stored": already},

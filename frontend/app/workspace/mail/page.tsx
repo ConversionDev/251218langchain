@@ -136,73 +136,10 @@ function apiMailToMailItem(api: MailApiItem): MailItem {
   };
 }
 
-const SAMPLE_INBOX: MailItem[] = [
-  {
-    id: "m1",
-    from: "peopleops@company.com",
-    subject: "[안내] 2026 Q1 역량 점검 자료 제출 요청",
-    preview: "이번 분기 역량 점검을 위해 부서별 활동 요약과 회의록 링크를 제출해 주세요.",
-    receivedAt: "오전 9:12",
-    unread: true,
-    starred: true,
-    body:
-      "안녕하세요. 2026 Q1 역량 점검을 위해 부서별 활동 요약과 회의록 링크 제출을 요청드립니다.\n\n마감: 2/26(수) 18:00\n제출 항목: 핵심성과, 실행 이슈, 다음 분기 계획\n\n감사합니다.",
-  },
-  {
-    id: "m2",
-    from: "support@company.com",
-    subject: "[공유] 신규 협업 툴 사용 가이드",
-    preview: "문서 결재 흐름과 보안 정책이 업데이트되어 공유드립니다.",
-    receivedAt: "어제",
-    unread: false,
-    body:
-      "신규 협업 툴 사용 가이드 문서를 공유드립니다.\n\n주요 변경: 문서 결재 흐름 표준화, 권한 분리 정책 강화, 반출 절차 명시.\n\n문의사항은 경영지원팀으로 연락 부탁드립니다.",
-  },
-  {
-    id: "m3",
-    from: "security@company.com",
-    subject: "[주의] 외부 메일 링크 클릭 유의",
-    preview: "유사 피싱 메일 유입 사례가 확인되어 보안 수칙을 재안내합니다.",
-    receivedAt: "2월 20일",
-    unread: true,
-    body:
-      "최근 외부 발신자로 위장한 피싱 메일 사례가 확인되었습니다.\n\n출처가 불분명한 첨부파일/링크는 열람하지 마시고 보안운영팀으로 즉시 전달해 주세요.",
-  },
-  {
-    id: "m4",
-    from: "hr@company.com",
-    subject: "2월 급여 명세서 안내",
-    preview: "2월 급여 명세서가 MyHR에서 확인 가능합니다.",
-    receivedAt: "2월 19일",
-    unread: false,
-    body: "2월 급여 명세서가 MyHR 포털에서 확인 가능합니다. 문의: 인사팀 내선 1234.",
-  },
-  {
-    id: "m5",
-    from: "it@company.com",
-    subject: "시스템 정기 점검 안내 (2/22 02:00~06:00)",
-    preview: "2월 22일 새벽 전사 시스템 정기 점검이 진행됩니다.",
-    receivedAt: "2월 18일",
-    unread: false,
-    starred: true,
-    body: "2월 22일(토) 02:00~06:00 전사 시스템 정기 점검이 진행됩니다. 해당 시간대 서비스 이용이 제한될 수 있습니다.",
-  },
-];
-
-const SAMPLE_SENT: MailItem[] = [
-  {
-    id: "s1",
-    from: "me",
-    to: "team@company.com",
-    subject: "Re: 주간 회의록 공유",
-    preview: "첨부와 같이 주간 회의록 공유드립니다.",
-    receivedAt: "2월 25일",
-    unread: false,
-    body: "첨부와 같이 주간 회의록 공유드립니다. 검토 부탁드립니다.",
-  },
-];
-
 type FolderId = "inbox" | "sent" | "drafts" | "starred" | "trash" | "spam" | "spam-test";
+
+// 개발용 메일 도구(스팸 테스트 주입 등) 노출 여부. 배포(Vercel prod)에선 미설정 → 숨김.
+const MAIL_DEVTOOLS = process.env.NEXT_PUBLIC_ENABLE_MAIL_DEVTOOLS === "true";
 
 const FOLDERS: { id: FolderId; label: string; icon: typeof Inbox }[] = [
   { id: "inbox", label: "받은편지함", icon: Inbox },
@@ -211,12 +148,16 @@ const FOLDERS: { id: FolderId; label: string; icon: typeof Inbox }[] = [
   { id: "starred", label: "중요 메일", icon: Star },
   { id: "spam", label: "스팸함", icon: ShieldAlert },
   { id: "trash", label: "휴지통", icon: Trash2 },
+  // 스팸 테스트는 개발용 — MAIL_DEVTOOLS가 켜졌을 때만 표시
   { id: "spam-test", label: "스팸 테스트", icon: FlaskConical },
 ];
 
+// 실제 사용자에게 보이는 폴더 (개발 도구는 플래그로 게이트)
+const VISIBLE_FOLDERS = MAIL_DEVTOOLS ? FOLDERS : FOLDERS.filter((f) => f.id !== "spam-test");
+
 export default function WorkspaceMailPage() {
   const [folder, setFolder] = useState<FolderId>("inbox");
-  const [activeId, setActiveId] = useState<string | null>(SAMPLE_INBOX[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [composing, setComposing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -627,7 +568,7 @@ http://example.com/claim`,
           </Button>
         </div>
         <nav className="flex-1 space-y-0.5 px-2 py-2">
-          {FOLDERS.map((item) => {
+          {VISIBLE_FOLDERS.map((item) => {
             const Icon = item.icon;
             const isActive = folder === item.id;
             return (
@@ -890,8 +831,8 @@ http://example.com/claim`,
               </div>
             )}
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-muted-foreground">
-              <p className="font-medium text-slate-700 dark:text-foreground">스팸 분류는 워커에서만 수행</p>
-              <p className="mt-1">LLaMA 스팸 분류는 <strong>워커(mail_pending)</strong>에서만 실행됩니다. 위 1)·2) 테스트 전송 후 받은편지함/스팸함에서 folder·spam_score를 확인하세요.</p>
+              <p className="font-medium text-slate-700 dark:text-foreground">스팸 분류는 수신 즉시 자동 수행</p>
+              <p className="mt-1">메일 수신 시 <strong>서버(rag-api)가 그 자리에서</strong> 스팸 분류 후 folder(spam/inbox)를 정합니다. 분류기는 환경별로 <strong>로컬=LLaMA / 배포=Gemini</strong>. 위 1)·2) 테스트 전송 후 받은편지함/스팸함에서 folder·spam_score를 확인하세요.</p>
               <p className="mt-2">받은편지함·스팸함에서 내 메일함(직원 ID)을 hr@mg.kanggyeonggu.store 소유자(예: E001)로 설정하면 저장된 메일을 볼 수 있습니다.</p>
             </div>
           </div>
