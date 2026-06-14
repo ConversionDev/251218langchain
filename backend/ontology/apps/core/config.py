@@ -247,6 +247,14 @@ class Settings(BaseSettings):
         default="gemini-2.5-flash-lite",
         description="분류·추출 등 가벼운 작업용 빠른 Gemini 모델 (thinking 미사용, 실측 ~1s). 이력서 폼 추출 등에 사용.",
     )
+    chat_gemini_model: str = Field(
+        default="gemini-2.5-flash-lite",
+        description=(
+            "CHAT_LLM=gemini일 때 채팅 답변에 쓰는 Gemini 모델. flash-lite 권장: "
+            "thinking 지연이 적어 첫 토큰이 빨리 나오고(스트리밍 체감↑), 무료 티어 일일 한도도 "
+            "2.5-flash(20/day)보다 넉넉하다."
+        ),
+    )
     resume_form_llm: str = Field(
         default="exaone",
         description=(

@@ -278,24 +278,33 @@ def list_employees(
             count_for_chat,
             is_new_hire_pipeline_employee_row,
             list_for_chat,
+            list_scored_for_chat,
         )
 
         db = SessionLocal()
         try:
             safe_limit = max(1, min(500, int(limit or 50)))
-            if pt == "high":
-                safe_limit = 500
             emp_type_filter = None if et == "all" else et
             dept_filter = (department or "").strip() or None
             title_filter = (job_title or "").strip() or None
-            rows = list_for_chat(
-                db,
-                employment_type=emp_type_filter,
-                department_part=dept_filter,
-                job_title_part=title_filter,
-                exclude_sample=False,
-                limit=safe_limit,
-            )
+            if pt == "high":
+                # 고성과자 판정은 Success DNA 점수 보유 직원만 대상 → id순 500 cap 없이 전수 스캔
+                # (cap을 쓰면 id가 큰 점수 보유 직원이 잘려 "조건에 맞는 직원이 없습니다"가 발생)
+                rows = list_scored_for_chat(
+                    db,
+                    employment_type=emp_type_filter,
+                    department_part=dept_filter,
+                    job_title_part=title_filter,
+                )
+            else:
+                rows = list_for_chat(
+                    db,
+                    employment_type=emp_type_filter,
+                    department_part=dept_filter,
+                    job_title_part=title_filter,
+                    exclude_sample=False,
+                    limit=safe_limit,
+                )
             if not rows:
                 return "조건에 맞는 직원이 없습니다."
             filtered_total = count_for_chat(
@@ -306,10 +315,13 @@ def list_employees(
                 exclude_sample=False,
             )
 
-            def _is_high_performer(emp: Dict[str, Any]) -> bool:
+            HIGH_PERFORMER_THRESHOLD = 80.0  # Success DNA 5개 평균 기준
+
+            def _dna_avg(emp: Dict[str, Any]) -> Optional[float]:
+                """Success DNA 5개 지표 평균. 점수가 없으면 None."""
                 dna = emp.get("successDna")
                 if not isinstance(dna, dict):
-                    return False
+                    return None
                 keys = ("leadership", "technical", "creativity", "collaboration", "adaptability")
                 vals: List[float] = []
                 for k in keys:
@@ -321,8 +333,12 @@ def list_employees(
                     except Exception:
                         continue
                 if not vals:
-                    return False
-                return (sum(vals) / len(vals)) >= 80.0
+                    return None
+                return sum(vals) / len(vals)
+
+            def _is_high_performer(emp: Dict[str, Any]) -> bool:
+                avg = _dna_avg(emp)
+                return avg is not None and avg >= HIGH_PERFORMER_THRESHOLD
 
             # 통계는 SQL count 쿼리로 정확하게 계산 (limit 무관)
             new_hire_total = count_for_chat(db, employment_type="new_hire", department_part=dept_filter, job_title_part=title_filter)
@@ -333,9 +349,32 @@ def list_employees(
             high_count = sum(1 for r in rows if _is_high_performer(r))
 
             if pt == "high":
-                rows = [r for r in rows if _is_high_performer(r)]
-                if not rows:
-                    return "조건에 맞는 직원이 없습니다."
+                # 점수 보유 직원을 평균 내림차순 정렬 → 고성과자 우선
+                scored = sorted(
+                    [r for r in rows if _dna_avg(r) is not None],
+                    key=lambda r: _dna_avg(r) or 0.0,
+                    reverse=True,
+                )
+                high = [r for r in scored if _is_high_performer(r)]
+                if not high:
+                    # 기준(평균 80점) 충족자가 없을 때: 기준을 명시하고 상위 평가자를 참고로 제시
+                    if not scored:
+                        return (
+                            "현재 Success DNA 평가 점수가 산출된 직원이 없어 고성과자를 판정할 수 없습니다. "
+                            "이력서·역량 분석을 거친 직원이 생기면 평균 80점 이상을 고성과자로 분류합니다."
+                        )
+                    top = scored[:3]
+                    lines = [
+                        f"고성과자 기준(Success DNA 5개 지표 평균 {HIGH_PERFORMER_THRESHOLD:.0f}점 이상)을 충족하는 직원은 현재 없습니다.",
+                        "참고로 평가 점수가 가장 높은 직원은 다음과 같습니다:",
+                    ]
+                    for i, emp in enumerate(top, 1):
+                        lines.append(
+                            f"[{i}] {emp.get('name','')} (부서: {emp.get('department') or '-'}, "
+                            f"직급: {emp.get('jobTitle') or '-'}, 평균 {(_dna_avg(emp) or 0):.0f}점)"
+                        )
+                    return "\n".join(lines)
+                rows = high
                 high_count = len(rows)
                 new_hire_count = sum(1 for r in rows if is_new_hire_pipeline_employee_row(r))
                 regular_count = len(rows) - new_hire_count
@@ -546,9 +585,12 @@ def _build_forced_tool_calls(user_query: str) -> List[Dict[str, Any]]:
         is_new_hire_query = ("신입" in q or "지원자" in q)
         is_regular_query = ("기존 직원" in q or "일반 직원" in q)
         is_high_query = ("고성과" in q or "high performer" in q or "highperformer" in q)
+        # 고성과자 질의는 재직 형태와 무관하게 전 직원을 대상으로 한다.
+        # (employment_type=regular로 좁히면 _onboarded_regular 필터가 실제 고성과자를
+        #  누락시켜 "고성과자 없음"이 나온다 — 신입/기존을 함께 말한 경우에만 좁힌다.)
         if is_new_hire_query:
             employment_type = "new_hire"
-        elif is_regular_query or is_high_query:
+        elif is_regular_query:
             employment_type = "regular"
         else:
             employment_type = "all"
@@ -591,46 +633,6 @@ def _chat_use_gemini() -> bool:
         return False
 
 
-def _with_rag_context(messages: List[BaseMessage], context: Optional[str]) -> List[BaseMessage]:
-    """RAG 컨텍스트를 시스템 메시지에 주입 (EXAONE 경로와 동일 처리)."""
-    if not (context and messages):
-        return messages
-    addition = (
-        f"\n\n참고 컨텍스트 (아래 문서를 우선 참고하여 답변하고, 인용 시 [출처: ...]를 밝혀 주세요):\n{context}"
-        "\n\n답변은 일반 텍스트로만 작성하고, ```json 또는 빈 코드 블록을 사용하지 마세요."
-    )
-    msgs = list(messages)
-    for i, m in enumerate(msgs):
-        if isinstance(m, SystemMessage):
-            msgs[i] = SystemMessage(content=str(m.content) + addition)
-            return msgs
-    return [SystemMessage(content=f"당신은 도움이 되는 AI 어시스턴트입니다.{addition}")] + msgs
-
-
-def _gemini_chat_answer(messages: List[BaseMessage]) -> str:
-    """LangChain 메시지(시스템·RAG컨텍스트·도구결과 포함)를 평문 프롬프트로 변환해 Gemini로 답변 생성. 실패 시 ''."""
-    from core.config import get_settings  # type: ignore
-    from infrastructure.llm.gemini_adapter import gemini_complete  # type: ignore
-
-    system_parts: List[str] = []
-    convo: List[str] = []
-    for m in messages:
-        content = getattr(m, "content", "")
-        text = content if isinstance(content, str) else str(content)
-        if isinstance(m, SystemMessage):
-            system_parts.append(text)
-        elif isinstance(m, HumanMessage):
-            convo.append(f"사용자: {text}")
-        elif isinstance(m, ToolMessage):
-            convo.append(f"[도구 결과]\n{text}")
-        elif isinstance(m, AIMessage) and text.strip():
-            convo.append(f"AI: {text}")
-    system = "\n".join(system_parts) or "당신은 도움이 되는 한국어 HR 어시스턴트입니다. 제공된 컨텍스트·도구 결과를 근거로 정확히 답하세요."
-    user = "\n".join(convo) + "\n\nAI:"
-    model = getattr(get_settings(), "gemini_model", None) or "gemini-2.5-flash"
-    return gemini_complete(system, user, model=model) or ""
-
-
 def model_node(state: ChatState) -> ChatState:
     """모델 노드. LLM 호출·Tool Calling, 스트리밍 지원. 이미지 있으면 Gemini 멀티모달 사용."""
     images: Optional[List[str]] = state.get("images") or []
@@ -648,26 +650,12 @@ def model_node(state: ChatState) -> ChatState:
         full_response = generate_multimodal(user_text=user_text, images=images, context=context or None)
         return {"messages": [AIMessage(content=full_response)], "model_provider": "gemini"}
 
-    # 채팅 답변 Gemini 분기(배포 CHAT_LLM=gemini): 도구 선택은 키워드 기반 그대로,
-    # 최종 답변 텍스트만 Gemini로 생성해 배포 CPU EXAONE 지연을 회피. 실패 시 아래 EXAONE 경로로 폴백.
-    if _chat_use_gemini():
-        g_messages = _with_rag_context(list(state.get("messages", [])), state.get("context"))
-        if _has_tool_message(g_messages):
-            ans = _gemini_chat_answer(g_messages)
-            if ans:
-                return {"messages": [AIMessage(content=ans)], "model_provider": "gemini"}
-        else:
-            forced_calls = _build_forced_tool_calls(_find_last_user_query(g_messages) or "")
-            if forced_calls:
-                logger.info("[MODEL] Gemini 채팅: 강제 도구 적용 %s", [c["name"] for c in forced_calls])
-                return {"messages": [AIMessage(content="", tool_calls=forced_calls)], "model_provider": "gemini"}
-            ans = _gemini_chat_answer(g_messages)
-            if ans:
-                return {"messages": [AIMessage(content=ans)], "model_provider": "gemini"}
-        logger.info("[MODEL] Gemini 답변 생성 실패 → EXAONE 폴백")
-
     LLMProvider = _get_llm_provider()
-    provider = state.get("model_provider") or LLMProvider.get_provider_name()
+    # 배포 CHAT_LLM=gemini: provider를 'gemini'로 잡아 아래 공통 경로(bind_tools+stream)를 그대로 탄다.
+    # GeminiChatModel._stream이 on_chat_model_stream 이벤트를 내보내므로 토큰 스트리밍이 유지된다.
+    # (도구 선택은 키워드 기반 _build_forced_tool_calls로 처리 — 네이티브 function-calling 불필요)
+    default_provider = "gemini" if _chat_use_gemini() else LLMProvider.get_provider_name()
+    provider = state.get("model_provider") or default_provider
     max_tokens = state.get("max_tokens") or 2048
     temperature = state.get("temperature") or 0.7
     llm = _get_llm(provider=provider, max_tokens=max_tokens, temperature=temperature)

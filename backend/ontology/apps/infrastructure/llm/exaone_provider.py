@@ -16,7 +16,7 @@ from langchain_core.language_models import BaseChatModel
 
 _lock_direct_load = threading.Lock()
 
-_SUPPORTED_PROVIDERS = {"exaone", "llama_cpp"}
+_SUPPORTED_PROVIDERS = {"exaone", "llama_cpp", "gemini"}
 
 
 class LLMProvider:
@@ -28,6 +28,9 @@ class LLMProvider:
     _supports_tool_calling: Dict[str, bool] = {
         "exaone": True,
         "llama_cpp": True,
+        # gemini: 네이티브 function-calling 대신 키워드 강제 도구 라우팅을 쓰지만,
+        # model_node의 스트리밍 경로(bind_tools+stream)를 타려면 True여야 한다.
+        "gemini": True,
     }
 
     @classmethod
@@ -69,6 +72,11 @@ class LLMProvider:
         if provider not in _SUPPORTED_PROVIDERS:
             raise ValueError(f"지원하지 않는 LLM Provider: {provider}. 가능: {_SUPPORTED_PROVIDERS}")
 
+        if provider == "gemini":
+            llm = cls._create_gemini_llm(temperature, max_tokens)
+            cls._instances[cache_key] = llm
+            return llm
+
         if provider == "llama_cpp":
             llm = cls._create_llama_cpp_llm(temperature, max_tokens)
             cls._instances[cache_key] = llm
@@ -88,6 +96,29 @@ class LLMProvider:
             return llm
         finally:
             cls._creating.discard(cache_key)
+
+    @classmethod
+    def _create_gemini_llm(cls, temperature: float, max_tokens: int) -> BaseChatModel:
+        """Gemini 채팅 모델 (배포 CHAT_LLM=gemini). google.generativeai 스트리밍 래퍼."""
+        from core.config import get_settings  # type: ignore
+        from infrastructure.llm.gemini_chat import GeminiChatModel  # type: ignore
+
+        settings = get_settings()
+        api_key = getattr(settings, "gemini_api_key", None) or os.getenv("GEMINI_API_KEY", "")
+        if not api_key:
+            raise ValueError("CHAT_LLM=gemini인데 GEMINI_API_KEY가 없습니다.")
+        # 채팅은 flash-lite 권장: thinking 지연이 적어 첫 토큰이 빠르고 무료 티어 한도도 넉넉.
+        model_id = (
+            getattr(settings, "chat_gemini_model", None)
+            or getattr(settings, "gemini_model", None)
+            or "gemini-2.5-flash-lite"
+        )
+        return GeminiChatModel(
+            model_id=model_id,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
     @classmethod
     def _create_llama_cpp_llm(cls, _temperature: float, _max_tokens: int) -> BaseChatModel:

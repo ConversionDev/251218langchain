@@ -17,11 +17,11 @@ const RECOMMENDED_QUESTION_CASES: { label: string; questions: [string, string] }
   },
   {
     label: "개인 정보/성과",
-    questions: ["강경구의 직급과 부서를 알려줘", "강경구의 최근 성과 활동을 요약해줘"],
+    questions: ["손보라의 직급과 부서를 알려줘", "손보라의 최근 성과 활동을 요약해줘"],
   },
   {
     label: "지표/고성과",
-    questions: ["강경구의 5대 지표를 알고 싶어", "고성과자가 누구야"],
+    questions: ["손보라의 5대 지표를 알고 싶어", "고성과자가 누구야"],
   },
   {
     label: "공시 기준",

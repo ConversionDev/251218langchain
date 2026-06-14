@@ -279,6 +279,23 @@ def list_for_chat(
     return [_row_to_dict(r) for r in rows]
 
 
+def list_scored_for_chat(
+    db: Session,
+    employment_type: Optional[str] = None,
+    department_part: Optional[str] = None,
+    job_title_part: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Success DNA 점수가 산출된 직원만 전수 조회 (고성과자 판정용, limit 없음).
+
+    list_for_chat은 id순 500건 cap이 있어 점수 보유 직원이 잘려 고성과자가 누락될 수 있다.
+    고성과 질의는 점수 있는 직원(소수)만 대상으로 하므로 cap 없이 전수 스캔한다.
+    """
+    q = _build_chat_query(db, employment_type, department_part, job_title_part, exclude_sample=False)
+    q = q.filter(Employee.success_dna.isnot(None))
+    rows = q.order_by(Employee.id).all()
+    return [_row_to_dict(r) for r in rows]
+
+
 def list_paginated(
     db: Session,
     page: int = 1,
