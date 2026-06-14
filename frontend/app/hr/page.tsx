@@ -3,9 +3,19 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, BarChart3, Database, ChevronDown } from "lucide-react";
+import { Search, BarChart3, Database, ChevronDown, Users, Cpu, Lightbulb, Handshake, Repeat } from "lucide-react";
 
 const FEATURES_ID = "features";
+const COMPETENCY_ID = "competencies";
+
+/** AI가 분석하는 5대 핵심 역량 (Success DNA) */
+const COMPETENCIES = [
+  { name: "리더십", en: "Leadership", icon: Users, desc: "팀을 이끌고 의사결정을 주도하는 역량" },
+  { name: "기술력", en: "Technical", icon: Cpu, desc: "직무 전문성과 문제 해결 능력" },
+  { name: "창의성", en: "Creativity", icon: Lightbulb, desc: "새로운 관점과 혁신적 아이디어" },
+  { name: "협업", en: "Collaboration", icon: Handshake, desc: "소통과 팀워크로 함께 성과를 내는 힘" },
+  { name: "적응력", en: "Adaptability", icon: Repeat, desc: "변화에 유연하게 대응하는 능력" },
+] as const;
 
 /** 메인 히어로 슬로건 — 1줄 + 2줄(통해 다음 줄바꿈) */
 const HERO_SLOGAN = {
@@ -54,7 +64,10 @@ export default function HRLandingPage() {
             </span>
           </Link>
 
-          <nav aria-label="메인 메뉴" className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-6 md:gap-8">
+          <nav aria-label="메인 메뉴" className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-6 md:flex md:gap-8">
+            <a href={`#${COMPETENCY_ID}`} className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
+              역량
+            </a>
             <a href={`#${FEATURES_ID}`} className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors md:text-base">
               기능
             </a>
@@ -164,13 +177,48 @@ export default function HRLandingPage() {
             ))}
           </div>
           <a
-            href={`#${FEATURES_ID}`}
+            href={`#${COMPETENCY_ID}`}
             className="flex flex-col items-center gap-1 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
             aria-label="아래 섹션으로 스크롤"
           >
             <span>더 보기</span>
             <ChevronDown className="h-5 w-5 animate-bounce" />
           </a>
+        </div>
+      </section>
+
+      {/* 5대 핵심 역량 (Success DNA) — 명시적으로 5개 역량 노출 */}
+      <section id={COMPETENCY_ID} className="relative z-10 scroll-mt-20 bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <div className="text-center">
+            <span className="inline-block rounded-full bg-[#e8f5ef] px-3 py-1 text-xs font-semibold tracking-wide text-emerald-700">
+              SUCCESS DNA
+            </span>
+            <h2 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              AI가 분석하는 5대 핵심 역량
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-[1.7] text-slate-600 md:text-lg">
+              모든 인재를 동일한 5개 축으로 <strong className="text-slate-800">0–100점</strong> 정량화해, 채용·배치·성과 예측의 공통 기준을 만듭니다.
+            </p>
+          </div>
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+            {COMPETENCIES.map((c) => {
+              const Icon = c.icon;
+              return (
+                <div
+                  key={c.name}
+                  className="group rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm transition-all hover:-translate-y-1 hover:border-[#a8d5c4] hover:shadow-md"
+                >
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-500 text-white shadow-sm">
+                    <Icon className="h-7 w-7" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900">{c.name}</h3>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600">{c.en}</p>
+                  <p className="mt-3 text-sm leading-[1.6] text-slate-600">{c.desc}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 

@@ -450,14 +450,19 @@ def _normalize_resume_parse_result(raw: Dict[str, Any], source_text: str = "") -
         except (TypeError, ValueError):
             return (lo + hi) // 2
 
-    success_dna = raw.get("successDna") or {}
-    dna = {
-        "leadership": clamp(success_dna.get("leadership"), 0, 100),
-        "technical": clamp(success_dna.get("technical"), 0, 100),
-        "creativity": clamp(success_dna.get("creativity"), 0, 100),
-        "collaboration": clamp(success_dna.get("collaboration"), 0, 100),
-        "adaptability": clamp(success_dna.get("adaptability"), 0, 100),
-    }
+    # 폼 채우기 경로(_RESUME_FORM_SYSTEM_PROMPT)는 successDna를 산출하지 않는다.
+    # raw에 successDna가 없으면 가짜 50점을 만들지 말고 None 반환(ATS 경로가 실제 점수 산출).
+    raw_dna = raw.get("successDna")
+    if isinstance(raw_dna, dict) and raw_dna:
+        dna: Optional[Dict[str, int]] = {
+            "leadership": clamp(raw_dna.get("leadership"), 0, 100),
+            "technical": clamp(raw_dna.get("technical"), 0, 100),
+            "creativity": clamp(raw_dna.get("creativity"), 0, 100),
+            "collaboration": clamp(raw_dna.get("collaboration"), 0, 100),
+            "adaptability": clamp(raw_dna.get("adaptability"), 0, 100),
+        }
+    else:
+        dna = None
 
     resume = raw.get("resume") or {}
     resume_education = resume.get("education") or []
