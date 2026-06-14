@@ -75,6 +75,27 @@ def list_by_folder(
     return [_row_to_dict(r) for r in q.all()]
 
 
+def list_starred(
+    db: Session,
+    owner_employee_id: str,
+    limit: int = 500,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """소유자의 중요(별표) 메일을 폴더 무관하게 조회 (휴지통 제외)."""
+    q = (
+        db.query(MailItem)
+        .filter(
+            MailItem.owner_employee_id == owner_employee_id,
+            MailItem.is_starred.is_(True),
+            MailItem.folder != "trash",
+        )
+        .order_by(MailItem.sent_at.desc().nullslast(), MailItem.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return [_row_to_dict(r) for r in q.all()]
+
+
 def get_by_id(db: Session, id: str) -> Optional[Dict[str, Any]]:
     """메일 단건 조회."""
     row = db.get(MailItem, id)

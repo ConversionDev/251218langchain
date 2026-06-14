@@ -7,7 +7,7 @@
 
 상태: **구현됨** / **부분** / **스텁** / **미구현** · 프론트: **연동** / **미연동** / **데모**
 
-관련 문서: [ARCHITECTURE.md](ARCHITECTURE.md) · [IMPLEMENTATION.md](IMPLEMENTATION.md) · [FRONTEND.md](FRONTEND.md)
+관련 문서: [ARCHITECTURE.md](ARCHITECTURE.md) · [IMPLEMENTATION.md](IMPLEMENTATION.md) · [FRONTEND.md](FRONTEND.md) · [MODEL_COMPARISON.md](MODEL_COMPARISON.md)
 
 ---
 
@@ -44,7 +44,8 @@
 
 **세부 기능**
 
-- 1차 분류 — LLaMA 3 SFT 스팸 어댑터 (`classify_spam`, 배치 32)
+- 1차 분류 — **환경별 분기**(`SPAM_CLASSIFIER`): 로컬 = 학습 LLaMA 3 SFT 스팸 어댑터(GPU), 배포 = Gemini(`gemini-2.5-flash`, CPU에서 무거운 LLaMA 미로드). 동일 스키마 반환(`classify_spam_by_env`)
+- 수신 즉시 분류 — Mailgun 웹훅·`POST /api/mail/receive`의 BackgroundTask에서 **등록 수신자(owner 해석된)만** 분류 → folder=spam/inbox, 미등록 수신자는 rejected(사용자 메일함 비노출). 별도 워커 불요(rag-api 인라인)
 - 라우팅 정책 — LLaMA 결과 시 `routing_strategy=rule` 고정 (ExaOne policy 덮어쓰기 방지)
 - 에스컬레이션 — 애매한 메일만 "증거 수집 + LLM 판정" (tool-calling 미사용)
   - 증거: LLaMA 결과 + 규칙 + EXAONE 심층분석
@@ -73,19 +74,20 @@
 
 ---
 
-### 1.4 수신 메일 성과·역량 분류 에이전트
+### 1.4 메일 성과·역량 분류 에이전트 (학습 EXAONE, 비동기)
 
 | 구분 | 내용 | 상태 | 프론트 |
 |------|------|------|--------|
-| **메인** | inbox 저장 메일 → 비동기 AI 분류 → 성과 기록·역량 태깅 | 구현됨 | (백그라운드) |
+| **메인** | 발송 메일 → 학습 EXAONE 비동기 분류 → 5대 역량 태깅·성과 기록·모델 배지 | 구현됨 | 연동 (보낸함 배지) |
 
 **세부 기능**
 
-- 트리거 — `folder=inbox` 수신 저장 후 BackgroundTasks
-- `run_email_classify_and_record` — 성과 판단 시 `performance_records` 기록
-- 5대 역량 태깅 연동
-- 실패 시 로그만, 수신 응답은 2xx 유지
-- 단건 분류 API — `POST /api/mail/classify`
+- 트리거 — 메일 발송(`POST /api/mail/send`) 후 BackgroundTask. 발송은 즉시 반환, 분류는 백그라운드 → UX 안 막힘
+- 분류기 — **직접 파인튜닝한 EXAONE competency 어댑터**(로컬 GPU 3~4s / 배포 GGUF CPU). 취업 쇼케이스 목적상 Gemini로 대체하지 않음
+- 결과 저장 — 메일 행 `ai_result_raw`(JSON: model·is_performance·competency_labels) → 프론트 보낸편지함에 **역량 라벨 + "EXAONE 파인튜닝" 배지**(4초 폴링 자동 반영)
+- 성과 기록 — `run_email_classify_and_record` → 성과 판단 시 `performance_records` 기록 + 5대 역량 태깅
+- 실패 시 `ai_status=FAILED`만, 발송 메일엔 영향 없음
+- 모델 비교 근거 — [MODEL_COMPARISON.md](MODEL_COMPARISON.md) (학습 EXAONE vs Gemini flash-lite 실측)
 
 ---
 
@@ -166,17 +168,21 @@
 
 ---
 
-### 2.3 메일 시스템 (비-AI CRUD·연동)
+### 2.3 메일 시스템 (CRUD·수신·발송)
 
 | 기능 | 상태 | 프론트 |
 |------|------|--------|
 | 메일 목록·단건 (folder·owner 필터) | 구현됨 | 연동 |
-| 수신 API·Mailgun Webhook (HMAC·멱등) | 구현됨 | 연동 |
-| 읽음·별표·수정·삭제 | 구현됨 | 연동 |
-| 임시저장 (draft) | 구현됨 | 연동 |
-| 발송 (`/api/mail/send`) | 스텁 | 연동 (DB 저장 위주) |
-| Store-then-Process 수신 (AI는 워커/백그라운드) | 구현됨 | — |
+| 중요(별표) 폴더 — 폴더 무관 전용 쿼리(`folder=starred`) | 구현됨 | 연동 |
+| 수신 API·Mailgun Webhook (HMAC·멱등) + 수신 즉시 스팸 분류 | 구현됨 | 연동 |
+| 읽음·별표·수정·삭제(휴지통/영구) | 구현됨 | 연동 |
+| 답장(Re: 인용)·전달(Fwd: 인용) | 구현됨 | 연동 |
+| 임시저장(draft) — 저장·편집 로드·발송 시 제거 | 구현됨 | 연동 |
+| 발송 (`/api/mail/send`) — 사내 DB(보낸함+받은함) / 외부 Mailgun, 발송 후 역량 분류 비동기 | 구현됨 | 연동 |
+| 분류 트리거 — rag-api 인라인(수신=스팸, 발송=역량). 상시 워커 불요 | 구현됨 | — |
 | AI 재처리 (`POST /api/mail/{id}/retry`) | 구현됨 | — |
+
+> 수신자 게이트: 등록 주소(employees·internal_addresses)만 수신·분류, 미등록은 rejected. 메일함 소유자는 현재 프론트 직원ID 입력 기반(포트폴리오 단순화, 인증 미연동).
 
 **화면**: `/workspace/mail`
 
@@ -291,9 +297,9 @@
 ```
 [에이전트 핵심]
   1.1 HR 채팅 에이전트 ─── RAG + 도구 + SSE
-  1.2 스팸·에스컬레이션 ── LLaMA 1차 + Gemini/EXAONE judge
+  1.2 스팸·에스컬레이션 ── 1차 환경분기(로컬 LLaMA/배포 Gemini) + judge
   1.3 이력서·Success DNA ─ LLM 역량 분석
-  1.4 메일 성과·역량 분류 ─ 수신 후 비동기 AI
+  1.4 메일 성과·역량 분류 ─ 발송 후 비동기 학습 EXAONE + 모델 배지
   1.5 공시 기여도 예측 ─── RAG + LLM
   1.6 직무 전환 인텔리전스 ─ 채팅 API 연동
   1.7 MCP 허브 ─────────── Chat/Spam 오케스트레이션
@@ -328,9 +334,8 @@
 
 ## 5. 확장 예정 (미구현·로드맵)
 
-- 메일 외부 발송(SMTP/Mailgun) 완전 연동
 - 공시 API 프론트 직접 연동
-- 메일 발송 → 성과 기록 연동 (`save_to_performance`)
+- 메일함 소유자 인증 연동 (로그인 세션→사번, 서버측 소유권 검증) — 현재 직원ID 수동 입력(포트폴리오 단순화)
 - 사내 주소록 그룹·부서 확장
 - PWA 오프라인·모니터링
 - Flutter 모바일 앱

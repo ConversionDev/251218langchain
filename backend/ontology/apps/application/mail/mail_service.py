@@ -18,6 +18,7 @@ from infrastructure.persistence.repositories.mail_item_repository import (  # ty
     get_by_external_id as mail_item_get_by_external_id,
     get_by_id as mail_item_get,
     list_by_folder as mail_item_list,
+    list_starred as mail_item_list_starred,
     move_to_trash as mail_item_trash,
     reset_failed_to_pending as mail_item_reset_failed_to_pending,
     update as mail_item_update,
@@ -40,6 +41,8 @@ class MailService:
         limit: int = 500,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
+        if folder == "starred":
+            return mail_item_list_starred(self.db, owner_employee_id, limit=limit, offset=offset)
         return mail_item_list(self.db, folder=folder, owner_employee_id=owner_employee_id, limit=limit, offset=offset)
 
     def get(self, mail_id: str) -> Optional[Dict[str, Any]]:

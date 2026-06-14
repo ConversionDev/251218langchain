@@ -218,6 +218,7 @@ export default function WorkspaceMailPage() {
   const [draftMails, setDraftMails] = useState<MailItem[]>([]);
   const [trashMails, setTrashMails] = useState<MailItem[]>([]);
   const [spamMails, setSpamMails] = useState<MailItem[]>([]);
+  const [starredMails, setStarredMails] = useState<MailItem[]>([]);
   const [mailLoading, setMailLoading] = useState(false);
   const [spamTestResult, setSpamTestResult] = useState<{ type: "ham" | "spam" | "rejected"; folder: string; mailId?: string; error?: string } | null>(null);
   const [spamTestLoading, setSpamTestLoading] = useState<"ham" | "spam" | "rejected" | null>(null);
@@ -236,7 +237,7 @@ export default function WorkspaceMailPage() {
             : folder === "spam"
               ? spamMails
               : folder === "starred"
-                ? [...mails, ...sentMails].filter((m) => m.starred)
+                ? starredMails
                 : [];
 
   const toFilteredEntries = useMemo(() => {
@@ -254,7 +255,7 @@ export default function WorkspaceMailPage() {
   }, [addressBook, toSearch]);
 
   // 폴더별 메일 목록 API 조회 (받은/보낸/임시보관/휴지통/스팸) — 실제 DB 직원 ID 기준
-  const fetchMailFolder = (folderId: "inbox" | "sent" | "draft" | "trash" | "spam") => {
+  const fetchMailFolder = (folderId: "inbox" | "sent" | "draft" | "trash" | "spam" | "starred") => {
     const owner = employeeId.trim();
     if (!owner) {
       setMails([]);
@@ -262,6 +263,7 @@ export default function WorkspaceMailPage() {
       setDraftMails([]);
       setTrashMails([]);
       setSpamMails([]);
+      setStarredMails([]);
       return;
     }
     setMailLoading(true);
@@ -274,6 +276,7 @@ export default function WorkspaceMailPage() {
         else if (folderId === "draft") setDraftMails(items);
         else if (folderId === "trash") setTrashMails(items);
         else if (folderId === "spam") setSpamMails(items);
+        else if (folderId === "starred") setStarredMails(items);
       })
       .catch(() => {
         if (folderId === "inbox") setMails([]);
@@ -281,6 +284,7 @@ export default function WorkspaceMailPage() {
         else if (folderId === "draft") setDraftMails([]);
         else if (folderId === "trash") setTrashMails([]);
         else if (folderId === "spam") setSpamMails([]);
+        else if (folderId === "starred") setStarredMails([]);
       })
       .finally(() => setMailLoading(false));
   };
@@ -292,6 +296,7 @@ export default function WorkspaceMailPage() {
     else if (folder === "drafts") fetchMailFolder("draft");
     else if (folder === "trash") fetchMailFolder("trash");
     else if (folder === "spam") fetchMailFolder("spam");
+    else if (folder === "starred") fetchMailFolder("starred");
   }, [folder, employeeId]);
 
   // 5.4 받은편지함/스팸함/보낸편지함 폴링 (4초). 탭 비활성 시 스킵, 포커스 시 즉시 재조회
@@ -371,7 +376,7 @@ export default function WorkspaceMailPage() {
         else if (folder === "drafts") fetchMailFolder("draft");
         else if (folder === "trash") fetchMailFolder("trash");
         else if (folder === "spam") fetchMailFolder("spam");
-        else if (folder === "starred") { fetchMailFolder("inbox"); fetchMailFolder("sent"); }
+        else if (folder === "starred") fetchMailFolder("starred");
       })
       .catch(() => {});
     setMails((prev) => prev.map((m) => (m.id === id ? { ...m, starred: nextStarred } : m)));
@@ -478,10 +483,7 @@ http://example.com/claim`,
     else if (folder === "sent") fetchMailFolder("sent");
     else if (folder === "drafts") fetchMailFolder("draft");
     else if (folder === "trash") fetchMailFolder("trash");
-    else if (folder === "starred") {
-      fetchMailFolder("inbox");
-      fetchMailFolder("sent");
-    }
+    else if (folder === "starred") fetchMailFolder("starred");
     setSelectedIds(new Set());
     setActiveId(null);
   };
@@ -516,13 +518,35 @@ http://example.com/claim`,
     setBody(`\n\n--- 전달된 메일 ---\n보낸 사람: ${m.from}\n\n${m.body || ""}`);
   };
 
-  const openDraft = (m: MailItem) => {
+  const openDraft = async (m: MailItem) => {
     openCompose();
     setEditingDraftId(m.id);
-    setRecipientMode("external");
-    setToExternalEmail(m.toEmail || m.to || "");
     setSubject(m.subject === "(제목 없음)" ? "" : m.subject);
     setBody(m.body || "");
+    const email = (m.toEmail || "").trim();
+    if (!email) {
+      setRecipientMode("external");
+      setToExternalEmail(m.to || "");
+      return;
+    }
+    // 사내 주소록에 있으면 내부 수신자로 정확히 복원, 없으면 외부 입력으로
+    try {
+      const res = await fetch(`${API_BASE}/api/address-book`);
+      const book: AddressBookEntry[] = res.ok ? await res.json() : [];
+      const match = Array.isArray(book)
+        ? book.find((e) => e.email && e.email.toLowerCase() === email.toLowerCase())
+        : undefined;
+      if (match) {
+        setRecipientMode("internal");
+        setToRecipient(match);
+        return;
+      }
+    } catch {
+      /* 주소록 조회 실패 → 외부 입력 폴백 */
+    }
+    setRecipientMode("external");
+    setToExternalEmail(email);
+    setToExternalDisplayName(m.to || "");
   };
 
   const deleteActive = async () => {
@@ -538,6 +562,7 @@ http://example.com/claim`,
     else if (folder === "drafts") fetchMailFolder("draft");
     else if (folder === "spam") fetchMailFolder("spam");
     else if (folder === "trash") fetchMailFolder("trash");
+    else if (folder === "starred") fetchMailFolder("starred");
   };
 
   const saveDraft = async () => {

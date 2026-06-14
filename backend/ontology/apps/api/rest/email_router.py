@@ -97,8 +97,8 @@ def list_mail(
     db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """폴더별 메일 목록."""
-    if folder not in ("inbox", "sent", "draft", "trash", "spam"):
-        raise HTTPException(status_code=400, detail="folder must be inbox, sent, draft, trash, or spam")
+    if folder not in ("inbox", "sent", "draft", "trash", "spam", "starred"):
+        raise HTTPException(status_code=400, detail="folder must be inbox, sent, draft, trash, spam, or starred")
     return MailService(db).list_folder(folder, ownerEmployeeId, limit=limit, offset=offset)
 
 
