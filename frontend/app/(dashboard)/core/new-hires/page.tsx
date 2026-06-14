@@ -730,6 +730,7 @@ export default function CoreNewHiresPage() {
         employee={editingEmployee}
         onSave={handleSave}
         nextId={nextId}
+        forceNewHire
       />
 
       <NewHireCompareDialog

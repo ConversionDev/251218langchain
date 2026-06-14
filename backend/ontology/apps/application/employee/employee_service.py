@@ -73,7 +73,9 @@ class EmployeeService:
     def create(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """직원 생성. new_hire 타입이면 applicationDate·status 자동 설정."""
         if data.get("employmentType") == "new_hire":
-            data["applicationDate"] = datetime.now(timezone.utc)
+            # 지원일: 관리자가 입력했으면 존중, 없을 때만 등록 시점(now)으로 기본 설정
+            if not data.get("applicationDate"):
+                data["applicationDate"] = datetime.now(timezone.utc)
             data["joinedAt"] = None
             data["status"] = "pending"
             data["successDna"] = None

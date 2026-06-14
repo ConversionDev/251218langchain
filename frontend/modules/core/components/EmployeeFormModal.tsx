@@ -28,6 +28,8 @@ interface EmployeeFormModalProps {
   employee: Employee | null;
   onSave: (employee: Employee) => void;
   nextId: string;
+  /** 신입 관리 탭에서 등록 시 true — 이력서가 경력직이어도 고용형태를 new_hire로 고정 */
+  forceNewHire?: boolean;
 }
 
 export function EmployeeFormModal({
@@ -36,6 +38,7 @@ export function EmployeeFormModal({
   employee,
   onSave,
   nextId,
+  forceNewHire = false,
 }: EmployeeFormModalProps) {
   const isEdit = employee != null;
   const [form, setForm] = useState<Employee>({
@@ -133,10 +136,11 @@ export function EmployeeFormModal({
         successDna: result.successDna,
         ...(result.gender != null && { gender: result.gender }),
         ...(result.age != null && result.age > 0 && { age: result.age }),
-        ...(result.employmentType != null && { employmentType: result.employmentType }),
+        // 신입 관리 등록(forceNewHire)에선 이력서가 경력직이어도 고용형태를 new_hire로 유지
+        ...(!forceNewHire && result.employmentType != null && { employmentType: result.employmentType }),
       };
     });
-  }, []);
+  }, [forceNewHire]);
 
   /** 이력서 업로드 시 빈칸에만 채움. 등록은 사용자가 등록 버튼으로 함. 파일 해시 저장(동일 이력서 중복 방지). */
   const handleResumeFile = useCallback(
@@ -177,6 +181,7 @@ export function EmployeeFormModal({
     e.preventDefault();
     onSave({
       ...form,
+      ...(forceNewHire && !isEdit ? { employmentType: "new_hire" } : {}),
       ...(isEdit ? {} : { resumeFileHash: lastResumeFileHash ?? undefined }),
     });
     onOpenChange(false);

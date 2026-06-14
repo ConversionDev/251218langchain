@@ -98,6 +98,9 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
       )
     ) : null;
 
+  const hasActions = !!(onEdit || onDelete || onOpenProfile || onAnalyze);
+  const colCount = hasActions ? 8 : 7;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-4">
@@ -122,7 +125,7 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
           />
         </div>
       </div>
-      <div className="w-full overflow-hidden rounded-lg border border-border">
+      <div className="w-full min-h-[24rem] overflow-hidden rounded-lg border border-border">
         <Table className="w-full">
           <TableHeader>
             <TableRow>
@@ -159,7 +162,14 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((emp) => (
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={colCount} className="h-64 text-center text-sm text-muted-foreground">
+                  {employees.length === 0 ? "직원이 없습니다." : "검색 결과가 없습니다."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((emp) => (
               <TableRow
                 key={emp.id}
                 className="cursor-pointer hover:bg-muted/50"
@@ -250,7 +260,8 @@ export function EmployeeListTable({ employees, onEdit, onDelete, onOpenProfile, 
                   </TableCell>
                 )}
               </TableRow>
-            ))}
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
