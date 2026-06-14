@@ -162,6 +162,8 @@ class MailService:
             sent_at=now,
             is_starred=False,
             is_unread=False,
+            # 역량 분류 대기 — 발송 후 백그라운드에서 학습 EXAONE가 채움
+            ai_status=AiStatus.PENDING.value,
         )
 
         if recipient_owner_id:
@@ -200,6 +202,45 @@ class MailService:
                 )
 
         return {"status": "success", "mail": record}
+
+    def classify_competency_and_store(
+        self,
+        mail_id: str,
+        subject: str,
+        body: Optional[str],
+        employee_id: str,
+    ) -> Dict[str, Any]:
+        """발송 메일을 5대 역량으로 분류(학습 EXAONE)하고 결과를 메일 행에 저장 + 성과 기록.
+
+        비동기(백그라운드) 호출용. 분류 모델·역량 라벨을 ai_result_raw(JSON)에 저장해
+        프론트 배지로 노출한다. 실패해도 발송 메일엔 영향 없음(ai_status=FAILED).
+        """
+        import json as _json
+
+        try:
+            result = run_email_classify_and_record(
+                self.db, subject=subject, body=body, employee_id=employee_id
+            )
+            classification = result.get("classification") or {}
+        except Exception:
+            logger.warning("역량 분류 실패 (mail_id=%s)", mail_id, exc_info=True)
+            mail_item_update(self.db, mail_id, ai_status=AiStatus.FAILED.value)
+            return {}
+
+        payload = {
+            "kind": "competency",
+            "model": "exaone",  # 자체 파인튜닝 EXAONE competency 어댑터
+            "is_performance": bool(classification.get("is_performance")),
+            "competency_labels": classification.get("competency_labels") or [],
+            "performance_record_id": result.get("performance_record_id"),
+        }
+        mail_item_update(
+            self.db,
+            mail_id,
+            ai_status=AiStatus.SUCCESS.value,
+            ai_result_raw=_json.dumps(payload, ensure_ascii=False),
+        )
+        return payload
 
     def save_draft(
         self,

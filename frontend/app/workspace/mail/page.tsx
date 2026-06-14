@@ -69,7 +69,9 @@ type ClassifyResult = {
 type MailItem = {
   id: string;
   from: string;
+  fromEmail?: string;
   to?: string;
+  toEmail?: string;
   subject: string;
   preview: string;
   receivedAt: string;
@@ -80,6 +82,8 @@ type MailItem = {
   aiStatus?: string;
   spamScore?: number;
   status?: string;
+  /** 역량 분류 결과(JSON 문자열): {kind,model,is_performance,competency_labels} */
+  aiResultRaw?: string;
 };
 
 /** API mail_items 응답 1건 */
@@ -101,6 +105,26 @@ type MailApiItem = {
   aiStatus?: string;
   spamScore?: number;
   status?: string;
+  aiResultRaw?: string;
+};
+
+/** 역량 분류 결과 (메일 행 ai_result_raw JSON) */
+type Competency = { model?: string; is_performance?: boolean; competency_labels?: string[] };
+
+function parseCompetency(raw?: string): Competency | null {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw);
+    if (o && o.kind === "competency") return o as Competency;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+const MODEL_LABEL: Record<string, string> = {
+  exaone: "EXAONE 파인튜닝",
+  gemini: "Gemini",
 };
 
 function apiMailToMailItem(api: MailApiItem): MailItem {
@@ -123,7 +147,9 @@ function apiMailToMailItem(api: MailApiItem): MailItem {
   return {
     id: api.id,
     from: api.fromDisplay || "me",
+    fromEmail: api.fromEmail,
     to: api.toDisplay,
+    toEmail: api.toEmail,
     subject: api.subject || "(제목 없음)",
     preview: body.slice(0, 50) || "(내용 없음)",
     receivedAt,
@@ -133,6 +159,7 @@ function apiMailToMailItem(api: MailApiItem): MailItem {
     aiStatus: api.aiStatus,
     spamScore: api.spamScore,
     status: api.status,
+    aiResultRaw: api.aiResultRaw,
   };
 }
 
@@ -160,6 +187,7 @@ export default function WorkspaceMailPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [composing, setComposing] = useState(false);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -266,15 +294,17 @@ export default function WorkspaceMailPage() {
     else if (folder === "spam") fetchMailFolder("spam");
   }, [folder, employeeId]);
 
-  // 5.4 받은편지함/스팸함 폴링 (4초). 탭 비활성 시 스킵, 포커스 시 즉시 재조회
+  // 5.4 받은편지함/스팸함/보낸편지함 폴링 (4초). 탭 비활성 시 스킵, 포커스 시 즉시 재조회
+  // (보낸편지함: 역량 분류가 백그라운드로 끝나면 배지가 자동 반영되도록 폴링)
   const POLL_INTERVAL_MS = 4000;
   useEffect(() => {
-    if (!employeeId.trim() || (folder !== "inbox" && folder !== "spam")) return;
+    if (!employeeId.trim() || (folder !== "inbox" && folder !== "spam" && folder !== "sent")) return;
     let timer: ReturnType<typeof setInterval> | null = null;
     const poll = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       if (folder === "inbox") fetchMailFolder("inbox");
       else if (folder === "spam") fetchMailFolder("spam");
+      else if (folder === "sent") fetchMailFolder("sent");
     };
     const onVisibility = () => {
       if (document.visibilityState === "visible") poll();
@@ -467,6 +497,72 @@ http://example.com/claim`,
     setToExternalDisplayName("");
     setSubject("");
     setBody("");
+    setEditingDraftId(null);
+  };
+
+  const openReply = (m: MailItem) => {
+    openCompose();
+    setRecipientMode("external");
+    setToExternalEmail(m.fromEmail || "");
+    setToExternalDisplayName(m.from || "");
+    setSubject(m.subject.startsWith("Re:") ? m.subject : `Re: ${m.subject}`);
+    setBody(`\n\n--- 원본 메일 ---\n${m.body || ""}`);
+  };
+
+  const openForward = (m: MailItem) => {
+    openCompose();
+    setRecipientMode("external");
+    setSubject(m.subject.startsWith("Fwd:") ? m.subject : `Fwd: ${m.subject}`);
+    setBody(`\n\n--- 전달된 메일 ---\n보낸 사람: ${m.from}\n\n${m.body || ""}`);
+  };
+
+  const openDraft = (m: MailItem) => {
+    openCompose();
+    setEditingDraftId(m.id);
+    setRecipientMode("external");
+    setToExternalEmail(m.toEmail || m.to || "");
+    setSubject(m.subject === "(제목 없음)" ? "" : m.subject);
+    setBody(m.body || "");
+  };
+
+  const deleteActive = async () => {
+    if (!active) return;
+    const permanent = folder === "trash";
+    const url = permanent
+      ? `${API_BASE}/api/mail/${encodeURIComponent(active.id)}?permanent=true`
+      : `${API_BASE}/api/mail/${encodeURIComponent(active.id)}`;
+    await fetch(url, { method: "DELETE" }).catch(() => {});
+    setActiveId(null);
+    if (folder === "inbox") fetchMailFolder("inbox");
+    else if (folder === "sent") fetchMailFolder("sent");
+    else if (folder === "drafts") fetchMailFolder("draft");
+    else if (folder === "spam") fetchMailFolder("spam");
+    else if (folder === "trash") fetchMailFolder("trash");
+  };
+
+  const saveDraft = async () => {
+    const owner = employeeId.trim();
+    if (!owner) return;
+    const toPayload =
+      recipientMode === "internal" && toRecipient
+        ? { id: toRecipient.id, displayName: toRecipient.displayName, email: toRecipient.email || undefined }
+        : recipientMode === "external" && toExternalEmail.trim()
+          ? { id: toExternalEmail.trim(), displayName: (toExternalDisplayName || toExternalEmail).trim(), email: toExternalEmail.trim() }
+          : undefined;
+    await fetch(`${API_BASE}/api/mail/draft`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ownerEmployeeId: owner,
+        id: editingDraftId || undefined,
+        to: toPayload,
+        subject: subject.trim(),
+        body: body.trim() || undefined,
+      }),
+    }).catch(() => {});
+    setComposing(false);
+    setEditingDraftId(null);
+    fetchMailFolder("draft");
   };
 
   const sendMail = async (e: React.FormEvent) => {
@@ -515,21 +611,18 @@ http://example.com/claim`,
       setSubject("");
       setBody("");
 
-      const classifyRes = await fetch(`${API_BASE}/api/mail/classify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: subjectText,
-          body: bodyText || undefined,
-          employeeId: owner,
-        }),
-      });
-      if (!classifyRes.ok) throw new Error(`분류 실패: ${classifyRes.status}`);
-      const classifyData = await classifyRes.json();
+      // 임시보관에서 작성해 보낸 경우 해당 draft 제거
+      if (editingDraftId) {
+        fetch(`${API_BASE}/api/mail/${encodeURIComponent(editingDraftId)}?permanent=true`, { method: "DELETE" }).catch(() => {});
+        setEditingDraftId(null);
+        fetchMailFolder("draft");
+      }
+
+      // 역량 분류는 백그라운드(학습 EXAONE)에서 수행 → 보낸편지함 메일에 배지로 채워짐
       setClassifyResult({
-        classification: classifyData.classification ?? { is_performance: false, competency_labels: [] },
-        performance_record_id: classifyData.performance_record_id ?? null,
-        raw_response: classifyData.raw_response,
+        classification: { is_performance: false, competency_labels: [] },
+        performance_record_id: null,
+        raw_response: "발송 완료 · 역량 분석을 백그라운드에서 진행합니다. 보낸편지함에서 결과 배지를 확인하세요.",
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "요청 실패";
@@ -669,7 +762,7 @@ http://example.com/claim`,
                 >
                   <Star className={`h-4 w-4 ${mail.starred ? "fill-amber-400 text-amber-500" : ""}`} />
                 </button>
-                {(folder === "inbox" || folder === "spam") && mail.aiStatus && (
+                {(folder === "inbox" || folder === "spam" || folder === "sent") && mail.aiStatus && (
                   <span className="shrink-0 flex items-center" title={mail.aiStatus === "PENDING" || mail.aiStatus === "PROCESSING" ? "분석 중" : mail.aiStatus === "SUCCESS" ? "분석 완료" : "분석 실패"}>
                     {mail.aiStatus === "PENDING" || mail.aiStatus === "PROCESSING" ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 dark:text-muted-foreground" />
@@ -683,7 +776,11 @@ http://example.com/claim`,
                 <button
                   type="button"
                   className="min-w-0 flex-1 text-left"
-                  onClick={() => { setActiveId(mail.id); markAsRead(mail.id); }}
+                  onClick={() => {
+                    if (folder === "drafts") { openDraft(mail); return; }
+                    setActiveId(mail.id);
+                    markAsRead(mail.id);
+                  }}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className={`truncate text-sm ${mail.unread ? "font-semibold text-slate-900 dark:text-foreground" : "text-slate-700 dark:text-muted-foreground"}`}>
@@ -695,6 +792,22 @@ http://example.com/claim`,
                     {mail.subject}
                   </p>
                   <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-muted-foreground">{mail.preview}</p>
+                  {(() => {
+                    const c = parseCompetency(mail.aiResultRaw);
+                    if (!c || !(c.competency_labels && c.competency_labels.length > 0)) return null;
+                    return (
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {c.competency_labels.map((lbl) => (
+                          <span key={lbl} className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-800 dark:bg-teal-900/50 dark:text-teal-200">
+                            {lbl}
+                          </span>
+                        ))}
+                        <span className="text-[10px] text-slate-400 dark:text-muted-foreground">
+                          · {MODEL_LABEL[c.model ?? ""] ?? c.model}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </button>
               </li>
             ))
@@ -707,7 +820,7 @@ http://example.com/claim`,
         {classifyLoading && (
           <div className="shrink-0 flex items-center gap-2 border-b border-[#a8d5c4]/40 bg-[#e8f5ef]/80 px-4 py-3 text-sm text-slate-700 dark:border-primary/20 dark:bg-primary/10 dark:text-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            AI 분류 중 (성과·5대 역량 판단)…
+            발송 중…
           </div>
         )}
         {!classifyLoading && classifyResult && (
@@ -978,7 +1091,10 @@ http://example.com/claim`,
                   <Send className="mr-2 h-4 w-4" />
                   보내기
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setComposing(false)} className="border-[#a8d5c4]/80 dark:border-primary/30 dark:hover:bg-primary/10">
+                <Button type="button" variant="outline" onClick={saveDraft} disabled={!employeeId.trim()} className="border-[#a8d5c4]/80 dark:border-primary/30 dark:hover:bg-primary/10">
+                  임시저장
+                </Button>
+                <Button type="button" variant="outline" onClick={() => { setComposing(false); setEditingDraftId(null); }} className="border-[#a8d5c4]/80 dark:border-primary/30 dark:hover:bg-primary/10">
                   취소
                 </Button>
               </div>
@@ -992,15 +1108,15 @@ http://example.com/claim`,
         ) : (
           <div className="flex flex-1 flex-col p-4">
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" className="gap-1 border-[#a8d5c4]/80 dark:border-primary/30 dark:hover:bg-primary/10">
+              <Button type="button" variant="outline" size="sm" onClick={() => active && openReply(active)} className="gap-1 border-[#a8d5c4]/80 dark:border-primary/30 dark:hover:bg-primary/10">
                 <Reply className="h-3.5 w-3.5" />
                 답장
               </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1 border-[#a8d5c4]/80 dark:border-primary/30 dark:hover:bg-primary/10">
+              <Button type="button" variant="outline" size="sm" onClick={() => active && openForward(active)} className="gap-1 border-[#a8d5c4]/80 dark:border-primary/30 dark:hover:bg-primary/10">
                 <Forward className="h-3.5 w-3.5" />
                 전달
               </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50">
+              <Button type="button" variant="outline" size="sm" onClick={deleteActive} className="gap-1 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50">
                 <Trash2 className="h-3.5 w-3.5" />
                 삭제
               </Button>

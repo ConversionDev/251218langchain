@@ -258,13 +258,31 @@ def get_mail(
     return item
 
 
+def _classify_sent_competency_bg(
+    mail_id: str, subject: str, body: Optional[str], employee_id: str
+) -> None:
+    """발송 메일 역량 분류(학습 EXAONE)를 백그라운드에서 수행. 전용 세션 사용."""
+    db = SessionLocal()
+    try:
+        MailService(db).classify_competency_and_store(mail_id, subject, body, employee_id)
+    except Exception as e:
+        logger.exception("역량 분류 백그라운드 실패: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
+
 @email_router.post("/send", response_model=Dict[str, Any])
 def send_mail_api(
     body: SendMailBody,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    """메일 발송: 직원/사내 주소면 DB만(보낸함+받은함), 외부 주소면 메일건 API 발송 후 보낸함 저장."""
-    return MailService(db).send(
+    """메일 발송: 직원/사내 주소면 DB만(보낸함+받은함), 외부 주소면 메일건 API 발송 후 보낸함 저장.
+
+    발송은 즉시 반환하고, 역량 분류(학습 EXAONE)는 백그라운드로 수행해 보낸 메일에 결과를 채운다.
+    """
+    result = MailService(db).send(
         sender_employee_id=body.senderEmployeeId,
         to_id=body.to.id,
         to_email=(body.to.email or "").strip(),
@@ -272,6 +290,16 @@ def send_mail_api(
         subject=body.subject or "",
         body=body.body,
     )
+    mail = result.get("mail") or {}
+    if mail.get("id") and body.senderEmployeeId:
+        background_tasks.add_task(
+            _classify_sent_competency_bg,
+            mail["id"],
+            body.subject or "",
+            body.body,
+            body.senderEmployeeId,
+        )
+    return result
 
 
 @email_router.post("/draft", response_model=Dict[str, Any])
