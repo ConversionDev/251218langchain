@@ -17,11 +17,11 @@ const COMPETENCIES = [
   { name: "적응력", en: "Adaptability", icon: Repeat, desc: "변화에 유연하게 대응하는 능력" },
 ] as const;
 
-/** 메인 히어로 슬로건 — 1줄 + 2줄(통해 다음 줄바꿈) */
+/** 메인 히어로 슬로건 */
 const HERO_SLOGAN = {
-  main: "인사(HR)의 직관을 데이터의 확신으로 바꾸다",
-  sub1: "리더십부터 적응력까지, AI가 분석한 5대 핵심 역량 지표를 통해",
-  sub2: "오차 없는 인재 배치와 성과 예측을 경험하세요.",
+  main: "HR 데이터를 묻고, 근거 있는 답을 얻다",
+  sub1: "Success DNA 5대 역량 정량화와 RAG 에이전트로",
+  sub2: "직원·성과·공시·메일을 하나의 HR 인텔리전스로 연결합니다.",
 } as const;
 
 /** 배경 캐러셀용 플레이스홀더 이미지 (추후 기업 신뢰 이미지로 교체) */
@@ -146,11 +146,11 @@ export default function HRLandingPage() {
         {/* 3) 글자: 슬로건 — 왼쪽 정렬, 크기·간격 강화 */}
         <div className="relative z-10 flex flex-1 items-center justify-start px-6 pt-24 pb-16 md:px-12 md:pt-28 lg:px-16">
           <div className="mx-auto w-full max-w-6xl flex justify-start">
-            <div className="max-w-xl text-left">
-              <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-slate-900 md:text-5xl lg:text-[3.25rem]">
+            <div className="max-w-4xl text-left">
+              <h2 className="text-2xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-3xl md:text-4xl md:whitespace-nowrap lg:text-[2.875rem]">
                 {HERO_SLOGAN.main}
               </h2>
-              <p className="mt-6 text-base leading-relaxed text-slate-700 md:mt-8 md:text-xl md:leading-relaxed">
+              <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-700 md:mt-8 md:text-lg md:leading-relaxed">
                 {HERO_SLOGAN.sub1}
                 <br />
                 {HERO_SLOGAN.sub2}
@@ -189,7 +189,7 @@ export default function HRLandingPage() {
 
       {/* 5대 핵심 역량 (Success DNA) — 명시적으로 5개 역량 노출 */}
       <section id={COMPETENCY_ID} className="relative z-10 scroll-mt-20 bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+        <div className="mx-auto max-w-7xl px-6 py-16 md:py-20">
           <div className="text-center">
             <span className="inline-block rounded-full bg-[#e8f5ef] px-3 py-1 text-xs font-semibold tracking-wide text-emerald-700">
               SUCCESS DNA
@@ -197,24 +197,26 @@ export default function HRLandingPage() {
             <h2 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
               AI가 분석하는 5대 핵심 역량
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-base leading-[1.7] text-slate-600 md:text-lg">
-              모든 인재를 동일한 5개 축으로 <strong className="text-slate-800">0–100점</strong> 정량화해, 채용·배치·성과 예측의 공통 기준을 만듭니다.
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-[1.7] text-slate-600 sm:max-w-3xl md:max-w-none md:text-lg md:whitespace-nowrap">
+              모든 인재를 동일한 5개 축으로 <strong className="text-slate-800">0–100점</strong> 정량화해, 채용·배치·성과 관리의 공통 기준을 만듭니다.
             </p>
           </div>
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-4 xl:grid-cols-5 xl:gap-3">
             {COMPETENCIES.map((c) => {
               const Icon = c.icon;
               return (
                 <div
                   key={c.name}
-                  className="group rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm transition-all hover:-translate-y-1 hover:border-[#a8d5c4] hover:shadow-md"
+                  className="group rounded-2xl border border-slate-200 bg-white px-4 py-6 text-center shadow-sm transition-all hover:-translate-y-1 hover:border-[#a8d5c4] hover:shadow-md sm:px-5 lg:px-3"
                 >
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-500 text-white shadow-sm">
                     <Icon className="h-7 w-7" />
                   </div>
-                  <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900">{c.name}</h3>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600">{c.en}</p>
-                  <p className="mt-3 text-sm leading-[1.6] text-slate-600">{c.desc}</p>
+                  <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">{c.name}</h3>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600 whitespace-nowrap">{c.en}</p>
+                  <p className="mt-3 text-[11px] leading-none text-slate-600 whitespace-nowrap sm:text-xs lg:text-[11px] xl:text-xs">
+                    {c.desc}
+                  </p>
                 </div>
               );
             })}
@@ -223,12 +225,12 @@ export default function HRLandingPage() {
       </section>
 
       <section id={FEATURES_ID} className="relative z-10 scroll-mt-20 bg-gradient-to-b from-[#e8f5ef] to-[#f0f5f0]">
-        <div className="mx-auto max-w-6xl px-6 py-16">
+        <div className="mx-auto max-w-7xl px-6 py-16">
           <h2 className="text-center text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
             RAG와 LLM으로 HR 인사이트를 발견하세요
           </h2>
-          <p className="mx-auto mt-5 max-w-2xl text-center text-lg leading-[1.7] text-slate-700">
-            이력서·공시 역량 데이터를 벡터 검색(RAG)과 LLM으로 연결하고, Fast MCP 기반 도구 호출로 정확한 분석과 인재 매칭을 실현합니다.
+          <p className="mx-auto mt-5 max-w-2xl text-center text-base leading-[1.7] text-slate-700 sm:max-w-3xl md:max-w-none md:text-lg md:whitespace-nowrap">
+            이력서·공시·성과 데이터를 RAG와 LangGraph 에이전트로 연결하고, MCP 도구 호출로 근거 있는 분석과 인재 매칭을 지원합니다.
           </p>
           <div className="mt-12 grid gap-8 md:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md">
