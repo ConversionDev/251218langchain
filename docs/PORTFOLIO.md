@@ -1,6 +1,6 @@
 # HR Ontology RAG Platform — 포트폴리오 상세
 
-AI 기반 인적자본(HCM) 플랫폼. 비정형 문서·커뮤니케이션 데이터를 자체 파인튜닝 LLM과 RAG로 분석해 **5대 핵심 역량(리더십·기술력·창의성·협업·적응력)** 을 정량화하고, 채용·배치·성장 추적을 지원한다.
+ㅈㅈ
 
 관련 문서: [ARCHITECTURE.md](ARCHITECTURE.md) · [FEATURES.md](FEATURES.md) · [MODEL_COMPARISON.md](MODEL_COMPARISON.md)
 
@@ -30,6 +30,11 @@ LangGraph 기반 RAG 에이전트, 직원·성과·공시·역량 단일·복합
 파일 업로드 텍스트 추출·멀티모달 입력 변환 → 질의 컨텍스트 반영 → RAG·LLM 응답
 - 이미지 첨부 시 Gemini 멀티모달, 문서 첨부 시 텍스트 추출 후 RAG 컨텍스트 결합
 
+### 5) 역량 온톨로지·지식베이스 구축
+직무역량 원천(O*NET·NCS 등) **11.8만 건** → BGE-M3 임베딩 → **FAISS K-Means 클러스터링 + UMAP** → **파인튜닝 EXAONE 자동 라벨링** → 채팅 RAG 근거 지식베이스
+- **하이브리드 벡터 검색 설계**(문제 해결): 11.8만 건을 Neon(서버리스) pgvector에 임베딩하려다 부하·타임아웃으로 2천 건에서 막힘 → **대용량 정적 코퍼스(역량 118,161·공시 1,764)를 FAISS 로컬 인덱스로 분리**(전량 임베딩·인메모리 검색), 소량 동적(직원 601)만 pgvector(HNSW) 유지 → Neon 부하 0, 전량 검색
+- 채팅 답변에 `[근거: ...]` 출처 표기 — RAG 그라운딩이 지식베이스에서 나옴을 증명
+
 ---
 
 ## 2. 아키텍처 설계
@@ -38,6 +43,7 @@ LangGraph 기반 RAG 에이전트, 직원·성과·공시·역량 단일·복합
 - **Hexagonal(라이트)**: domain/application/infrastructure 레이어 분리로 확장성·유지보수성 확보
 - **Hub-and-Spoke (FastMCP)**: 중앙 허브(/mcp) → Chat·Spam 도메인 MCP → Spoke `call_tool` 위임. 허브는 라우팅만, 무거운 모델은 Spoke에서
 - **작업 특성별 모델 분기**: 학습 EXAONE(GPU)·llama.cpp(CPU 배포)·Gemini(스팸·이력서폼·OCR·배포 채팅)를 적재적소 배치 — **핵심 역량 판정은 자체 파인튜닝 모델, 빠른 추출·분류·응답은 관리형 API**
+- **하이브리드 벡터 검색**: 대용량 정적 코퍼스(역량 11.8만·공시 1.7천)=**FAISS**(인메모리), 소량 동적(직원)=**pgvector(HNSW)** — 서버리스 DB 부하 회피
 
 ---
 
@@ -65,7 +71,11 @@ LangGraph 기반 RAG 에이전트, 직원·성과·공시·역량 단일·복합
 | 12 | 직원 RAG 페르소나 생성 | EXAONE |
 
 ### C. RAG·벡터 인프라
-BGE-M3 임베딩 + pgvector(HNSW) + FAISS + K-Means/UMAP 클러스터링 → competency_anchors 지식베이스.
+- 임베딩: BGE-M3 (dense)
+- **하이브리드 벡터 검색**: FAISS(역량 **118,161** · 공시 **1,764** — 정적 대용량, 인메모리) + pgvector HNSW(직원 601 — 동적)
+- 클러스터링: FAISS K-Means + UMAP → competency_anchors 역량 지식베이스(EXAONE 라벨링)
+
+> **숫자 주의**: competency_anchors 테이블 11.8만 건 전량이 FAISS에 임베딩·검색됨. (pgvector엔 2천 건만 — 초기 Neon 부하 한계로 남은 잔재, RAG 경로 아님)
 
 ### Agentic RAG 판정 — defensible
 - **그래프**: LangGraph StateGraph `rag → model → tools → (조건부 루프) → 답변`
@@ -104,7 +114,8 @@ BGE-M3 임베딩 + pgvector(HNSW) + FAISS + K-Means/UMAP 클러스터링 → com
 | 메일 수신·인라인 스팸 분류 | ✅ 구현·배포 | 웹훅→폴더 배치 ~1s |
 | 메일 CRUD(발송·답장·전달·임시저장·별표·검색) | ✅ 구현·배포 | 서버측 검색 |
 | 채팅 RAG 에이전트(SSE·도구·멀티모달) | ✅ 구현·배포 | 답변 LLM 환경분기: 로컬 EXAONE / 배포 Gemini(웜 ~2s). 도구·RAG는 동일 |
-| 공시 기여도 예측(RAG+LLM) | ✅ API 구현 | 프론트 직접 연동은 부분 |
+| 역량 지식베이스(FAISS 하이브리드) | ✅ 구현·검증 | 역량 11.8만·공시 1.7천 FAISS 전량 임베딩·검색, 클러스터링·EXAONE 라벨링 |
+| 공시 기여도 예측(RAG+LLM) | ◐ 부분 | RAG ingest·API는 됨. **배포 예측 작업이 pending에서 미완료(EXAONE CPU)** — 데모 헤드라인 비추천 |
 | FastMCP 허브 오케스트레이션 | ✅ 구현 | 중앙→도메인 MCP→Spoke |
 | 직무 전환 인텔리전스 | ◐ 부분 | 채팅 API 재사용, 전용 백엔드 없음 |
 | 역량 클러스터 지도(/data-map) | ◐ 개발 전용 | 페이지가 prod에서 notFound()(의도). 클러스터 HTML은 수동 viz 스크립트 |
