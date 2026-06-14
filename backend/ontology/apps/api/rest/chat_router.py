@@ -163,8 +163,14 @@ async def agent_upload(files: List[UploadFile] = File(default=[], description="�
 
 @router.post("/chat/stream")
 async def agent_chat_stream(request: Request):
-    payload = await _parse_chat_payload(request)
-    _resolve_file_ids_to_payload(payload)
+    try:
+        payload = await _parse_chat_payload(request)
+        _resolve_file_ids_to_payload(payload)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 잘못된 JSON·인코딩 등 → raw 500 대신 명확한 400
+        raise HTTPException(status_code=400, detail=f"요청 본문 파싱 실패: {e}")
 
     svc = ChatService()
 
