@@ -2,7 +2,7 @@
 
 POST /api/resume/analyze: 이력서 파일 업로드 → 텍스트 추출 → RAG+LLM 분석 → Success DNA + 기본 정보 반환.
 Core 직원 등록 시 이력서 업로드로 연동.
-지원 확장자: domain/shared/document_extract.SUPPORTED_TEXT_EXTENSIONS (PDF, TXT, Word .docx, HWP .hwp)
+지원 확장자: domain/shared/document_extract.SUPPORTED_TEXT_EXTENSIONS (PDF, TXT, Word .docx)
 """
 
 import asyncio
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/resume", tags=["Resume"])
 
 
 @router.post("/analyze")
-async def resume_analyze(file: UploadFile = File(..., description="이력서 파일 (PDF, TXT, Word .docx, HWP .hwp)")):
+async def resume_analyze(file: UploadFile = File(..., description="이력서 파일 (PDF, TXT, Word .docx)")):
     """이력서 파일을 분석하여 기본 정보와 Success DNA를 반환합니다.
 
     Returns:

@@ -3,7 +3,7 @@
 
 Core 직원 등록 시 이력서 업로드로 연동.
 - RAG/임베딩(BGE) 로드 없이 ExaOne만 호출해 GPU 메모리 절감.
-- 텍스트 추출: domain/shared/document_extract (PDF/TXT/Word/HWP).
+- 텍스트 추출: domain/shared/document_extract (PDF/TXT/Word).
 - 속도 최적화: 동일 파일 해시 캐시, max_tokens 1024, temperature 0.3, 입력 1만 자 제한.
 """
 
@@ -559,7 +559,7 @@ def _normalize_resume_parse_result(raw: Dict[str, Any], source_text: str = "") -
     import re as _re
 
     def _clean_name(v: str) -> str:
-        """HWP 표 셀 정렬 아티팩트 제거: 한글 음절 사이 공백 삭제. '강 경 구' → '강경구'"""
+        """표 셀 정렬 아티팩트 제거: 한글 음절 사이 공백 삭제. '강 경 구' → '강경구'"""
         v = _re.sub(r"(?<=[\uac00-\ud7a3])\s+(?=[\uac00-\ud7a3])", "", v)
         # 이름 끝 괄호 부가 정보 제거: '강경구(남)' → '강경구'
         v = _re.sub(r"\s*[\(\（][^\)\）]{1,10}[\)\）]\s*$", "", v)

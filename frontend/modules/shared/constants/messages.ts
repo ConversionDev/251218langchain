@@ -50,7 +50,7 @@ export const NEW_HIRES_MESSAGES = {
   },
   section: {
     registerTitle: "이력서로 신입 등록",
-    registerDescription: "PDF/Word/HWP 업로드 시 기본 정보와 역량 분석이 자동으로 채워집니다.",
+    registerDescription: "PDF/Word 업로드 시 기본 정보와 역량 분석이 자동으로 채워집니다.",
     registerButton: "이력서 업로드하여 등록하기",
     registerDoneHint: "등록 완료. 아래 목록에서 확인하세요.",
     atsTitle: "지원자 · 신입 목록 (ATS)",
@@ -124,7 +124,7 @@ export const EMPLOYEE_FORM_MESSAGES = {
   upload: {
     uploadLegend: "이력서 업로드",
     resumeLegend: "이력서",
-    acceptedHint: "PDF, TXT, Word(.docx), HWP(.hwp) · 업로드 시 빈칸에 정보가 채워집니다. 등록은 등록 버튼을 눌러 주세요.",
+    acceptedHint: "PDF, TXT, Word(.docx) · 업로드 시 빈칸에 정보가 채워집니다. 등록은 등록 버튼을 눌러 주세요.",
     editReplaceHint: "새 이력서로 갱신 (빈칸 채움 후 저장 버튼)",
     editUploadHint: "이력서 업로드 (빈칸 채움 후 저장 버튼)",
     existingResumeSummary: (eduCount: number, expCount: number) =>

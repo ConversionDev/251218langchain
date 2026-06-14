@@ -94,7 +94,7 @@ fastmcp>=2.14.0,<3
 
 # ===============================
 # Word (.docx) — 이력서 등 텍스트 추출 (배포에서 사용 시)
-# PDF 바이너리 추출(pymupdf/pdfplumber), xlsx(openpyxl), HWP(pyhwp)는
+# PDF 바이너리 추출(pymupdf/pdfplumber), xlsx(openpyxl)는
 # 배포에서는 OCR·미사용 가정 → 루트 requirements.txt(로컬)에만 둠.
 # ===============================
 python-docx==1.2.0

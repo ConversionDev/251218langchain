@@ -104,14 +104,13 @@ fastmcp>=2.14.0,<3
 
 # ===============================
 
-# PDF / Excel / Word / HWP (전략: domain/shared, document_extract)
-# PDF: pymupdf, pdfplumber. Excel: openpyxl. Word: python-docx. HWP: pyhwp(.hwp v5).
+# PDF / Excel / Word (전략: domain/shared, document_extract)
+# PDF: pymupdf, pdfplumber. Excel: openpyxl. Word: python-docx.
 # ===============================
 pymupdf==1.25.1
 pdfplumber==0.11.9
 openpyxl==3.1.5
 python-docx==1.2.0
-pyhwp>=0.1b15
 
 # ===============================
 # Clustering 시각화 (run_competency_visualization.py)
