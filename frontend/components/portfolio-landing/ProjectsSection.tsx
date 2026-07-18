@@ -105,7 +105,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     ],
     evalTable: RAG_EVAL_TIERS,
     links: [
-      { label: "데모", href: "https://www.clickme.co.kr" },
+      { label: "광고 데모", href: "https://www.clickme.co.kr" },
       { label: "GitHub", href: "https://github.com/cclickstudio/click-me" },
     ],
     previewUrl: "https://www.clickme.co.kr",
