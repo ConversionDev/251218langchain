@@ -2,7 +2,7 @@
 
 이 문서는 **3개 독립 서비스 토폴로지**, **헥사고날 계층**, **MCP 중앙 허브·스타 토폴로지**, 그리고 채팅·스팸·메일 파이프라인과 배포(systemd·nginx·CI/CD) 구조를 한곳에 정리합니다.
 
-개요·기술스택은 루트 [README.md](../README.md), 도메인별 구현 현황은 [IMPLEMENTATION.md](IMPLEMENTATION.md), 프론트엔드는 [FRONTEND.md](FRONTEND.md)를 참고하세요.
+개요·기술스택은 루트 [README.md](../../README.md), 도메인별 구현 현황은 [IMPLEMENTATION.md](IMPLEMENTATION.md), 프론트엔드는 [FRONTEND.md](FRONTEND.md)를 참고하세요.
 
 ---
 
@@ -234,7 +234,7 @@ rag_node
 
 ### 9.1 인프라
 
-- **EC2**: m7i-flex.large (2 vCPU, 8GB RAM, 월 ~$70). 세 서비스 systemd 독립 실행.
+- **EC2**: t4g.large (ARM Graviton2, 2 vCPU, 8GB RAM, 서울 $0.0832/hr) + **Elastic IP 43.201.214.82** 고정. 세 서비스 systemd 독립 실행. 평시 중지·필요 시 기동 운영 (상세: [INFRA.md](INFRA.md)). — 2026-07 이전 (구: m7i-flex.large x86)
 - **CI/CD**: GitHub Actions — `rsync`로 코드 전송 후 `ssh nohup`(또는 systemd 재시작). `.github/workflows/deploy.yml`에서 `printf`로 `.env`를 생성해 환경변수 유지.
 - **SSL**: Let's Encrypt(Certbot). `certbot.timer`로 자동 갱신.
 

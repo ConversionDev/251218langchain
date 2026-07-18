@@ -36,7 +36,7 @@
 | Embedding | BGE-M3 |
 | Vector DB | PostgreSQL + `pgvector` (Neon) |
 | Cache | Upstash Redis |
-| Infra | AWS EC2 (m7i-flex.large), Nginx, Let's Encrypt |
+| Infra | AWS EC2 (t4g.large, ARM Graviton2 + Elastic IP), Nginx, Let's Encrypt |
 | CI/CD | GitHub Actions (rsync + ssh nohup) |
 
 ---
@@ -101,7 +101,8 @@ python main.py
 ## 6. EC2 CPU 배포 (2025-04)
 
 ### 목표
-> GPU 없는 **AWS EC2 m7i-flex.large (2 vCPU, 8GB RAM, 월 ~$70)** 환경에 7.8B 파인튜닝 모델 서빙
+> GPU 없는 **AWS EC2 CPU 인스턴스(2 vCPU, 8GB RAM)** 환경에 7.8B 파인튜닝 모델 서빙
+> (최초 m7i-flex.large(x86, 월 ~$86) → 2026-07 **t4g.large(ARM Graviton2, 시간당 $0.0832)** 로 이전, 상세: [backend/docs/INFRA.md](backend/docs/INFRA.md))
 
 ### 모델 변환 파이프라인
 
@@ -125,7 +126,7 @@ exaone_q4_k_m.gguf (tensor만 OK, metadata 손상)
 exaone_competency_q4_k_m.gguf  (4.5GB, 배포 최종본)
 ```
 
-### 트러블슈팅 요약 (상세는 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md))
+### 트러블슈팅 요약 (상세는 [backend/docs/TROUBLESHOOTING.md](backend/docs/TROUBLESHOOTING.md))
 
 - **bitsandbytes 호환성**: `Linear4bit` 레이어를 fp16으로 직접 역양자화
 - **GGUF 메타데이터 손상**: Q4 변환 시 토크나이저 merges 누락 → f16 GGUF의 KV를 Q4 tensor와 재결합하는 패치 스크립트 작성
@@ -141,7 +142,7 @@ exaone_competency_q4_k_m.gguf  (4.5GB, 배포 최종본)
 | 배포 | ✅ HTTPS 동작 |
 | 응답 정확도 | ✅ 한국어, 도메인 답변 |
 | 응답 속도 | ⚠️ 30초~1분+ (CPU 2 vCPU 한계) |
-| 월 비용 | ~$70 |
+| 월 비용 | 고정 ~$6.4(EIP+EBS) + 가동 시간당 $0.0832 — 평시 중지·필요 시 기동 운영 |
 
 ### 제약과 트레이드오프
 - **속도는 프로덕션급이 아님**. 월 비용 최소화를 위해 CPU 인스턴스 선택의 결과
@@ -154,17 +155,18 @@ exaone_competency_q4_k_m.gguf  (4.5GB, 배포 최종본)
 
 ## 7. 프로젝트 문서
 
-세부 문서는 [`docs/`](docs/)에 **6개 문서**로 정리되어 있습니다 (이 README가 개요·진입점).
+세부 문서는 [`backend/docs/`](backend/docs/)에 정리되어 있습니다 (이 README가 개요·진입점).
 
 | 문서 | 내용 |
 |------|------|
-| [FEATURES.md](docs/FEATURES.md) | **전체 기능 목록** — 에이전트 핵심 vs 플랫폼·세부 기능 분류 |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 3서비스 토폴로지·헥사고날 계층·MCP 스타 토폴로지·채팅/스팸/메일 파이프라인·배포(systemd·nginx·CI/CD) |
-| [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | 도메인별 구현 현황(API·프론트 연동)·데이터·RAG·학습 파이프라인(스팸 SFT·역량 LoRA) |
-| [FRONTEND.md](docs/FRONTEND.md) | 프론트 라우트·플로우·상태·API 매핑·GSAP 붓글씨 인트로 연출 |
-| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | **이력서용** 핵심 난제·해결(문제→원인→해결→배운 점) |
+| [FEATURES.md](backend/docs/FEATURES.md) | **전체 기능 목록** — 에이전트 핵심 vs 플랫폼·세부 기능 분류 |
+| [ARCHITECTURE.md](backend/docs/ARCHITECTURE.md) | 3서비스 토폴로지·헥사고날 계층·MCP 스타 토폴로지·채팅/스팸/메일 파이프라인·배포(systemd·nginx·CI/CD) |
+| [IMPLEMENTATION.md](backend/docs/IMPLEMENTATION.md) | 도메인별 구현 현황(API·프론트 연동)·데이터·RAG·학습 파이프라인(스팸 SFT·역량 LoRA) |
+| [FRONTEND.md](backend/docs/FRONTEND.md) | 프론트 라우트·플로우·상태·API 매핑·GSAP 붓글씨 인트로 연출 |
+| [TROUBLESHOOTING.md](backend/docs/TROUBLESHOOTING.md) | **이력서용** 핵심 난제·해결(문제→원인→해결→배운 점) |
+| [INFRA.md](backend/docs/INFRA.md) | **인프라 운영** — 2026-07 계정 복구·t4g.large(ARM) 이전·Elastic IP·비용·기동/중지 운영 절차 |
 
-> 헥사고날 마이그레이션 상세 이력은 [docs/archive/hexagonal-architecture-milestone.md](docs/archive/hexagonal-architecture-milestone.md)에 보존되어 있습니다.
+> 헥사고날 마이그레이션 상세 이력은 [backend/docs/archive/hexagonal-architecture-milestone.md](backend/docs/archive/hexagonal-architecture-milestone.md)에 보존되어 있습니다.
 
 ---
 
