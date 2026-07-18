@@ -6,7 +6,7 @@ import { SectionHeader } from "./SectionHeader";
 
 const BIO = [
   {
-    text: "더 빠르고, 더 효율적인 방법을 찾는 과정이 즐겁습니다. 백엔드에서 AI까지 풀스택으로 시스템을 설계하며, 성능의 병목을 추적하고 해결하는 데 깊이 몰입합니다.",
+    text: "sLLM 파인튜닝부터 RAG 파이프라인·AI Agent·실서비스 배포까지, AI 시스템 전 계층을 직접 구현합니다. 제한된 인프라에서 고성능 모델을 양자화·최적화해 CPU 환경에 서빙하는 등, 비용과 성능을 동시에 고려한 실용적 설계에 강점이 있습니다.",
     color: "rgba(220,228,245,0.95)",
   },
   {
@@ -19,12 +19,13 @@ const BIO = [
   },
 ];
 
+/** 출처: ClickMe Ragas 골든셋 평가 · HR Insight 실측 — 이력서·발표자료와 동일 수치 */
 const STATS = [
-  { v: "95%", l: "OCR 정확도" },
-  { v: "+40%", l: "추론 속도" },
-  { v: "-60%", l: "비용 절감" },
-  { v: "92%", l: "리스크 탐지" },
-  { v: "85%", l: "자동화율" },
+  { v: "1.000", l: "RAG Hit Rate@K" },
+  { v: "0.705→0.938", l: "MRR (리랭커 도입)" },
+  { v: "0.51→1.00", l: "Faithfulness" },
+  { v: "2.5~3×", l: "LLM 학습 속도" },
+  { v: "11.8만", l: "지식베이스 임베딩" },
 ];
 
 const TRAITS = [
@@ -34,12 +35,12 @@ const TRAITS = [
 ];
 
 const INTERESTS = [
-  "LLM Engineering",
-  "RAG Architecture",
-  "OCR Pipeline",
-  "Performance Optimization",
-  "Prompt Engineering",
+  "LLM Fine-tuning (QLoRA)",
+  "Agentic RAG",
+  "LLM Evaluation (Ragas)",
   "Multi-Agent System",
+  "Performance Optimization",
+  "Computer Vision",
 ];
 
 export function AboutSection() {

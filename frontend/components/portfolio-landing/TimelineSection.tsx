@@ -5,10 +5,11 @@ import { motion, useInView } from "framer-motion";
 import { SectionHeader } from "./SectionHeader";
 
 const ITEMS = [
-  { period: "2025.09 — Present", title: "AI Developer", org: "AI/ML 프로젝트 집중", desc: "OCR & RAG 기반 Intelligent HR Agent, ESG Supply Chain Platform 등 성능 중심의 AI 프로젝트 설계 및 개발. 추론 최적화, 파이프라인 아키텍처, 프롬프트 엔지니어링에 집중.", current: true },
-  { period: "2023.10 — 2024.01", title: "제로베이스 백엔드 스쿨 12기", org: "온라인 부트캠프 · 원격 협업 경험", desc: "백엔드 심화 학습. 팀 프로젝트 KeyWord 원격 협업. 소셜 로그인 및 ElasticSearch 기반 회원 검색 기능 담당.", current: false },
-  { period: "2022.09 — 2022.12", title: "의료 IT / Backend", org: "(주)화산시스템 · 인터페이스 팀", desc: "병원 LIS 시스템 간 시리얼 통신 인터페이스 데이터 전송·검증 담당. 전국 병원 출장 LOG 분석 및 네트워크 진단, 사용자 교육 수행.", current: false },
-  { period: "2022.02 — 2022.09", title: "응용 SW 엔지니어링 수료", org: "대구 중앙 직업전문학교 · Java Class", desc: "Java와 Spring을 활용한 통합 시스템 구축 과정. 개발자로의 전환 시작.", current: false },
+  { period: "2026.05 — 2026.07", title: "하이미디어 심화 생성형 AI 과정", org: "심화 생성형 AI 활용 인재 양성 과정", desc: "AI 모델 운영을 위한 하네스 시스템 설계와 AI 서비스 구현. 팀 프로젝트 ClickMe(광고 운영 플랫폼)·FOM(댄스 동작 분석) 진행 — LangGraph 딥에이전트, Ragas 기반 RAG 품질 평가에 집중.", current: true },
+  { period: "2025.09 — 2026.04", title: "삼정KPMG AX Academy 3기", org: "ESG 데이터 활용 AX Academy with AI Agent", desc: "AI 풀스택 개발, 클라우드 인프라, 데이터 기반 플랫폼 구축 역량 학습. 개인 프로젝트 HR Insight(Success DNA)와 ESG 공급망 리스크 관리 시스템(AIFIX) 개발.", current: false },
+  { period: "2023.04 — 2023.10", title: "제로베이스 백엔드 스쿨 15기", org: "온라인 부트캠프 · 원격 협업 경험", desc: "Spring 기반 백엔드 개발 및 REST API 설계·구현. 팀 프로젝트 KeyWord 원격 협업 — ElasticSearch 기반 회원 검색 기능 담당.", current: false },
+  { period: "2022.09 — 2022.12", title: "의료 IT / 인터페이스팀", org: "(주)화산시스템 · 대학병원 LIS 전문 기업", desc: "진단검사의학과 LIS 시스템 유지보수·운영 지원. 의료 장비-LIS 데이터 인터페이스 연동 점검 및 장애 대응, 로그 분석·네트워크 점검·백업 관리.", current: false },
+  { period: "2022.03 — 2022.09", title: "응용 SW 엔지니어링(Java) 수료", org: "대구중앙직업전문학교", desc: "Java/JSP 기반 웹 애플리케이션 및 통합 시스템 개발 학습. 개발자로의 전환 시작.", current: false },
   { period: "2013 — 2020", title: "영남대학교 & 비개발 경험", org: "중어중문학과 · 소통과 리더십의 기반", desc: "필리핀 해외 자원봉사 6개월, 대구 YMCA 청소년 쉼터, 한국 YMCA 국제개발협력팀 근무.", current: false },
 ];
 

@@ -83,7 +83,7 @@ export function PortfolioLanding() {
                 fontWeight: 500,
               }}
             >
-              AI DEVELOPER
+              AI ENGINEER
             </span>
           </div>
           <div className="relative z-10 w-full max-w-[1520px] mx-auto px-8 sm:px-14 lg:px-24 xl:px-32 md:flex md:items-start md:gap-32 lg:gap-48 xl:gap-64">

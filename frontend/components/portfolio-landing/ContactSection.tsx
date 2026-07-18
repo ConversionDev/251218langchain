@@ -34,7 +34,7 @@ export function ContactSection() {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
-    navigator.clipboard.writeText("kanggyeonggu@gmail.com");
+    navigator.clipboard.writeText("rkdrudrn1031@gmail.com");
     setCopied(true);
     setTimeout(() => setCopied(false), 2200);
   };
@@ -68,7 +68,7 @@ export function ContactSection() {
           className="flex flex-wrap items-center gap-3 mb-10"
         >
           <a
-            href="mailto:kanggyeonggu@gmail.com"
+            href="mailto:rkdrudrn1031@gmail.com"
             className="group inline-flex items-center gap-3 rounded-xl transition-all duration-300"
             style={{
               padding: "14px 22px",
@@ -90,7 +90,7 @@ export function ContactSection() {
             }}
           >
             <Mail size={16} />
-            kanggyeonggu@gmail.com
+            rkdrudrn1031@gmail.com
             <ArrowUpRight
               size={14}
               className="opacity-55 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300"

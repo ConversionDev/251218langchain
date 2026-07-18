@@ -2,40 +2,56 @@
 
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { Brain, Database, Code2, Cloud, Server, Cpu } from "lucide-react";
+import { Brain, Database, Code2, Cloud, Server, Cpu, Eye } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 
-/** 이력서 PDF(components/portfolio/이력서.pdf) 좌측 스킬란과 동일 */
+/** 이력서(2026.07) 기술 스택 분류와 동일 */
 const TECH = [
   {
     label: "Core Language",
     icon: Cpu,
-    items: ["Java", "Python"],
+    items: ["Python", "Java"],
   },
   {
-    label: "Frontend",
-    icon: Code2,
-    items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Framer", "PWA", "Potrace"],
+    label: "Generative AI",
+    icon: Brain,
+    items: [
+      "LangChain",
+      "LangGraph",
+      "LangSmith · Ragas",
+      "PEFT · QLoRA",
+      "Unsloth",
+      "llama.cpp",
+      "Transformers",
+      "BGE-M3",
+      "EXAONE",
+      "Llama",
+    ],
+  },
+  {
+    label: "Computer Vision",
+    icon: Eye,
+    items: ["YOLO11", "MediaPipe", "OpenCV", "librosa"],
   },
   {
     label: "Backend",
     icon: Database,
-    items: ["FastAPI", "SQLAlchemy", "Alembic", "Spring Boot", "JPA"],
-  },
-  {
-    label: "AI / ML / DL",
-    icon: Brain,
-    items: ["LangChain", "LangGraph", "Transformers", "BGE-M3", "Llama", "EXAONE"],
+    items: ["FastAPI", "SSE Streaming", "SQLAlchemy", "Spring Boot", "JPA"],
   },
   {
     label: "Data Base",
     icon: Cloud,
-    items: ["Postgre(Neon DB)", "FAISS", "Redis(Upstash)"],
+    items: ["PostgreSQL · pgvector (Neon)", "FAISS", "Redis (Upstash)", "Elasticsearch"],
   },
   {
-    label: "DevOps",
+    label: "Frontend & Mobile",
+    icon: Code2,
+    items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "PWA", "Flutter"],
+  },
+  {
+    label: "Infra / DevOps",
     icon: Server,
-    items: ["Docker", "Vercel", "GitHub Actions", "CI/CD", "AWS", "NGINX"],
+    items: ["AWS EC2", "Nginx", "Docker", "GitHub Actions", "CI/CD", "Vercel"],
   },
 ];
 

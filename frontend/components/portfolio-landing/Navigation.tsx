@@ -68,7 +68,7 @@ function GitHubLogo({ size = 22 }: { size?: number }) {
 const SOCIALS = [
   { type: "github" as const, href: "https://github.com/ConversionDev", label: "GitHub" },
   { type: "icon" as const, icon: PenSquare, href: "https://kku1031.tistory.com", label: "Blog" },
-  { type: "icon" as const, icon: Mail, href: "mailto:kanggyeonggu@gmail.com", label: "Email" },
+  { type: "icon" as const, icon: Mail, href: "mailto:rkdrudrn1031@gmail.com", label: "Email" },
 ];
 
 /** 좌측 슬라이드 전부 어두운 틸로 통일 */
@@ -134,7 +134,7 @@ export function Navigation({ activeSection }: NavigationProps) {
             textTransform: "uppercase",
           }}
         >
-          AI Full-Stack Engineer
+          AI Engineer
         </p>
         <span
           className={`flex items-center gap-2 mt-6 ${nanumBrush.className}`}
