@@ -656,9 +656,21 @@ def model_node(state: ChatState) -> ChatState:
     # (도구 선택은 키워드 기반 _build_forced_tool_calls로 처리 — 네이티브 function-calling 불필요)
     default_provider = "gemini" if _chat_use_gemini() else LLMProvider.get_provider_name()
     provider = state.get("model_provider") or default_provider
+    if _chat_use_gemini():
+        # 배포 강제: 상태(state)에 exaone/llama_cpp가 어떤 경로로 남아 있어도 채팅 최종 답변은 항상 Gemini.
+        # EXAONE(GGUF)은 역량 분류 등 별도 경로 전용 — CPU 서버에서 채팅에 로드되면 분당 단위 지연이 발생한다.
+        provider = "gemini"
     max_tokens = state.get("max_tokens") or 2048
     temperature = state.get("temperature") or 0.7
-    llm = _get_llm(provider=provider, max_tokens=max_tokens, temperature=temperature)
+    logger.info(
+        "[MODEL] provider 해석: %s (default=%s, state=%r)",
+        provider, default_provider, state.get("model_provider"),
+    )
+
+    def _build_llm():
+        # 강제 도구(1턴 최적화) 분기는 LLM을 쓰지 않으므로, 실제 호출 분기에서만 생성한다
+        # (llama_cpp일 때 불필요한 GGUF 4.5GB 로드 방지).
+        return _get_llm(provider=provider, max_tokens=max_tokens, temperature=temperature)
 
     messages = list(state.get("messages", []))
     context = state.get("context")
@@ -686,9 +698,9 @@ def model_node(state: ChatState) -> ChatState:
             ] + messages
 
     if _supports_tool_calling(provider):
-        llm_with_tools = llm.bind_tools(TOOLS)
         if _has_tool_message(messages):
             # 도구 실행 후 최종 답변 턴: stream() → 클라이언트 실시간 스트리밍
+            llm_with_tools = _build_llm().bind_tools(TOOLS)
             stream_chunks: List[Any] = []
             for chunk in llm_with_tools.stream(messages):
                 stream_chunks.append(chunk)
@@ -711,6 +723,7 @@ def model_node(state: ChatState) -> ChatState:
             else:
                 # 도구 불필요 → LLM 1회만 호출하여 바로 스트리밍 답변
                 logger.info("[MODEL] 1턴 최적화: 도구 불필요, 직접 스트리밍 답변")
+                llm_with_tools = _build_llm().bind_tools(TOOLS)
                 stream_chunks_direct: List[Any] = []
                 for chunk in llm_with_tools.stream(messages):
                     stream_chunks_direct.append(chunk)
@@ -723,6 +736,7 @@ def model_node(state: ChatState) -> ChatState:
                 else:
                     response = AIMessage(content="")
     else:
+        llm = _build_llm()
         chunks = []
         for chunk in llm.stream(messages):
             chunks.append(chunk)
