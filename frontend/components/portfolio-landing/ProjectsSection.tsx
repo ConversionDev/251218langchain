@@ -31,7 +31,7 @@ interface Project {
   challenges: string[];
   evalTable?: EvalTier[];
   links?: ProjectLink[];
-  /** 내부 경로일 때 카드 미리보기 iframe으로 사용 */
+  /** 카드 미리보기 iframe URL (내부 경로 또는 X-Frame-Options 없는 외부 사이트) */
   previewUrl?: string;
 }
 
@@ -160,6 +160,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
       { label: "데모", href: "https://www.clickme.co.kr" },
       { label: "GitHub", href: "https://github.com/cclickstudio/click-me" },
     ],
+    previewUrl: "https://www.clickme.co.kr",
   },
 ];
 
@@ -173,6 +174,7 @@ const SUB_PROJECTS: SubProject[] = [
     description:
       "댄스 동작 분석 AI 평가 플랫폼 (팀 6인 · 2026.05)\n비전 모델 기반 영상 키포인트 추출 → 레퍼런스 대비 동작 채점 End-to-End 파이프라인 담당",
     href: "https://github.com/Hi-Six/FOM",
+    previewImage: "https://opengraph.githubassets.com/1/Hi-Six/FOM",
     techStack: ["FastAPI", "MediaPipe", "YOLO11", "librosa", "Flutter"],
     icon: Activity,
   },
@@ -551,7 +553,7 @@ function MainProjectRow({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
-  const hasPreview = project.previewUrl && project.previewUrl.startsWith("/");
+  const hasPreview = Boolean(project.previewUrl);
 
   return (
     <motion.article
