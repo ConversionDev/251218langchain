@@ -242,7 +242,22 @@ def get_employee_info(name: str) -> str:
                 if emp.get("trainingHours") is not None:
                     line += f", 교육훈련: {emp['trainingHours']}시간"
                 if emp.get("successDna"):
-                    line += ", Success DNA 보유"
+                    dna = emp["successDna"]
+                    if isinstance(dna, dict) and dna:
+                        # 5대 지표 수치를 그대로 노출해야 "OOO의 5대 지표" 질문에 답할 수 있다
+                        label_map = {
+                            "leadership": "리더십",
+                            "technical": "기술력",
+                            "creativity": "창의성",
+                            "collaboration": "협업",
+                            "adaptability": "적응력",
+                        }
+                        dna_txt = ", ".join(
+                            f"{label_map.get(k, k)} {v}" for k, v in dna.items()
+                        )
+                        line += f", 5대 지표(Success DNA): {dna_txt}"
+                    else:
+                        line += ", Success DNA 보유"
                 if emp.get("email"):
                     line += f", 이메일: {emp['email']}"
                 parts.append(line)
