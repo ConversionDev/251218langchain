@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
+import { RagEvalTable, RAG_EVAL_TIERS } from "./RagEvalTable";
 
 const BIO = [
   {
@@ -46,6 +48,7 @@ const INTERESTS = [
 export function AboutSection() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-60px" });
+  const [evalOpen, setEvalOpen] = useState(false);
 
   return (
     <section
@@ -110,6 +113,40 @@ export function AboutSection() {
             </div>
           ))}
         </motion.div>
+        {/* ClickMe RAG 품질 평가 상세 — 스탯 수치의 출처 표 (접이식) */}
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setEvalOpen((v) => !v)}
+            className="inline-flex items-center gap-2 rounded-lg transition-all"
+            style={{
+              padding: "8px 14px",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              color: "rgba(142,240,215,0.75)",
+              background: "rgba(142,240,215,0.04)",
+              border: "1px solid rgba(142,240,215,0.12)",
+              cursor: "pointer",
+            }}
+          >
+            ClickMe RAG 품질 평가 상세 — Ragas · 골든셋
+            <ChevronDown
+              size={14}
+              className="transition-transform duration-300"
+              style={{ transform: evalOpen ? "rotate(180deg)" : "none" }}
+            />
+          </button>
+          {evalOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mt-3"
+            >
+              <RagEvalTable tiers={RAG_EVAL_TIERS} />
+            </motion.div>
+          )}
+        </div>
         {/* About 섹션 실선 통일 */}
         <div
           role="presentation"

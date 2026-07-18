@@ -1,22 +1,22 @@
 "use client";
 
-import { useState, useRef, Fragment } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import { motion, useInView, AnimatePresence } from "framer-motion";
 import { Bot, Leaf, X, ArrowUpRight, ExternalLink, Key, Megaphone, Activity } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
-
-/** RAG 품질 평가 표 (계층 × 지표 × 개선전후 × 적용 작업) */
-interface EvalTier {
-  tier: string;
-  rows: { metric: string; change: string; work: string }[];
-}
+import { RagEvalTable, RAG_EVAL_TIERS, type EvalTier } from "./RagEvalTable";
 
 interface ProjectLink {
   label: string;
   href: string;
 }
 
+/**
+ * 전 카드 공통 규칙:
+ * - 카드 본문 클릭 → 상세 모달 / 바로가기 → 카드 하단 데모·GitHub 링크
+ * - 미리보기: previewUrl(iframe) > previewImage(이미지) > icon(플레이스홀더)
+ */
 interface Project {
   id: string;
   title: string;
@@ -25,29 +25,18 @@ interface Project {
   icon: typeof Bot;
   type: string;
   year: string;
-  metrics: { label: string; value: string }[];
+  metrics?: { label: string; value: string }[];
   techStack: string[];
   details: string[];
-  challenges: string[];
+  challenges?: string[];
   evalTable?: EvalTier[];
   links?: ProjectLink[];
   /** 카드 미리보기 iframe URL (내부 경로 또는 X-Frame-Options 없는 외부 사이트) */
   previewUrl?: string;
-}
-
-/** 서브 프로젝트: 작은 미리보기 + 클릭 시 외부 링크(없으면 정적 카드) */
-interface SubProject {
-  id: string;
-  title: string;
-  description: string;
-  href?: string;
-  /** 미리보기 이미지 URL (없으면 디자인 플레이스홀더) */
+  /** iframe이 없을 때 쓸 미리보기 이미지 (GitHub OG 등) */
   previewImage?: string;
-  techStack?: string[];
-  icon?: typeof Key;
 }
 
-/** 카테고리: Personal / Team / Other(과거·소규모 프로젝트) */
 const PROJECT_CATEGORY = { personal: "personal", team: "team", other: "other" } as const;
 
 const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
@@ -114,89 +103,75 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
       "모델 검증용 실측 데이터 부재 → Meta에 사비로 트래픽·잠재고객 캠페인을 직접 집행, 실측 CTR·CPC를 확보해 합성 데이터의 한계 극복",
       "Meta API Standard 등급 제약 → 15일 내 실호출 500개 적립, 사업자 등록 후 Advanced 상향 신청 — 선제 구현으로 승인 즉시 실서비스 전환 설계",
     ],
-    evalTable: [
-      {
-        tier: "RAG Pipeline 평가 지표",
-        rows: [
-          {
-            metric: "Hit Rate@K",
-            change: "단일 0.886 → 1.000 · 복합 0.800 → 1.000",
-            work: "하이브리드 검색, 검색 결과 다양화, 리랭킹",
-          },
-          {
-            metric: "MRR",
-            change: "단일 0.705 → 0.938 · 복합 0.634 → 0.833",
-            work: "리랭킹을 통한 정답 문서 순위 개선",
-          },
-          {
-            metric: "Context Precision",
-            change: "단일 신규측정 → 0.886 · 복합 신규측정 → 0.926",
-            work: "관련 문서 정밀도 지표 신규 도입, 계산 로직 오류 수정",
-          },
-        ],
-      },
-      {
-        tier: "LLM as Judge",
-        rows: [
-          {
-            metric: "Faithfulness",
-            change: "0.51 → 1.00",
-            work: "자료 근거 강제, CRAG 기반 자기교정, 재검색·답변 거절",
-          },
-          {
-            metric: "Factual Correctness",
-            change: "단일 0.714 → 0.986 · 복합 0.857 → 0.971",
-            work: "회사 고유 규칙에 대한 자료 기반 답변 강제",
-          },
-          {
-            metric: "환각 억제",
-            change: "함정 질문 23개 별도평가",
-            work: "근거 확인, 재검색, 답변 거절, CRAG 자기교정",
-          },
-        ],
-      },
-    ],
+    evalTable: RAG_EVAL_TIERS,
     links: [
       { label: "데모", href: "https://www.clickme.co.kr" },
       { label: "GitHub", href: "https://github.com/cclickstudio/click-me" },
     ],
     previewUrl: "https://www.clickme.co.kr",
   },
-];
-
-const PERSONAL_PROJECTS = PROJECTS.filter((p) => p.category === "personal");
-const TEAM_PROJECTS = PROJECTS.filter((p) => p.category === "team");
-
-const SUB_PROJECTS: SubProject[] = [
   {
     id: "fom",
     title: "FOM",
+    subtitle: "댄스 동작 분석 AI 평가 플랫폼.\n비전 모델 기반 키포인트 추출 → 레퍼런스 대비 동작 채점",
     description:
-      "댄스 동작 분석 AI 평가 플랫폼 (팀 6인 · 2026.05)\n비전 모델 기반 영상 키포인트 추출 → 레퍼런스 대비 동작 채점 End-to-End 파이프라인 담당",
-    href: "https://github.com/Hi-Six/FOM",
-    previewImage: "https://opengraph.githubassets.com/1/Hi-Six/FOM",
-    techStack: ["FastAPI", "MediaPipe", "YOLO11", "librosa", "Flutter"],
+      "영상 속 댄스 동작을 AI로 분석·채점하는 평가 플랫폼. 비전 모델 기반 영상 키포인트 추출부터 레퍼런스 대비 동작 채점까지 End-to-End 파이프라인을 담당했습니다.",
     icon: Activity,
+    type: "팀 프로젝트 · 6인 · 하이미디어",
+    year: "2026",
+    category: "other",
+    techStack: ["FastAPI", "MediaPipe", "YOLO11", "librosa", "Flutter"],
+    details: [
+      "YOLO11·MediaPipe 기반 영상 키포인트 추출",
+      "레퍼런스 대비 동작 채점 End-to-End 파이프라인 구현",
+      "librosa 기반 오디오·멀티모달 신호 처리",
+    ],
+    links: [{ label: "GitHub", href: "https://github.com/Hi-Six/FOM" }],
+    previewImage: "https://opengraph.githubassets.com/1/Hi-Six/FOM",
   },
   {
     id: "aifix",
     title: "AIFIX",
+    subtitle: "ESG 공급망 리스크 관리 및 PCF 산정 지원 시스템.\n비동기 알림 파이프라인·실시간 브로드캐스트 담당",
     description:
-      "ESG 공급망 리스크 관리·PCF 산정 지원 시스템 (삼정KPMG · 4인 · 2026.03–04)\n백그라운드 워커 비동기 알림 파이프라인, WebSocket 실시간 브로드캐스트·Slack/Gmail API 연동 담당",
-    techStack: ["WebSocket", "Slack API", "Gmail API", "Vercel"],
+      "공급망 ESG 리스크 관리와 PCF(제품 탄소발자국) 산정을 지원하는 시스템. 백그라운드 워커 기반 비동기 알림 파이프라인과 WebSocket 실시간 브로드캐스트, Slack/Gmail API 연동을 담당했습니다.",
     icon: Leaf,
+    type: "팀 프로젝트 · 4인 · 삼정KPMG",
+    year: "2026",
+    category: "other",
+    techStack: ["WebSocket", "Slack API", "Gmail API", "Vercel"],
+    details: [
+      "백그라운드 워커 비동기 알림 파이프라인 구축",
+      "WebSocket 실시간 브로드캐스트 구현",
+      "Slack·Gmail API 연동 알림 채널 구성",
+    ],
+    links: [{ label: "GitHub", href: "https://github.com/ESGAIFixr" }],
+    previewImage: "https://opengraph.githubassets.com/1/ESGAIFixr/aifixr.site",
   },
   {
     id: "keyword",
     title: "KeyWord",
+    subtitle: "약속의 시작부터 끝까지, 이용자 일정을 도와주는 서비스.\nElasticsearch 기반 고성능 회원 검색 담당",
     description:
-      "약속의 시작부터 끝까지, 이용자 일정을 도와주는 서비스 (팀 5인 · 2023.09–10)\nElasticSearch 기반 고성능 회원 검색 기능 담당, 원격 협업 프로젝트",
-    href: "https://github.com/ZB-Keyword",
+      "약속 일정 관리 서비스. 프론트엔드·백엔드 팀 원격 협업 프로젝트로, Elasticsearch 기반 고성능 회원 검색 기능을 담당했습니다.",
+    icon: Key,
+    type: "팀 프로젝트 · 5인 · 제로베이스",
+    year: "2023",
+    category: "other",
+    techStack: ["Java", "Spring", "OAuth 2.0", "ElasticSearch"],
+    details: [
+      "Elasticsearch 기반 고성능 회원 검색 기능 구현",
+      "Spring Boot REST API 설계·구현, 원격 협업",
+    ],
+    links: [{ label: "GitHub", href: "https://github.com/ZB-Keyword" }],
     previewImage:
       "https://github.com/ZB-Keyword/.github/assets/130157565/45b3001f-1705-4d93-acf4-4b979b218186",
-    techStack: ["Java", "Spring", "OAuth 2.0", "ElasticSearch"],
   },
 ];
+
+const TEAM_PROJECTS = PROJECTS.filter((p) => p.category === "team");
+const PERSONAL_PROJECTS = PROJECTS.filter((p) => p.category === "personal");
+const OTHER_PROJECTS = PROJECTS.filter((p) => p.category === "other");
 
 const modalLabelStyle: React.CSSProperties = {
   fontSize: "0.625rem",
@@ -312,40 +287,42 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
               ))}
             </div>
           )}
-          <div className="grid grid-cols-3 gap-3">
-            {project.metrics.map((m) => (
-              <div
-                key={m.label}
-                className="rounded-xl p-4 text-center"
-                style={{
-                  background: "rgba(142,240,215,0.03)",
-                  border: "1px solid rgba(142,240,215,0.07)",
-                }}
-              >
+          {project.metrics && project.metrics.length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              {project.metrics.map((m) => (
                 <div
+                  key={m.label}
+                  className="rounded-xl p-4 text-center"
                   style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: "1.25rem",
-                    fontWeight: 700,
-                    color: "#8ef0d7",
-                    letterSpacing: "-0.01em",
+                    background: "rgba(142,240,215,0.03)",
+                    border: "1px solid rgba(142,240,215,0.07)",
                   }}
                 >
-                  {m.value}
+                  <div
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: "#8ef0d7",
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    {m.value}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.6875rem",
+                      color: "rgba(220,228,245,0.8)",
+                      marginTop: 5,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {m.label}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: "0.6875rem",
-                    color: "rgba(220,228,245,0.8)",
-                    marginTop: 5,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {m.label}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           <div>
             <p style={modalLabelStyle}>주요 구현</p>
             <ul className="space-y-2.5">
@@ -374,102 +351,35 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
               ))}
             </ul>
           </div>
-          <div>
-            <p style={modalLabelStyle}>문제 해결</p>
-            {project.challenges.map((c, i) => (
-              <div
-                key={i}
-                className="rounded-lg p-3.5 mb-2.5"
-                style={{
-                  background: "rgba(142,240,215,0.02)",
-                  border: "1px solid rgba(142,240,215,0.06)",
-                }}
-              >
-                <span
+          {project.challenges && project.challenges.length > 0 && (
+            <div>
+              <p style={modalLabelStyle}>문제 해결</p>
+              {project.challenges.map((c, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg p-3.5 mb-2.5"
                   style={{
-                    fontSize: "0.9375rem",
-                    color: "rgba(220,228,245,0.85)",
-                    lineHeight: 1.7,
+                    background: "rgba(142,240,215,0.02)",
+                    border: "1px solid rgba(142,240,215,0.06)",
                   }}
                 >
-                  {c}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <span
+                    style={{
+                      fontSize: "0.9375rem",
+                      color: "rgba(220,228,245,0.85)",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {c}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {project.evalTable && (
             <div>
               <p style={modalLabelStyle}>RAG 품질 평가 — Ragas · 골든셋 정량 평가</p>
-              <div
-                className="overflow-x-auto rounded-lg"
-                style={{ border: "1px solid rgba(142,240,215,0.1)" }}
-              >
-                <table
-                  className="w-full"
-                  style={{ borderCollapse: "collapse", fontSize: "0.75rem", minWidth: 480 }}
-                >
-                  <tbody>
-                    {project.evalTable.map((tier) => (
-                      <Fragment key={tier.tier}>
-                        <tr>
-                          <td
-                            colSpan={3}
-                            style={{
-                              padding: "7px 10px",
-                              fontSize: "0.6875rem",
-                              fontWeight: 700,
-                              letterSpacing: "0.08em",
-                              textTransform: "uppercase",
-                              color: "#8ef0d7",
-                              background: "rgba(142,240,215,0.06)",
-                            }}
-                          >
-                            {tier.tier}
-                          </td>
-                        </tr>
-                        {tier.rows.map((r) => (
-                          <tr
-                            key={r.metric}
-                            style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
-                          >
-                            <td
-                              style={{
-                                padding: "8px 10px",
-                                color: "rgba(220,228,245,0.92)",
-                                fontWeight: 600,
-                                whiteSpace: "nowrap",
-                                verticalAlign: "top",
-                              }}
-                            >
-                              {r.metric}
-                            </td>
-                            <td
-                              style={{
-                                padding: "8px 10px",
-                                fontFamily: "'JetBrains Mono', monospace",
-                                color: "#8ef0d7",
-                                verticalAlign: "top",
-                              }}
-                            >
-                              {r.change}
-                            </td>
-                            <td
-                              style={{
-                                padding: "8px 10px",
-                                color: "rgba(220,228,245,0.75)",
-                                lineHeight: 1.55,
-                                verticalAlign: "top",
-                              }}
-                            >
-                              {r.work}
-                            </td>
-                          </tr>
-                        ))}
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <RagEvalTable tiers={project.evalTable} />
             </div>
           )}
           <div className="flex flex-wrap gap-2">
@@ -496,7 +406,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
   );
 }
 
-/** 미리보기·카드 공통 크기 (Personal/Team/Other 통일) */
+/** 미리보기·카드 공통 크기 */
 const PREVIEW_CLASS = "shrink-0 w-[140px] sm:w-[160px] h-[88px] sm:h-[96px] rounded-lg overflow-hidden";
 
 const titleStyle = {
@@ -541,8 +451,8 @@ const rowHoverProps = {
   },
 };
 
-/** 메인 프로젝트: 클릭 시 상세 모달 (데모·GitHub 링크는 모달 내부 버튼) */
-function MainProjectRow({
+/** 프로젝트 카드(공통): 클릭 시 상세 모달, 하단 링크로 바로 이동 */
+function ProjectRow({
   project,
   index,
   onOpen,
@@ -553,7 +463,6 @@ function MainProjectRow({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
-  const hasPreview = Boolean(project.previewUrl);
 
   return (
     <motion.article
@@ -573,10 +482,10 @@ function MainProjectRow({
         className={`${PREVIEW_CLASS} cursor-pointer relative`}
         style={{
           border: "1px solid rgba(142,240,215,0.08)",
-          background: "rgba(0,0,0,0.25)",
+          background: project.previewImage && !project.previewUrl ? "#fff" : "rgba(0,0,0,0.25)",
         }}
       >
-        {hasPreview ? (
+        {project.previewUrl ? (
           <div className="absolute inset-0 overflow-hidden">
             <iframe
               src={project.previewUrl}
@@ -589,6 +498,15 @@ function MainProjectRow({
               }}
             />
           </div>
+        ) : project.previewImage ? (
+          <Image
+            src={project.previewImage}
+            alt=""
+            width={160}
+            height={96}
+            className="absolute inset-0 w-full h-full object-contain object-center rounded-lg"
+            unoptimized
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center p-0 min-h-0 min-w-0">
             <project.icon size={44} className="shrink-0" style={{ color: "rgba(142,240,215,0.4)" }} />
@@ -638,107 +556,6 @@ function MainProjectRow({
   );
 }
 
-/** 서브 프로젝트: 미리보기·글자 크기·태그 스타일 통일, 링크가 있으면 클릭 시 이동 */
-function SubProjectRow({ sub, index }: { sub: SubProject; index: number }) {
-  const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
-  const SubIcon = sub.icon ?? Key;
-
-  const inner = (
-    <>
-      <div
-        className={`${PREVIEW_CLASS} relative overflow-hidden`}
-        style={{
-          border: "1px solid rgba(142,240,215,0.08)",
-          background: sub.previewImage ? "#fff" : "rgba(0,0,0,0.25)",
-        }}
-      >
-        {sub.previewImage ? (
-          <Image
-            src={sub.previewImage}
-            alt=""
-            width={160}
-            height={96}
-            className="absolute inset-0 w-full h-full object-contain object-center rounded-lg"
-            unoptimized
-          />
-        ) : (
-          <div
-            className="w-full h-full flex flex-col items-center justify-center p-0 min-h-0 min-w-0"
-            style={{ background: "rgba(142,240,215,0.08)" }}
-          >
-            <SubIcon size={44} className="shrink-0" style={{ color: "rgba(142,240,215,0.4)" }} />
-            <span
-              className="mt-1"
-              style={{
-                fontSize: "0.625rem",
-                fontWeight: 700,
-                color: "rgba(220,228,245,0.9)",
-                letterSpacing: "0.02em",
-              }}
-            >
-              {sub.title}
-            </span>
-          </div>
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 style={{ ...titleStyle, whiteSpace: "nowrap" }} className="group-hover:!text-[#8ef0d7] transition-colors shrink-0">
-            {sub.title}
-          </h3>
-          {sub.href && (
-            <ExternalLink size={14} style={{ color: "rgba(142,240,215,0.5)" }} className="shrink-0" />
-          )}
-        </div>
-        <p style={subtitleStyle}>{sub.description}</p>
-        {sub.techStack && sub.techStack.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {sub.techStack.map((t) => (
-              <span key={t} style={tagStyle}>
-                {t}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
-  );
-
-  const motionProps = {
-    initial: { opacity: 0, y: 12 },
-    animate: inView ? { opacity: 1, y: 0 } : {},
-    transition: { duration: 0.4, delay: index * 0.08 },
-    className:
-      "group flex gap-5 sm:gap-6 items-start rounded-xl -mx-4 sm:-mx-5 px-4 sm:px-5 py-4 transition-all duration-300",
-    style: {
-      border: "1px solid transparent",
-      borderBottom: "1px solid rgba(255,255,255,0.32)",
-      textDecoration: "none",
-    },
-    ...rowHoverProps,
-  };
-
-  if (sub.href) {
-    return (
-      <motion.a
-        ref={ref as React.RefObject<HTMLAnchorElement>}
-        href={sub.href}
-        target="_blank"
-        rel="noopener noreferrer"
-        {...motionProps}
-      >
-        {inner}
-      </motion.a>
-    );
-  }
-  return (
-    <motion.div ref={ref as React.RefObject<HTMLDivElement>} {...motionProps}>
-      {inner}
-    </motion.div>
-  );
-}
-
 const blockLabelStyle = {
   fontFamily: '"Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
   fontSize: "0.875rem",
@@ -764,7 +581,7 @@ export function ProjectsSection() {
         <p style={blockLabelStyle}>Team Project</p>
         <div className="space-y-0">
           {TEAM_PROJECTS.map((p, i) => (
-            <MainProjectRow key={p.id} project={p} index={i} onOpen={() => setActive(p)} />
+            <ProjectRow key={p.id} project={p} index={i} onOpen={() => setActive(p)} />
           ))}
         </div>
       </div>
@@ -772,16 +589,15 @@ export function ProjectsSection() {
         <p style={blockLabelStyle}>Personal Project</p>
         <div className="space-y-0">
           {PERSONAL_PROJECTS.map((p, i) => (
-            <MainProjectRow key={p.id} project={p} index={i} onOpen={() => setActive(p)} />
+            <ProjectRow key={p.id} project={p} index={i} onOpen={() => setActive(p)} />
           ))}
         </div>
       </div>
-      {/* Other Project — FOM · AIFIX · KeyWord */}
       <div>
         <p style={blockLabelStyle}>Other Project</p>
         <div className="space-y-0">
-          {SUB_PROJECTS.map((sub, i) => (
-            <SubProjectRow key={sub.id} sub={sub} index={i} />
+          {OTHER_PROJECTS.map((p, i) => (
+            <ProjectRow key={p.id} project={p} index={i} onOpen={() => setActive(p)} />
           ))}
         </div>
       </div>
