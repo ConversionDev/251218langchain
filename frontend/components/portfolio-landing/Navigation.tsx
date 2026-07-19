@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Mail, Phone, PenSquare, User, FolderKanban, Layers, Briefcase, FileText } from "lucide-react";
+import { Mail, Phone, AtSign, PenSquare, User, FolderKanban, Layers, Briefcase, FileText } from "lucide-react";
 import { Jua, Nanum_Brush_Script, Nunito } from "next/font/google";
 
 const jua = Jua({ weight: "400", subsets: ["latin"], display: "swap" });
@@ -65,10 +65,12 @@ function GitHubLogo({ size = 22 }: { size?: number }) {
   );
 }
 
-const SOCIALS = [
-  { type: "github" as const, href: "https://github.com/ConversionDev", label: "GitHub" },
-  { type: "icon" as const, icon: PenSquare, href: "https://kku1031.tistory.com", label: "Blog" },
-  { type: "icon" as const, icon: Mail, href: "mailto:rkdrudrn1031@gmail.com", label: "rkdrudrn1031@gmail.com" },
+/** 내비 하단 연락처 행 — 메뉴와 같은 구조, 한 단계 작은 타이포 */
+const INFO_LINKS = [
+  { kind: "icon" as const, icon: Phone, href: "tel:010-4739-2339", label: "010-4739-2339", newTab: false },
+  { kind: "icon" as const, icon: AtSign, href: "mailto:rkdrudrn1031@gmail.com", label: "rkdrudrn1031@gmail.com", newTab: false },
+  { kind: "github" as const, href: "https://github.com/ConversionDev", label: "github.com/ConversionDev", newTab: true },
+  { kind: "icon" as const, icon: PenSquare, href: "https://kku1031.tistory.com", label: "kku1031.tistory.com", newTab: true },
 ];
 
 /** 좌측 슬라이드 전부 어두운 틸로 통일 */
@@ -91,7 +93,7 @@ export function Navigation({ activeSection }: NavigationProps) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 
   const iconColorDefault = "rgba(220,228,245,0.6)";
-  const iconSize = 32;
+  const iconSize = 26;
 
   return (
     <header
@@ -170,7 +172,7 @@ export function Navigation({ activeSection }: NavigationProps) {
                   />
                   <span
                     style={{
-                      fontSize: "1.25rem",
+                      fontSize: "1.0625rem",
                       fontWeight: isActive ? 700 : 400,
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
@@ -218,63 +220,42 @@ export function Navigation({ activeSection }: NavigationProps) {
                 </button>
               );
             })}
-            {/* CONTACT 아래 전화번호 — 메뉴 항목과 동일한 아이콘·서체·간격으로 통일 */}
-            <a
-              href="tel:010-4739-2339"
-              className="group relative flex items-center py-3 w-full text-left pl-5 -ml-5 pr-2 rounded-r-lg"
-            >
-              <Phone
-                size={iconSize}
-                className="mr-7 shrink-0 opacity-90"
-                style={{ color: iconColorDefault }}
-              />
-              <span
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: 400,
-                  letterSpacing: "0.1em",
-                  color: "rgba(220,228,245,0.65)",
-                  transition: "color 0.25s, background 0.2s",
-                }}
-                className="group-hover:!text-[rgba(220,228,245,0.9)]"
+            {/* CONTACT 아래 연락처 행들 — 메뉴와 같은 구조, 한 단계 작은 타이포 */}
+            {INFO_LINKS.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                target={item.newTab ? "_blank" : undefined}
+                rel={item.newTab ? "noopener noreferrer" : undefined}
+                className="group relative flex items-center py-2 w-full text-left pl-5 -ml-5 pr-2 rounded-r-lg"
               >
-                010-4739-2339
-              </span>
-            </a>
+                {item.kind === "github" ? (
+                  <span className="mr-7 shrink-0 opacity-90 flex justify-center" style={{ width: iconSize, color: iconColorDefault }}>
+                    <GitHubLogo size={22} />
+                  </span>
+                ) : (
+                  <item.icon
+                    size={22}
+                    className="mr-7 shrink-0 opacity-90"
+                    style={{ color: iconColorDefault, width: iconSize }}
+                  />
+                )}
+                <span
+                  style={{
+                    fontSize: "0.9375rem",
+                    fontWeight: 400,
+                    letterSpacing: "0.05em",
+                    color: "rgba(220,228,245,0.6)",
+                    transition: "color 0.25s",
+                  }}
+                  className="group-hover:!text-[#8ef0d7]"
+                >
+                  {item.label}
+                </span>
+              </a>
+            ))}
           </div>
         </nav>
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.7, delay: 0.3 }}
-        className="mt-12 lg:mt-0 flex items-center gap-5"
-      >
-        {SOCIALS.map((item) => (
-          <a
-            key={item.label}
-            href={item.href}
-            target={item.href.startsWith("mailto") || item.href.startsWith("tel") ? undefined : "_blank"}
-            rel="noopener noreferrer"
-            aria-label={item.label}
-            title={item.label}
-            className="transition-colors duration-300 flex items-center justify-center"
-            style={{ color: "rgba(220,228,245,0.7)" }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color = "#8ef0d7";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color =
-                "rgba(220,228,245,0.7)";
-            }}
-          >
-            {item.type === "github" ? (
-              <GitHubLogo size={32} />
-            ) : (
-              <item.icon size={32} />
-            )}
-          </a>
-        ))}
       </motion.div>
     </header>
   );
