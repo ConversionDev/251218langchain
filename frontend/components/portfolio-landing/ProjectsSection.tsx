@@ -351,21 +351,6 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
             </div>
           )}
           {project.demo && <DemoNote demo={project.demo} />}
-          {project.video && (
-            <div>
-              <p style={modalLabelStyle}>시연 영상</p>
-              <video
-                controls
-                preload="metadata"
-                playsInline
-                className="w-full rounded-lg"
-                style={{ border: "1px solid rgba(142,240,215,0.1)", background: "#000" }}
-              >
-                <source src={project.video} type="video/mp4" />
-                브라우저가 video 태그를 지원하지 않습니다.
-              </video>
-            </div>
-          )}
           {project.metrics && project.metrics.length > 0 && (
             <div className="grid grid-cols-3 gap-3">
               {project.metrics.map((m) => (
@@ -564,7 +549,17 @@ function ProjectRow({
           background: project.previewImage && !project.previewUrl ? "#fff" : "rgba(0,0,0,0.25)",
         }}
       >
-        {project.previewUrl ? (
+        {project.video ? (
+          <video
+            src={project.video}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : project.previewUrl ? (
           <div className="absolute inset-0 overflow-hidden">
             <iframe
               src={project.previewUrl}
