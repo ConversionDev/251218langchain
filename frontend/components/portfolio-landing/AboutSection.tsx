@@ -5,10 +5,11 @@ import { motion, useInView } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { RagEvalTable, RAG_EVAL_TIERS } from "./RagEvalTable";
+import { renderEmphasis } from "./emphasis";
 
 const BIO = [
   {
-    text: "sLLM 파인튜닝부터 RAG 파이프라인·AI Agent·실서비스 배포까지, AI 시스템 전 계층을 직접 구현합니다. 제한된 인프라에서 고성능 모델을 양자화·최적화해 CPU 환경에 서빙하는 등, 비용과 성능을 동시에 고려한 실용적 설계에 강점이 있습니다.",
+    text: "**sLLM 파인튜닝부터 RAG 파이프라인·AI Agent·실서비스 배포까지**, AI 시스템 전 계층을 직접 구현합니다. 제한된 인프라에서 **고성능 모델을 양자화·최적화해 CPU 환경에 서빙**하는 등, 비용과 성능을 동시에 고려한 실용적 설계에 강점이 있습니다.",
     color: "rgba(220,228,245,0.95)",
   },
   {
@@ -16,7 +17,7 @@ const BIO = [
     color: "rgba(220,228,245,0.88)",
   },
   {
-    text: "비전공(중어중문학)에서 자기주도적으로 개발에 전환했고, 의료 IT와 백엔드 개발로 견고한 기본기를 쌓은 뒤 현재는 AI/ML 엔지니어링에 집중하며 실전 프로젝트에서 성과를 만들고 있습니다.",
+    text: "비전공(중어중문학)에서 자기주도적으로 개발에 전환했고, 의료 IT와 백엔드 개발로 견고한 기본기를 쌓은 뒤 현재는 **AI/ML 엔지니어링에 집중**하며 실전 프로젝트에서 성과를 만들고 있습니다.",
     color: "rgba(220,228,245,0.82)",
   },
 ];
@@ -71,7 +72,7 @@ export function AboutSection() {
                 fontWeight: 400,
               }}
             >
-              {text}
+              {renderEmphasis(text)}
             </motion.p>
           ))}
         </div>

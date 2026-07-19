@@ -6,6 +6,7 @@ import { motion, useInView, AnimatePresence } from "framer-motion";
 import { Bot, Leaf, X, ArrowUpRight, ExternalLink, Key, Megaphone, Activity } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { RagEvalTable, RAG_EVAL_TIERS, type EvalTier } from "./RagEvalTable";
+import { renderEmphasis } from "./emphasis";
 
 interface ProjectLink {
   label: string;
@@ -55,9 +56,9 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     id: "hr-insight",
     title: "HR Insight (Success DNA)",
     subtitle:
-      "비정형 업무 데이터(이력서·메일·회의록) 통합 HCM 플랫폼.\nsLLM 파인튜닝부터 Agentic RAG·CPU 서빙까지 전 계층 직접 구현",
+      "비정형 업무 데이터(이력서·메일·회의록) 통합 HCM 플랫폼.\n**sLLM 파인튜닝부터 Agentic RAG·CPU 서빙까지** 전 계층 직접 구현",
     description:
-      "이력서·메일·회의록 등 비정형 업무 데이터를 통합해 ISO 30414 기반으로 역량을 정량화하고, 채용 이후 역량 발현·성장을 추적하는 HCM 플랫폼. EXAONE 파인튜닝, 11.8만 건 역량 지식베이스, LangGraph 기반 SSE 스트리밍 채팅까지 전 과정을 직접 구현했습니다.",
+      "이력서·메일·회의록 등 비정형 업무 데이터를 통합해 ISO 30414 기반으로 역량을 정량화하고, 채용 이후 역량 발현·성장을 추적하는 HCM 플랫폼. **EXAONE 파인튜닝**, **11.8만 건 역량 지식베이스**, LangGraph 기반 SSE 스트리밍 채팅까지 전 과정을 직접 구현했습니다.",
     icon: Bot,
     type: "개인 프로젝트 · 삼정KPMG",
     year: "2026",
@@ -90,9 +91,9 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     id: "clickme",
     title: "ClickMe",
     subtitle:
-      "광고 집행 전 AI 소비자 시뮬레이션으로 사전 검증·개선하고,\n집행 후 실측 성과 진단·조치 제안까지 연결하는 광고 운영 플랫폼",
+      "광고 집행 전 **AI 소비자 시뮬레이션**으로 사전 검증·개선하고,\n집행 후 **실측 성과 진단·조치 제안**까지 연결하는 광고 운영 플랫폼",
     description:
-      "Meta 광고 캠페인 실측 데이터를 실시간 연동하고, LangGraph ReAct 딥에이전트가 운영·생성 작업을 한 채팅에서 조율하는 광고 운영 플랫폼. 이상 감지→진단→조치 제안→HITL 승인 플로우와 Ragas 기반 RAG 품질 평가 체계 구축을 담당했습니다.",
+      "Meta 광고 캠페인 실측 데이터를 실시간 연동하고, **LangGraph ReAct 딥에이전트**가 운영·생성 작업을 한 채팅에서 조율하는 광고 운영 플랫폼. 이상 감지→진단→조치 제안→HITL 승인 플로우와 **Ragas 기반 RAG 품질 평가 체계** 구축을 담당했습니다.",
     icon: Megaphone,
     type: "팀 프로젝트 · 6인 · 하이미디어",
     year: "2026",
@@ -130,9 +131,9 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
   {
     id: "fom",
     title: "FOM",
-    subtitle: "댄스 동작 분석 AI 평가 플랫폼.\n비전 모델 기반 키포인트 추출 → 레퍼런스 대비 동작 채점",
+    subtitle: "댄스 동작 분석 AI 평가 플랫폼.\n비전 모델 기반 **키포인트 추출** → 레퍼런스 대비 동작 채점",
     description:
-      "영상 속 댄스 동작을 AI로 분석·채점하는 평가 플랫폼. 비전 모델 기반 영상 키포인트 추출부터 레퍼런스 대비 동작 채점까지 End-to-End 파이프라인을 담당했습니다.",
+      "영상 속 댄스 동작을 AI로 분석·채점하는 평가 플랫폼. 비전 모델 기반 영상 **키포인트 추출**부터 레퍼런스 대비 동작 채점까지 **End-to-End 파이프라인**을 담당했습니다.",
     icon: Activity,
     type: "팀 프로젝트 · 6인 · 하이미디어",
     year: "2026",
@@ -150,9 +151,9 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
   {
     id: "aifix",
     title: "AIFIX",
-    subtitle: "ESG 공급망 리스크 관리 및 PCF 산정 지원 시스템.\n비동기 알림 파이프라인·실시간 브로드캐스트 담당",
+    subtitle: "ESG 공급망 리스크 관리 및 PCF 산정 지원 시스템.\n비동기 알림 파이프라인·**실시간 브로드캐스트** 담당",
     description:
-      "공급망 ESG 리스크 관리와 PCF(제품 탄소발자국) 산정을 지원하는 시스템. 백그라운드 워커 기반 비동기 알림 파이프라인과 WebSocket 실시간 브로드캐스트, Slack/Gmail API 연동을 담당했습니다.",
+      "공급망 ESG 리스크 관리와 PCF(제품 탄소발자국) 산정을 지원하는 시스템. 백그라운드 워커 기반 비동기 알림 파이프라인과 **WebSocket 실시간 브로드캐스트**, Slack/Gmail API 연동을 담당했습니다.",
     icon: Leaf,
     type: "팀 프로젝트 · 4인 · 삼정KPMG",
     year: "2026",
@@ -169,9 +170,9 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
   {
     id: "keyword",
     title: "KeyWord",
-    subtitle: "약속의 시작부터 끝까지, 이용자 일정을 도와주는 서비스.\nElasticsearch 기반 고성능 회원 검색 담당",
+    subtitle: "약속의 시작부터 끝까지, 이용자 일정을 도와주는 서비스.\n**Elasticsearch** 기반 고성능 회원 검색 담당",
     description:
-      "약속 일정 관리 서비스. 프론트엔드·백엔드 팀 원격 협업 프로젝트로, Elasticsearch 기반 고성능 회원 검색 기능을 담당했습니다.",
+      "약속 일정 관리 서비스. 프론트엔드·백엔드 팀 원격 협업 프로젝트로, **Elasticsearch** 기반 고성능 회원 검색 기능을 담당했습니다.",
     icon: Key,
     type: "팀 프로젝트 · 5인 · 제로베이스",
     year: "2023",
@@ -190,21 +191,6 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
 const TEAM_PROJECTS = PROJECTS.filter((p) => p.category === "team");
 const PERSONAL_PROJECTS = PROJECTS.filter((p) => p.category === "personal");
 const OTHER_PROJECTS = PROJECTS.filter((p) => p.category === "other");
-
-/** 이력서와 동일한 키워드 강조: 문자열 내 **텍스트** 를 굵게 렌더링 */
-function renderEmphasis(text: string): React.ReactNode {
-  const parts = text.split(/\*\*(.+?)\*\*/g);
-  if (parts.length === 1) return text;
-  return parts.map((p, i) =>
-    i % 2 === 1 ? (
-      <strong key={i} style={{ fontWeight: 700, color: "rgba(240,245,255,0.98)" }}>
-        {p}
-      </strong>
-    ) : (
-      p
-    )
-  );
-}
 
 /** 클릭하면 값이 복사되는 크리덴셜 칩 */
 function CopyChip({ value }: { value: string }) {
@@ -343,7 +329,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
               whiteSpace: "pre-line",
             }}
           >
-            {project.description}
+            {renderEmphasis(project.description)}
           </p>
           {project.links && project.links.length > 0 && (
             <div className="flex flex-wrap gap-2.5">
@@ -646,7 +632,7 @@ function ProjectRow({
           )}
           <ArrowUpRight size={14} style={{ color: "rgba(142,240,215,0.5)" }} className="shrink-0" />
         </div>
-        <p style={subtitleStyle}>{project.subtitle}</p>
+        <p style={subtitleStyle}>{renderEmphasis(project.subtitle)}</p>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {project.techStack.slice(0, 5).map((tech) => (
             <span key={tech} style={tagStyle}>
