@@ -38,6 +38,8 @@ interface Project {
   evalTable?: EvalTier[];
   links?: ProjectLink[];
   demo?: DemoInfo;
+  /** 시연 영상 (public 경로, 모달에서 재생) */
+  video?: string;
   /** 카드 미리보기 iframe URL (내부 경로 또는 X-Frame-Options 없는 외부 사이트) */
   previewUrl?: string;
   /** iframe이 없을 때 쓸 미리보기 이미지 (GitHub OG 등) */
@@ -114,9 +116,11 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     evalTable: RAG_EVAL_TIERS,
     links: [
       { label: "광고 데모", href: "https://www.clickme.co.kr" },
+      { label: "소개 자료", href: "/docs/clickme-intro.pdf" },
       { label: "GitHub", href: "https://github.com/cclickstudio/click-me" },
     ],
     demo: { note: "데모 계정", credentials: { id: "admin", pw: "admin1234" } },
+    video: "/videos/clickme-demo.mp4",
     previewUrl: "https://www.clickme.co.kr",
   },
   {
@@ -136,6 +140,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
       "librosa 기반 오디오·멀티모달 신호 처리",
     ],
     links: [{ label: "GitHub", href: "https://github.com/Hi-Six/FOM" }],
+    video: "/videos/fom-demo.mp4",
     previewImage: "https://opengraph.githubassets.com/1/Hi-Six/FOM",
   },
   {
@@ -327,8 +332,8 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
                 <a
                   key={l.href}
                   href={l.href}
-                  target={l.href.startsWith("/") ? undefined : "_blank"}
-                  rel={l.href.startsWith("/") ? undefined : "noopener noreferrer"}
+                  target={l.href.startsWith("/") && !l.href.endsWith(".pdf") ? undefined : "_blank"}
+                  rel={l.href.startsWith("/") && !l.href.endsWith(".pdf") ? undefined : "noopener noreferrer"}
                   className="inline-flex items-center gap-1.5 rounded-lg transition-all"
                   style={{
                     padding: "8px 14px",
@@ -346,6 +351,21 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
             </div>
           )}
           {project.demo && <DemoNote demo={project.demo} />}
+          {project.video && (
+            <div>
+              <p style={modalLabelStyle}>시연 영상</p>
+              <video
+                controls
+                preload="metadata"
+                playsInline
+                className="w-full rounded-lg"
+                style={{ border: "1px solid rgba(142,240,215,0.1)", background: "#000" }}
+              >
+                <source src={project.video} type="video/mp4" />
+                브라우저가 video 태그를 지원하지 않습니다.
+              </video>
+            </div>
+          )}
           {project.metrics && project.metrics.length > 0 && (
             <div className="grid grid-cols-3 gap-3">
               {project.metrics.map((m) => (
@@ -593,8 +613,8 @@ function ProjectRow({
               <a
                 key={l.href}
                 href={l.href}
-                target={l.href.startsWith("/") ? undefined : "_blank"}
-                rel={l.href.startsWith("/") ? undefined : "noopener noreferrer"}
+                target={l.href.startsWith("/") && !l.href.endsWith(".pdf") ? undefined : "_blank"}
+                rel={l.href.startsWith("/") && !l.href.endsWith(".pdf") ? undefined : "noopener noreferrer"}
                 onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center gap-1 transition-colors hover:!text-[#8ef0d7]"
                 style={{

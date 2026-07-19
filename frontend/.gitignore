@@ -139,6 +139,8 @@ coverage/
 *.mov
 *.wmv
 *.flv
+# 예외: 압축된 시연 영상(수 MB)은 포트폴리오 모달에서 서빙하므로 추적
+!public/videos/*.mp4
 
 # Model files (if any)
 *.pth
