@@ -11,7 +11,8 @@ const ITEMS = [
   { period: "2023.04 — 2023.10", title: "제로베이스 백엔드 스쿨 15기", org: "온라인 부트캠프 · 원격 협업 경험", desc: "Spring 기반 백엔드 개발 및 REST API 설계·구현. 팀 프로젝트 KeyWord 원격 협업 — **ElasticSearch 기반 회원 검색** 기능 담당.", current: false },
   { period: "2022.09 — 2022.12", title: "의료 IT / 인터페이스팀", org: "(주)화산시스템 · 대학병원 LIS 전문 기업", desc: "진단검사의학과 LIS 시스템 유지보수·운영 지원. 의료 장비-LIS 데이터 인터페이스 연동 점검 및 **장애 대응**, 로그 분석·네트워크 점검·백업 관리.", current: false },
   { period: "2022.03 — 2022.09", title: "응용 SW 엔지니어링(Java) 수료", org: "대구중앙직업전문학교", desc: "Java/JSP 기반 웹 애플리케이션 및 통합 시스템 개발 학습. 개발자로의 전환 시작.", current: false },
-  { period: "2013 — 2020", title: "영남대학교 & 비개발 경험", org: "중어중문학과 · 소통과 리더십의 기반", desc: "필리핀 해외 자원봉사 6개월, 대구 YMCA 청소년 쉼터, 한국 YMCA 국제개발협력팀 근무.", current: false },
+  { period: "2018 — 2020", title: "한국 YMCA 국제개발협력팀 / 대구 YMCA 청소년 쉼터", org: "비개발 경력 · 소통과 리더십의 기반", desc: "국내외 다양한 대상자와의 소통으로 상황에 맞는 커뮤니케이션·조율 능력 체득. 현장 중심 문제 해결 경험으로 팀 협업과 조직 목표 달성에 기여.", current: false },
+  { period: "2017 졸업", title: "영남대학교 중어중문학과", org: "학력", desc: "재학 중 필리핀 해외 자원봉사 6개월 등 다양한 현장 소통 경험.", current: false },
 ];
 
 export function TimelineSection() {

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
 import {
   Mail,
+  Phone,
   PenSquare,
   ArrowUpRight,
   Copy,
@@ -32,11 +33,18 @@ export function ContactSection() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-60px" });
   const [copied, setCopied] = useState(false);
+  const [phoneCopied, setPhoneCopied] = useState(false);
 
   const copy = () => {
     navigator.clipboard.writeText("rkdrudrn1031@gmail.com");
     setCopied(true);
     setTimeout(() => setCopied(false), 2200);
+  };
+
+  const copyPhone = () => {
+    navigator.clipboard.writeText("010-4739-2339");
+    setPhoneCopied(true);
+    setTimeout(() => setPhoneCopied(false), 2200);
   };
 
   return (
@@ -126,6 +134,57 @@ export function ContactSection() {
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? "복사됐어요!" : "주소 복사"}
+          </button>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.55, delay: 0.18 }}
+          className="flex flex-wrap items-center gap-3 mb-10 -mt-6"
+        >
+          <a
+            href="tel:010-4739-2339"
+            className="group inline-flex items-center gap-3 rounded-xl transition-all duration-300"
+            style={{
+              padding: "14px 22px",
+              background: "rgba(142,240,215,0.06)",
+              border: "1px solid rgba(142,240,215,0.15)",
+              color: "#8ef0d7",
+              fontSize: "1.2rem",
+              fontWeight: 500,
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLAnchorElement;
+              el.style.background = "rgba(142,240,215,0.1)";
+              el.style.borderColor = "rgba(142,240,215,0.28)";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLAnchorElement;
+              el.style.background = "rgba(142,240,215,0.06)";
+              el.style.borderColor = "rgba(142,240,215,0.15)";
+            }}
+          >
+            <Phone size={16} />
+            010-4739-2339
+          </a>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              copyPhone();
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg transition-all duration-300 shrink-0"
+            style={{
+              padding: "10px 14px",
+              fontSize: "0.9375rem",
+              fontWeight: 500,
+              color: phoneCopied ? "rgba(142,240,215,0.8)" : "rgba(220,228,245,0.7)",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
+            {phoneCopied ? <Check size={14} /> : <Copy size={14} />}
+            {phoneCopied ? "복사됐어요!" : "번호 복사"}
           </button>
         </motion.div>
         <motion.div
