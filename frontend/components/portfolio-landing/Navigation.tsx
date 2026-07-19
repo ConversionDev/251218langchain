@@ -66,10 +66,10 @@ function GitHubLogo({ size = 22 }: { size?: number }) {
 }
 
 const SOCIALS = [
-  { type: "icon" as const, icon: Phone, href: "tel:010-4739-2339", label: "010-4739-2339" },
+  { type: "github" as const, href: "https://github.com/ConversionDev", label: "GitHub" },
+  { type: "icon" as const, icon: PenSquare, href: "https://kku1031.tistory.com", label: "Blog" },
   { type: "icon" as const, icon: Mail, href: "mailto:rkdrudrn1031@gmail.com", label: "rkdrudrn1031@gmail.com" },
-  { type: "github" as const, href: "https://github.com/ConversionDev", label: "github.com/ConversionDev" },
-  { type: "icon" as const, icon: PenSquare, href: "https://kku1031.tistory.com", label: "kku1031.tistory.com" },
+  { type: "icon" as const, icon: Phone, href: "tel:010-4739-2339", label: "010-4739-2339" },
 ];
 
 /** 좌측 슬라이드 전부 어두운 틸로 통일 */
@@ -226,7 +226,7 @@ export function Navigation({ activeSection }: NavigationProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.7, delay: 0.3 }}
-        className="mt-12 lg:mt-0 flex flex-col gap-2.5"
+        className="mt-12 lg:mt-0 flex items-center gap-5"
       >
         {SOCIALS.map((item) => (
           <a
@@ -235,27 +235,22 @@ export function Navigation({ activeSection }: NavigationProps) {
             target={item.href.startsWith("mailto") || item.href.startsWith("tel") ? undefined : "_blank"}
             rel="noopener noreferrer"
             aria-label={item.label}
-            className="transition-colors duration-300 flex items-center gap-3"
-            style={{
-              color: "rgba(220,228,245,0.75)",
-              fontFamily: '"Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-              fontSize: "0.9375rem",
-              letterSpacing: "0.02em",
-            }}
+            title={item.label}
+            className="transition-colors duration-300 flex items-center justify-center"
+            style={{ color: "rgba(220,228,245,0.7)" }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLAnchorElement).style.color = "#8ef0d7";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLAnchorElement).style.color =
-                "rgba(220,228,245,0.75)";
+                "rgba(220,228,245,0.7)";
             }}
           >
             {item.type === "github" ? (
-              <GitHubLogo size={20} />
+              <GitHubLogo size={32} />
             ) : (
-              <item.icon size={20} />
+              <item.icon size={32} />
             )}
-            <span>{item.label}</span>
           </a>
         ))}
       </motion.div>
