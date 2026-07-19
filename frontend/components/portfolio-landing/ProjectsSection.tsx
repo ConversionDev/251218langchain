@@ -69,15 +69,15 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     ],
     techStack: ["EXAONE Fine-tuning", "QLoRA · Unsloth", "LangGraph", "BGE-M3 · FAISS", "llama.cpp"],
     details: [
-      "멀티 포맷 문서 파싱 + 스캔본 OCR → LLM 의미 분석 → 5대 핵심 역량 정량화(리더십·기술력·창의성·협업·적응력)",
-      "직무역량 원천(O*NET·NCS) 11.8만 건 → BGE-M3 임베딩 → FAISS K-Means·UMAP → 파인튜닝 EXAONE 자동 라벨링 지식베이스",
-      "LangGraph RAG 에이전트 SSE 스트리밍 채팅 — 직원·성과·공시·역량 단일·복합 질의",
+      "**멀티 포맷 문서 파싱** + 스캔본 **OCR** → LLM 의미 분석 → 5대 핵심 역량 정량화(리더십·기술력·창의성·협업·적응력)",
+      "직무역량 원천(O*NET·NCS) 11.8만 건 → **BGE-M3 임베딩** → FAISS K-Means·UMAP → 파인튜닝 EXAONE 자동 라벨링 지식베이스",
+      "**LangGraph** RAG 에이전트 SSE 스트리밍 채팅 — 직원·성과·공시·역량 단일·복합 질의, **Tool Calling** 12개 시나리오 검증",
       "Polyglot 아키텍처 — Spring Boot(인증 게이트웨이) + FastAPI(AI 연산) 분리, 헥사고날 라이트 레이어링",
     ],
     challenges: [
-      "GPU 파인튜닝 모델의 CPU 서빙 — NF4 4bit 학습 모델을 GGUF Q4_K_M으로 재변환, 변환 중 tokenizer 손상은 수동 패치, OOM은 n_ctx 축소로 해결해 GPU 없는 EC2에 배포",
-      "Neon 스토리지 한도로 11.8만 건 임베딩 적재 불가 → 검색 계층 이원화: 정적·대용량(역량·공시)은 FAISS 인메모리, 동적·트랜잭션(직원)은 pgvector HNSW·FlatIP",
-      "Transformers + PEFT + bitsandbytes 4bit 양자화로 EXAONE 학습 약 2배, Unsloth로 LLaMA 학습 2.5~3배 가속",
+      "GPU 파인튜닝 모델의 CPU 서빙 — NF4 4bit 학습 모델을 **GGUF Q4_K_M**으로 재변환, 변환 중 tokenizer 손상은 수동 패치, OOM은 n_ctx 축소로 해결해 GPU 없는 EC2에 배포",
+      "Neon 스토리지 한도로 11.8만 건 임베딩 적재 불가 → **검색 계층 이원화**: 정적·대용량(역량·공시)은 FAISS 인메모리, 동적·트랜잭션(직원)은 pgvector **HNSW·FlatIP 검색 최적화**",
+      "Transformers + PEFT + **bitsandbytes 4bit 양자화**로 EXAONE 학습 약 2배, **Unsloth**로 LLaMA 학습 2.5~3배 가속",
     ],
     links: [
       { label: "인사 시스템 데모", href: "/hr" },
@@ -105,16 +105,17 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     ],
     techStack: ["LangGraph", "LangSmith · Ragas", "pgvector (Neon)", "Meta Graph API", "FastAPI"],
     details: [
-      "LangGraph ReAct 딥에이전트 오케스트레이터 — plan→act→observe 루프로 운영·생성 작업을 한 채팅에서 조율",
-      "pgvector 벡터 검색 + GIN 키워드 검색 → RRF 융합 하이브리드 검색 구축",
+      "**LangGraph ReAct(Agentic RAG)** 딥에이전트 오케스트레이터 — plan→act→observe 루프로 운영·생성 작업을 한 채팅에서 조율",
+      "pgvector 벡터 검색 + GIN 키워드 검색 → RRF 융합 **하이브리드 검색** 구축",
       "채팅 메모리 3단 구조 — 최근 원문·요약·롱텀(tsvector 키워드 회수) 컨텍스트 조립",
-      "이상 감지 → 진단 → 조치 제안 → Tier 판정 → 자율 통과/사람 승인(HITL) 분기 — '관측은 자율, 집행은 사람' 경계 설계",
-      "Meta Graph API 실측 연동 — 배치 insights·TTL 캐시·토큰 암호화",
+      "이상 감지 → 진단 → 조치 제안 → Tier 판정 → 자율 통과/**사람 승인(HITL)** 분기 — '관측은 자율, 집행은 사람' 경계 설계",
+      "**Meta Graph API** 실측 연동 — 배치 insights·TTL 캐시·토큰 암호화",
+      "검색·응답 품질 **5개 지표 골든셋 정량 평가** 체계 구축 — LangSmith 추적, 함정 질문 23개 환각 검증",
     ],
     challenges: [
-      "정답 문서가 검색 상위에 안정적으로 노출되지 않음 → 청크 크기 조정·리랭커 도입·프롬프트 강화·랭킹 알고리즘·few-shot 보강 (결과는 아래 평가 표)",
-      "모델 검증용 실측 데이터 부재 → Meta에 사비로 트래픽·잠재고객 캠페인을 직접 집행, 실측 CTR·CPC를 확보해 합성 데이터의 한계 극복",
-      "Meta API Standard 등급 제약 → 15일 내 실호출 500개 적립, 사업자 등록 후 Advanced 상향 신청 — 선제 구현으로 승인 즉시 실서비스 전환 설계",
+      "정답 문서가 검색 상위에 안정적으로 노출되지 않음 → 청크 크기 조정·**리랭커 도입**·프롬프트 강화·랭킹 알고리즘·few-shot 보강 (**Hit Rate**·**MRR**·**faithfulness** 개선은 아래 평가 표)",
+      "모델 검증용 실측 데이터 부재 → **Meta에 사비로 트래픽·잠재고객 캠페인을 직접 집행**, **실측 CTR·CPC를 확보**해 합성 데이터의 한계 극복",
+      "Meta API Standard 등급 제약 → 15일 내 실호출 500개 적립, **사업자 등록증** 발급 후 Advanced 상향 신청 — **선제 구현으로 승인 즉시 실서비스 전환** 설계",
     ],
     evalTable: RAG_EVAL_TIERS,
     links: [
@@ -138,8 +139,8 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     category: "other",
     techStack: ["FastAPI", "MediaPipe", "YOLO11", "librosa", "Flutter"],
     details: [
-      "YOLO11·MediaPipe 기반 영상 키포인트 추출",
-      "레퍼런스 대비 동작 채점 End-to-End 파이프라인 구현",
+      "YOLO11·MediaPipe 기반 영상 **키포인트 추출**",
+      "레퍼런스 대비 동작 채점 **End-to-End 파이프라인** 구현",
       "librosa 기반 오디오·멀티모달 신호 처리",
     ],
     links: [{ label: "GitHub", href: "https://github.com/Hi-Six/FOM" }],
@@ -159,7 +160,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     techStack: ["WebSocket", "Slack API", "Gmail API", "Vercel"],
     details: [
       "백그라운드 워커 비동기 알림 파이프라인 구축",
-      "WebSocket 실시간 브로드캐스트 구현",
+      "**WebSocket 실시간 브로드캐스트** 구현",
       "Slack·Gmail API 연동 알림 채널 구성",
     ],
     links: [{ label: "GitHub", href: "https://github.com/ESGAIFixr" }],
@@ -177,7 +178,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     category: "other",
     techStack: ["Java", "Spring", "OAuth 2.0", "ElasticSearch"],
     details: [
-      "Elasticsearch 기반 고성능 회원 검색 기능 구현",
+      "**Elasticsearch** 기반 고성능 회원 검색 기능 구현",
       "Spring Boot REST API 설계·구현, 원격 협업",
     ],
     links: [{ label: "GitHub", href: "https://github.com/ZB-Keyword" }],
@@ -189,6 +190,21 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
 const TEAM_PROJECTS = PROJECTS.filter((p) => p.category === "team");
 const PERSONAL_PROJECTS = PROJECTS.filter((p) => p.category === "personal");
 const OTHER_PROJECTS = PROJECTS.filter((p) => p.category === "other");
+
+/** 이력서와 동일한 키워드 강조: 문자열 내 **텍스트** 를 굵게 렌더링 */
+function renderEmphasis(text: string): React.ReactNode {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  if (parts.length === 1) return text;
+  return parts.map((p, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} style={{ fontWeight: 700, color: "rgba(240,245,255,0.98)" }}>
+        {p}
+      </strong>
+    ) : (
+      p
+    )
+  );
+}
 
 /** 클릭하면 값이 복사되는 크리덴셜 칩 */
 function CopyChip({ value }: { value: string }) {
@@ -427,7 +443,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
                       lineHeight: 1.7,
                     }}
                   >
-                    {d}
+                    {renderEmphasis(d)}
                   </span>
                 </li>
               ))}
@@ -452,7 +468,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
                       lineHeight: 1.7,
                     }}
                   >
-                    {c}
+                    {renderEmphasis(c)}
                   </span>
                 </div>
               ))}
