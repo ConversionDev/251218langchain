@@ -40,6 +40,8 @@ interface Project {
   demo?: DemoInfo;
   /** 시연 영상 (public 경로, 모달에서 재생) */
   video?: string;
+  /** 수상 배지 (카드 제목 옆 노출) */
+  award?: string;
   /** 카드 미리보기 iframe URL (내부 경로 또는 X-Frame-Options 없는 외부 사이트) */
   previewUrl?: string;
   /** iframe이 없을 때 쓸 미리보기 이미지 (GitHub OG 등) */
@@ -95,6 +97,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
     type: "팀 프로젝트 · 6인 · 하이미디어",
     year: "2026",
     category: "team",
+    award: "우수상",
     metrics: [
       { label: "RAG Hit Rate@K (단일·복합)", value: "1.000" },
       { label: "MRR (0.705에서 개선)", value: "0.938" },
@@ -607,6 +610,24 @@ function ProjectRow({
           <h3 style={titleStyle} className="group-hover:!text-[#8ef0d7] transition-colors">
             {project.title}
           </h3>
+          {project.award && (
+            <span
+              title="하이미디어 교육과정 수상"
+              className="shrink-0"
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                color: "#fbbf24",
+                background: "rgba(251,191,36,0.09)",
+                border: "1px solid rgba(251,191,36,0.3)",
+                padding: "2px 9px",
+                borderRadius: 999,
+                letterSpacing: "0.02em",
+              }}
+            >
+              🏆 {project.award}
+            </span>
+          )}
           <ArrowUpRight size={14} style={{ color: "rgba(142,240,215,0.5)" }} className="shrink-0" />
         </div>
         <p style={subtitleStyle}>{project.subtitle}</p>
