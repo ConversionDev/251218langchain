@@ -24,7 +24,7 @@ export default function ResumePage() {
       </div>
       <div className="flex-1 min-h-0 w-full">
         <iframe
-          src="/resume.pdf"
+          src={encodeURI("/resume/강경구(이력서).pdf")}
           title="이력서"
           className="w-full h-full border-0"
         />
