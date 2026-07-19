@@ -12,6 +12,12 @@ interface ProjectLink {
   href: string;
 }
 
+/** 데모 접속 안내 (계정이 있으면 클릭-복사 칩으로 노출) */
+interface DemoInfo {
+  note: string;
+  credentials?: { id: string; pw: string };
+}
+
 /**
  * 전 카드 공통 규칙:
  * - 카드 본문 클릭 → 상세 모달 / 바로가기 → 카드 하단 데모·GitHub 링크
@@ -31,6 +37,7 @@ interface Project {
   challenges?: string[];
   evalTable?: EvalTier[];
   links?: ProjectLink[];
+  demo?: DemoInfo;
   /** 카드 미리보기 iframe URL (내부 경로 또는 X-Frame-Options 없는 외부 사이트) */
   previewUrl?: string;
   /** iframe이 없을 때 쓸 미리보기 이미지 (GitHub OG 등) */
@@ -72,6 +79,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
       { label: "인사 시스템 데모", href: "/hr" },
       { label: "GitHub", href: "https://github.com/ConversionDev/251218langchain" },
     ],
+    demo: { note: "데모: 로그인 화면에서 '로그인 없이 역할 선택하기'로 바로 입장 (계정 불필요)" },
     previewUrl: "/hr",
   },
   {
@@ -108,6 +116,7 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
       { label: "광고 데모", href: "https://www.clickme.co.kr" },
       { label: "GitHub", href: "https://github.com/cclickstudio/click-me" },
     ],
+    demo: { note: "데모 계정", credentials: { id: "admin", pw: "admin1234" } },
     previewUrl: "https://www.clickme.co.kr",
   },
   {
@@ -172,6 +181,55 @@ const PROJECTS: (Project & { category: keyof typeof PROJECT_CATEGORY })[] = [
 const TEAM_PROJECTS = PROJECTS.filter((p) => p.category === "team");
 const PERSONAL_PROJECTS = PROJECTS.filter((p) => p.category === "personal");
 const OTHER_PROJECTS = PROJECTS.filter((p) => p.category === "other");
+
+/** 클릭하면 값이 복사되는 크리덴셜 칩 */
+function CopyChip({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      title="클릭하면 복사됩니다"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard?.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1400);
+      }}
+      style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: "0.75rem",
+        color: copied ? "#8ef0d7" : "rgba(220,228,245,0.8)",
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.14)",
+        borderRadius: 4,
+        padding: "1px 8px",
+        cursor: "pointer",
+      }}
+    >
+      {copied ? "복사됨!" : value}
+    </button>
+  );
+}
+
+/** 데모 접속 안내 줄 (카드·모달 공용) */
+function DemoNote({ demo }: { demo: DemoInfo }) {
+  return (
+    <div
+      className="flex items-center flex-wrap gap-1.5"
+      onClick={(e) => e.stopPropagation()}
+      style={{ fontSize: "0.8125rem", color: "rgba(220,228,245,0.6)" }}
+    >
+      <span>{demo.note}</span>
+      {demo.credentials && (
+        <>
+          <CopyChip value={demo.credentials.id} />
+          <span style={{ color: "rgba(220,228,245,0.4)" }}>/</span>
+          <CopyChip value={demo.credentials.pw} />
+        </>
+      )}
+    </div>
+  );
+}
 
 const modalLabelStyle: React.CSSProperties = {
   fontSize: "0.625rem",
@@ -287,6 +345,7 @@ function Modal({ project, onClose }: { project: Project; onClose: () => void }) 
               ))}
             </div>
           )}
+          {project.demo && <DemoNote demo={project.demo} />}
           {project.metrics && project.metrics.length > 0 && (
             <div className="grid grid-cols-3 gap-3">
               {project.metrics.map((m) => (
@@ -549,6 +608,11 @@ function ProjectRow({
                 <ExternalLink size={12} className="shrink-0" />
               </a>
             ))}
+          </div>
+        )}
+        {project.demo && (
+          <div className="mt-2">
+            <DemoNote demo={project.demo} />
           </div>
         )}
       </div>
