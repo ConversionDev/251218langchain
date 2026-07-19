@@ -49,7 +49,8 @@ const INTERESTS = [
 export function AboutSection() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-60px" });
-  const [evalOpen, setEvalOpen] = useState(false);
+  // 기본 펼침: 인사담당자가 토글 없이 평가 표를 바로 보도록
+  const [evalOpen, setEvalOpen] = useState(true);
 
   return (
     <section
