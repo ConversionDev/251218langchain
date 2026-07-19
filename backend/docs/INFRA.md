@@ -1,6 +1,6 @@
 # 인프라 운영 (INFRA)
 
-> 최종 갱신: 2026-07-19 — AWS 계정 복구 및 t4g.large(ARM) 이전
+> 최종 갱신: 2026-07-19 — AWS 계정 복구·t4g.large(ARM) 이전 + 채팅 LLM 운영 정리(§7)
 
 ## 1. 현재 인프라 요약
 
@@ -67,9 +67,70 @@
 ### GGUF 모델
 - 서버 경로: `/home/ubuntu/app/artifacts/fine_tuned/exaone/gguf/exaone_competency_q4_k_m.gguf` (4.5GB)
 - CI rsync에서 제외되므로 서버 교체 시 로컬에서 `scp`로 1회 업로드
+- ⚠️ **정본은 v3 패치본이다.** 로컬 gguf 폴더의 원본(패치 전) 파일은 tokenizer merges가 누락되어
+  `cannot find tokenizer merges in model file` 로 로드에 실패한다(TROUBLESHOOTING 참고).
+  2026-07-19부터 로컬·서버 모두 정식 파일명(`exaone_competency_q4_k_m.gguf`)에 **v3 내용**이 들어가 있으므로
+  이 파일명을 그대로 업로드하면 된다. `_fixed`(중간 시도)·`_v3`(원본 보존용)는 참고용.
+
+### FAISS 인덱스 (artifacts/faiss/)
+- `disclosures.index`·`competency_anchors.index`(+id_map)를 서버에 업로드해 두었으나,
+  **현행 코드는 런타임에 `load_faiss_indices()`를 호출하지 않는다**(메모리 절약 설계 — 로컬 동일).
+  RAG는 pgvector로 동작하며, FAISS는 오프라인 파이프라인(클러스터링·시각화)용.
 
 ## 6. 문서 구조 변경 (2026-07-19)
 
 - 루트 `docs/` 폴더를 **`backend/docs/`로 통합 이동** (ARCHITECTURE·FEATURES·FRONTEND·IMPLEMENTATION·MODEL_COMPARISON·PORTFOLIO·TROUBLESHOOTING·nginx_default.conf·archive/)
 - `frontend.md` → `FRONTEND.md` 대소문자 정규화 (GitHub(리눅스)에서 링크 404 방지)
 - 루트 README·`backend/ontology/apps/ARCHITECTURE.md`(포인터)의 링크 경로 갱신
+
+## 7. 채팅 LLM 운영 (2026-07-19 정리)
+
+### 7.1 provider 구조
+
+| 용도 | 로컬 | 배포(EC2) |
+|---|---|---|
+| 채팅 최종 답변 | 학습 EXAONE (transformers, GPU) | **Gemini** (`CHAT_LLM=gemini`) |
+| 역량/성과 분류(비동기) | 학습 EXAONE | 학습 EXAONE GGUF (llama.cpp CPU) |
+| 스팸 1차 분류·이력서 폼 추출 | 학습 LLaMA / EXAONE | Gemini (`SPAM_CLASSIFIER=gemini` 등) |
+
+### 7.2 이번에 고친 버그·개선 (커밋 기준)
+
+1. **`364670e` — CHAT_LLM=gemini 강제 적용**: LangGraph 상태(state)에 `llama_cpp`가 새어 들어와
+   Gemini 설정을 덮어쓰고 EXAONE CPU로 답변하던 버그(문항당 7분+). `model_node`에서
+   `_chat_use_gemini()`가 참이면 provider를 무조건 gemini로 고정. provider 해석 로그 추가
+   (`[MODEL] provider 해석: ... (default=..., state=...)`) — 재발 시 이 로그가 원인을 알려준다.
+   부수 개선: 강제 도구(1턴 최적화) 분기에서 불필요하게 GGUF 4.5GB를 로드하던 비효율 제거(지연 생성).
+2. **`f7e7887` — get_employee_info에 5대 지표 수치 노출**: 기존엔 "Success DNA 보유" 문구만 반환해
+   "OOO의 5대 지표" 질문에 답변 불가. 리더십·기술력·창의성·협업·적응력 수치를 도구 출력에 포함.
+3. **`518bce4` — Gemini 429 폴백 체인**: 무료 티어 일일 쿼터가 **모델별 ~20회**로 작다.
+   첫 토큰 전 429 발생 시 `flash-lite → 2.5-flash → 2.0-flash` 순으로 자동 전환(`gemini_chat.py`).
+   스트리밍 시작 후에는 폴백하지 않는다(중복 답변 방지).
+
+### 7.3 Gemini 무료 쿼터 운영 수칙
+
+- 모델당 일 ~20회, 폴백 체인으로 실질 일 ~60회. 리셋은 태평양 기준 자정.
+- 대량 시연(면접 등) 예정 시: Google AI Studio에서 유료 결제 연결 권장(이 사용량이면 월 $1 미만).
+
+### 7.4 학습 EXAONE으로 채팅 전환(시연용)
+
+```bash
+ssh -i RSA.pem ubuntu@43.201.214.82
+sed -i 's/^CHAT_LLM=.*/CHAT_LLM=llama_cpp/' /home/ubuntu/app/.env && sudo systemctl restart rag-api
+# 원복: llama_cpp → gemini 로 동일하게. 다음 CI 배포 시 .env가 gemini로 재작성되므로 자동 원복되기도 함.
+```
+
+### 7.5 18문항 전수 검증 결과 (2026-07-19)
+
+| 경로 | 결과 | 문항당 소요 | 비고 |
+|---|---|---|---|
+| 로컬 EXAONE (GPU) | 18/18 | 8~29초 | 전체 ~5분 |
+| 운영 EXAONE (t4g CPU) | 18/18 | 2.2~8.5분 | 전체 ~75분 — CPU 서빙 증빙용 |
+| 운영 Gemini | 18/18 | 1~28초 | 기본 운영 경로, 폴백 체인 실동작 확인 |
+
+### 7.6 로컬 개발 함정
+
+- **루트 `.env`에 인라인 주석 금지** (`KEY=value  # 주석` 형태): Spring 게이트웨이가 `.env`를
+  properties로 import(`application.yaml`의 `spring.config.import`)하므로 `#` 뒤까지 값에 포함된다.
+  실제로 `NEON_DEV_DATABASE` 값 오염 → Neon `SASL authentication failed`로 게이트웨이 기동 실패했었다.
+  주석은 반드시 별도 줄에 쓸 것.
+- 로컬 소셜 로그인은 게이트웨이(8080) 기동이 전제: `python run_all.py` 또는 `backend/gateway`에서 `gradlew bootRun`.
