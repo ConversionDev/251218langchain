@@ -69,7 +69,6 @@ const SOCIALS = [
   { type: "github" as const, href: "https://github.com/ConversionDev", label: "GitHub" },
   { type: "icon" as const, icon: PenSquare, href: "https://kku1031.tistory.com", label: "Blog" },
   { type: "icon" as const, icon: Mail, href: "mailto:rkdrudrn1031@gmail.com", label: "rkdrudrn1031@gmail.com" },
-  { type: "icon" as const, icon: Phone, href: "tel:010-4739-2339", label: "010-4739-2339" },
 ];
 
 /** 좌측 슬라이드 전부 어두운 틸로 통일 */
@@ -219,6 +218,26 @@ export function Navigation({ activeSection }: NavigationProps) {
                 </button>
               );
             })}
+            {/* CONTACT 아래 상시 노출 전화번호 (메뉴 라벨과 같은 들여쓰기) */}
+            <a
+              href="tel:010-4739-2339"
+              className="block transition-colors duration-300"
+              style={{
+                marginTop: 14,
+                paddingLeft: 60,
+                fontSize: "1.05rem",
+                letterSpacing: "0.08em",
+                color: "rgba(220,228,245,0.6)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.color = "#8ef0d7";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.color = "rgba(220,228,245,0.6)";
+              }}
+            >
+              010-4739-2339
+            </a>
           </div>
         </nav>
       </motion.div>
