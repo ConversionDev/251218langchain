@@ -218,25 +218,28 @@ export function Navigation({ activeSection }: NavigationProps) {
                 </button>
               );
             })}
-            {/* CONTACT 아래 상시 노출 전화번호 (메뉴 라벨과 같은 들여쓰기) */}
+            {/* CONTACT 아래 전화번호 — 메뉴 항목과 동일한 아이콘·서체·간격으로 통일 */}
             <a
               href="tel:010-4739-2339"
-              className="block transition-colors duration-300"
-              style={{
-                marginTop: 14,
-                paddingLeft: 60,
-                fontSize: "1.05rem",
-                letterSpacing: "0.08em",
-                color: "rgba(220,228,245,0.6)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.color = "#8ef0d7";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.color = "rgba(220,228,245,0.6)";
-              }}
+              className="group relative flex items-center py-3 w-full text-left pl-5 -ml-5 pr-2 rounded-r-lg"
             >
-              010-4739-2339
+              <Phone
+                size={iconSize}
+                className="mr-7 shrink-0 opacity-90"
+                style={{ color: iconColorDefault }}
+              />
+              <span
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 400,
+                  letterSpacing: "0.1em",
+                  color: "rgba(220,228,245,0.65)",
+                  transition: "color 0.25s, background 0.2s",
+                }}
+                className="group-hover:!text-[rgba(220,228,245,0.9)]"
+              >
+                010-4739-2339
+              </span>
             </a>
           </div>
         </nav>
